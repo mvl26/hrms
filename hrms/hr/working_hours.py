@@ -5,7 +5,9 @@ from calendar import monthrange
 
 import frappe
 from frappe import _
+from frappe.query_builder.functions import Extract
 from frappe.utils import cint, flt, getdate, time_diff_in_hours
+from frappe.utils.nestedset import get_descendants_of
 
 LUNCH_BREAK_HOURS = 1.5
 FULL_DAY_STATUSES = ("Present", "Work From Home")
@@ -44,3 +46,55 @@ def get_week_buckets(year, month):
 		buckets[key].append(day)
 
 	return [{"label": f"{_('Week')} {i}", "days": buckets[key]} for i, key in enumerate(order, start=1)]
+
+
+def prepare_filters(filters):
+	"""Đảm bảo month/year (mặc định tháng hiện tại) và companies (suy từ company)."""
+	filters = frappe._dict(filters or {})
+	today = getdate()
+	filters.month = cint(filters.get("month")) or today.month
+	filters.year = cint(filters.get("year")) or today.year
+
+	if not filters.get("companies"):
+		company = filters.get("company")
+		companies = [company] if company else []
+		if company and filters.get("include_company_descendants"):
+			companies.extend(get_descendants_of("Company", company))
+		filters.companies = companies
+
+	return filters
+
+
+def get_net_hours_map(filters):
+	"""{employee: {shift: {day_of_month: net_hours}}} cho tháng/năm trong filters."""
+	companies = filters.get("companies") or ([filters.get("company")] if filters.get("company") else [])
+
+	Attendance = frappe.qb.DocType("Attendance")
+	query = (
+		frappe.qb.from_(Attendance)
+		.select(
+			Attendance.employee,
+			Attendance.shift,
+			Extract("day", Attendance.attendance_date).as_("day_of_month"),
+			Attendance.status,
+			Attendance.in_time,
+			Attendance.out_time,
+			Attendance.working_hours,
+		)
+		.where(
+			(Attendance.docstatus == 1)
+			& (Attendance.company.isin(companies))
+			& (Extract("month", Attendance.attendance_date) == filters.get("month"))
+			& (Extract("year", Attendance.attendance_date) == filters.get("year"))
+		)
+	)
+	if filters.get("employee"):
+		query = query.where(Attendance.employee == filters.get("employee"))
+
+	hours_map = {}
+	for d in query.run(as_dict=True):
+		shift = d.shift or ""
+		net = compute_net_hours(d.status, d.in_time, d.out_time, d.working_hours)
+		hours_map.setdefault(d.employee, {}).setdefault(shift, {})[d.day_of_month] = net
+
+	return hours_map
