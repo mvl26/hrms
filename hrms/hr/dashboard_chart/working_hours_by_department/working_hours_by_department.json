@@ -1,0 +1,21 @@
+{
+ "chart_name": "Working Hours by Department",
+ "chart_type": "Custom",
+ "creation": "2026-06-30 00:00:00.000000",
+ "custom_options": "{\n\t\"type\": \"bar\"\n}",
+ "docstatus": 0,
+ "doctype": "Dashboard Chart",
+ "dynamic_filters_json": "{\"company\":\"frappe.defaults.get_user_default(\\\"Company\\\")\",\"month\":\"frappe.datetime.str_to_obj(frappe.datetime.get_today()).getMonth() + 1\",\"year\":\"frappe.datetime.str_to_obj(frappe.datetime.get_today()).getFullYear()\"}",
+ "filters_json": "{}",
+ "idx": 0,
+ "is_public": 1,
+ "is_standard": 1,
+ "module": "HR",
+ "name": "Working Hours by Department",
+ "owner": "Administrator",
+ "roles": [],
+ "source": "Working Hours by Department",
+ "timeseries": 0,
+ "type": "Bar",
+ "use_report_chart": 0
+}

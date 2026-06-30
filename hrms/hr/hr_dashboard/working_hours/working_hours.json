@@ -1,0 +1,25 @@
+{
+ "cards": [],
+ "charts": [
+  {
+   "chart": "Working Hours by Week",
+   "width": "Full"
+  },
+  {
+   "chart": "Working Hours by Department",
+   "width": "Full"
+  }
+ ],
+ "creation": "2026-06-30 00:00:00.000000",
+ "dashboard_name": "Working Hours",
+ "docstatus": 0,
+ "doctype": "Dashboard",
+ "idx": 0,
+ "is_default": 0,
+ "is_standard": 1,
+ "modified": "2026-06-30 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "HR",
+ "name": "Working Hours",
+ "owner": "Administrator"
+}
