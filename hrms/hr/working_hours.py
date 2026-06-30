@@ -98,3 +98,51 @@ def get_net_hours_map(filters):
 		hours_map.setdefault(d.employee, {}).setdefault(shift, {})[d.day_of_month] = net
 
 	return hours_map
+
+
+def _employee_total(shift_hours):
+	return sum(net for days in shift_hours.values() for net in days.values())
+
+
+def get_hours_by_week(filters):
+	"""Tổng giờ làm toàn công ty theo từng tuần trong tháng. -> {labels, values}"""
+	filters = prepare_filters(filters)
+	hours_map = get_net_hours_map(filters)
+	buckets = get_week_buckets(filters.year, filters.month)
+
+	labels, values = [], []
+	for bucket in buckets:
+		day_set = set(bucket["days"])
+		total = 0.0
+		for shift_hours in hours_map.values():
+			for days in shift_hours.values():
+				for day, net in days.items():
+					if day in day_set:
+						total += net
+		labels.append(bucket["label"])
+		values.append(round(total, 2))
+
+	return {"labels": labels, "values": values}
+
+
+def get_hours_by_department(filters):
+	"""Tổng giờ làm theo từng phòng ban trong tháng. -> {labels, values}"""
+	filters = prepare_filters(filters)
+	hours_map = get_net_hours_map(filters)
+
+	employees = list(hours_map.keys())
+	dept_of = {}
+	if employees:
+		for emp in frappe.get_all(
+			"Employee", filters={"name": ["in", employees]}, fields=["name", "department"]
+		):
+			dept_of[emp.name] = emp.department or _("No Department")
+
+	totals = {}
+	for emp, shift_hours in hours_map.items():
+		dept = dept_of.get(emp, _("No Department"))
+		totals[dept] = totals.get(dept, 0.0) + _employee_total(shift_hours)
+
+	labels = list(totals.keys())
+	values = [round(totals[d], 2) for d in labels]
+	return {"labels": labels, "values": values}

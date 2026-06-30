@@ -9,7 +9,13 @@ from frappe.utils import getdate
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms.hr.doctype.attendance.attendance import mark_attendance
-from hrms.hr.working_hours import compute_net_hours, get_net_hours_map, get_week_buckets
+from hrms.hr.working_hours import (
+	compute_net_hours,
+	get_hours_by_department,
+	get_hours_by_week,
+	get_net_hours_map,
+	get_week_buckets,
+)
 
 
 class TestComputeNetHours(FrappeTestCase):
@@ -85,3 +91,29 @@ class TestGetNetHoursMap(FrappeTestCase):
 		filters = frappe._dict(company=self.company, companies=[self.company], month=3, year=2026)
 		hours_map = get_net_hours_map(filters)
 		self.assertEqual(hours_map[self.employee][""][3], 7.5)  # 9.0 - 1.5
+
+
+class TestHoursAggregation(FrappeTestCase):
+	def setUp(self):
+		self.company = "_Test Company"
+		self.employee = make_employee("wh_agg_test@example.com", company=self.company)
+		frappe.db.delete("Attendance", {"employee": self.employee})
+		name = mark_attendance(self.employee, getdate("2026-03-02"), "Present")
+		frappe.db.set_value(
+			"Attendance",
+			name,
+			{"in_time": "2026-03-02 08:00:00", "out_time": "2026-03-02 17:30:00"},
+		)
+		self.filters = frappe._dict(
+			company=self.company, companies=[self.company], month=3, year=2026
+		)
+
+	def test_by_week_total_matches(self):
+		data = get_hours_by_week(self.filters)
+		self.assertEqual(len(data["labels"]), len(data["values"]))
+		self.assertEqual(round(sum(data["values"]), 2), 8.0)
+
+	def test_by_department_total_matches(self):
+		data = get_hours_by_department(self.filters)
+		self.assertEqual(len(data["labels"]), len(data["values"]))
+		self.assertEqual(round(sum(data["values"]), 2), 8.0)
