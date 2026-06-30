@@ -1,9 +1,10 @@
 # Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
 # License: GNU General Public License v3. See license.txt
 
+from frappe import _
 from frappe.tests.utils import FrappeTestCase
 
-from hrms.hr.working_hours import compute_net_hours
+from hrms.hr.working_hours import compute_net_hours, get_week_buckets
 
 
 class TestComputeNetHours(FrappeTestCase):
@@ -34,3 +35,21 @@ class TestComputeNetHours(FrappeTestCase):
 	def test_absent_and_leave_are_zero(self):
 		self.assertEqual(compute_net_hours("Absent", None, None, 0), 0.0)
 		self.assertEqual(compute_net_hours("On Leave", None, None, 0), 0.0)
+
+
+class TestGetWeekBuckets(FrappeTestCase):
+	def test_march_2026_buckets(self):
+		# 1/3/2026 là Chủ nhật -> nằm riêng ở tuần đầu (phần đuôi của tuần ISO trước)
+		buckets = get_week_buckets(2026, 3)
+		self.assertEqual(buckets[0]["days"], [1])
+		self.assertIn(2, buckets[1]["days"])
+
+	def test_all_days_covered_once_in_order(self):
+		buckets = get_week_buckets(2026, 3)
+		all_days = [d for b in buckets for d in b["days"]]
+		self.assertEqual(all_days, list(range(1, 32)))  # tháng 3 có 31 ngày, đủ và đúng thứ tự
+
+	def test_labels_are_sequential(self):
+		buckets = get_week_buckets(2026, 3)
+		labels = [b["label"] for b in buckets]
+		self.assertEqual(labels, [f"{_('Week')} {i}" for i in range(1, len(buckets) + 1)])
