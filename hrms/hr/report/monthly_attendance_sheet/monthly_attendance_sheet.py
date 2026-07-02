@@ -442,10 +442,14 @@ def get_rows(
 		else None
 	)
 	total_days = get_total_days_in_month(filters)
+	# tính cột một lần (tránh dựng lại week buckets mỗi dòng ở summarized view)
+	summarized_columns = get_columns(filters) if filters.summarized_view else None
 
 	for employee, details in employee_details.items():
 		emp_holiday_list = details.holiday_list or default_holiday_list
 		holidays = holiday_map.get(emp_holiday_list)
+		# giờ làm là tổng theo NHÂN SỰ (gộp mọi shift) để định mức/chênh lệch nhất quán
+		emp_day_hours = _flatten_employee_hours(net_hours_map.get(employee, {}))
 
 		if filters.summarized_view:
 			attendance = get_attendance_status_for_summarized_view(
@@ -458,12 +462,11 @@ def get_rows(
 			entry_exits_summary = get_entry_exits_summary(employee, filters)
 
 			row = {"employee": employee, "employee_name": details.employee_name}
-			set_defaults_for_summarized_view(filters, row)
+			set_defaults_for_summarized_view(summarized_columns, row)
 			row.update(attendance)
 			row.update(leave_summary)
 			row.update(entry_exits_summary)
 
-			emp_day_hours = _flatten_employee_hours(net_hours_map.get(employee, {}))
 			set_working_hours_on_row(row, emp_day_hours, filters, week_buckets)
 			set_standard_and_variance(row, total_days, holidays)
 
@@ -476,11 +479,8 @@ def get_rows(
 			attendance_for_employee = get_attendance_status_for_detailed_view(
 				employee, filters, employee_attendance, holidays
 			)
-			# set employee details in the first row
 			for record in attendance_for_employee:
-				shift_key = record.get("shift") or ""
-				day_hours = net_hours_map.get(employee, {}).get(shift_key, {})
-				set_working_hours_on_row(record, day_hours, filters, week_buckets)
+				set_working_hours_on_row(record, emp_day_hours, filters, week_buckets)
 				set_standard_and_variance(record, total_days, holidays)
 				record.update({"employee": employee, "employee_name": details.employee_name})
 
@@ -515,8 +515,8 @@ def set_standard_and_variance(row: dict, total_days: int, holidays) -> None:
 	row["variance"] = round(row.get("total_working_hours", 0.0) - standard, 2)
 
 
-def set_defaults_for_summarized_view(filters, row):
-	for entry in get_columns(filters):
+def set_defaults_for_summarized_view(columns, row):
+	for entry in columns:
 		if entry.get("fieldtype") == "Float":
 			row[entry.get("fieldname")] = 0.0
 

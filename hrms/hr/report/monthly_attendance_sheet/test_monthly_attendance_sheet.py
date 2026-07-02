@@ -121,6 +121,33 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 		)
 
 	@set_holiday_list("Salary Slip Test Holiday List", "_Test Company")
+	def test_multi_shift_detailed_consistent_variance(self):
+		first = get_first_day_for_prev_month()
+		if not frappe.db.exists("Shift Type", "Night Shift"):
+			setup_shift_type(shift_type="Night Shift")
+
+		n0 = mark_attendance(self.employee, first, "Present", "Day Shift")
+		frappe.db.set_value(
+			"Attendance", n0, {"in_time": f"{first} 08:00:00", "out_time": f"{first} 17:30:00"}
+		)  # 8.0
+		second = first + relativedelta(days=1)
+		n1 = mark_attendance(self.employee, second, "Present", "Night Shift")
+		frappe.db.set_value(
+			"Attendance", n1, {"in_time": f"{second} 08:00:00", "out_time": f"{second} 16:00:00"}
+		)  # 6.5
+
+		filters = frappe._dict(
+			month=first.month, year=first.year, company=self.company, working_hours_period="Month"
+		)
+		report = execute(filters=filters)
+		rows = [r for r in report[1] if r.get("employee") == self.employee]
+		# 2 dòng (2 shift); mỗi dòng phải là TỔNG của nhân sự (14.5), variance nhất quán với total của dòng
+		self.assertGreaterEqual(len(rows), 2)
+		for r in rows:
+			self.assertEqual(r["total_working_hours"], 14.5)
+			self.assertEqual(r["variance"], round(14.5 - r["standard_hours"], 2))
+
+	@set_holiday_list("Salary Slip Test Holiday List", "_Test Company")
 	def test_working_hours_week_mode_columns(self):
 		first = get_first_day_for_prev_month()
 		n0 = mark_attendance(self.employee, first, "Present")

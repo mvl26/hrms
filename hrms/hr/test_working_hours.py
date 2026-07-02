@@ -13,7 +13,9 @@ from erpnext.setup.doctype.employee.test_employee import make_employee
 from hrms.hr.doctype.attendance.attendance import mark_attendance
 from hrms.hr.working_hours import (
 	compute_net_hours,
+	get_active_employee_count,
 	get_avg_working_hours_card,
+	get_effective_days_in_month,
 	get_hours_by_department,
 	get_hours_by_week,
 	get_net_hours_map,
@@ -98,6 +100,11 @@ class TestGetNetHoursMap(FrappeTestCase):
 		hours_map = get_net_hours_map(filters)
 		self.assertEqual(hours_map[self.employee][""][3], 7.5)  # 9.0 - 1.5
 
+	def test_empty_companies_returns_empty_without_sql_error(self):
+		# không có company -> không dựng `company IN ()` -> trả rỗng, không lỗi SQL
+		filters = frappe._dict(companies=[], month=3, year=2026)
+		self.assertEqual(get_net_hours_map(filters), {})
+
 
 class TestHoursAggregation(FrappeTestCase):
 	def setUp(self):
@@ -137,6 +144,17 @@ class TestStandardHours(FrappeTestCase):
 		self.assertEqual(get_standard_hours(5, 10), 0.0)
 
 
+class TestEffectiveDays(FrappeTestCase):
+	def test_past_month_uses_full_month(self):
+		# tháng 1/2020 đã qua -> đủ 31 ngày
+		self.assertEqual(get_effective_days_in_month(2020, 1), 31)
+
+	def test_current_month_clamped_to_today(self):
+		today = getdate()
+		eff = get_effective_days_in_month(today.year, today.month)
+		self.assertEqual(eff, today.day)
+
+
 class TestWorkingHoursCards(FrappeTestCase):
 	def setUp(self):
 		self.company = "_Test Company"
@@ -150,16 +168,32 @@ class TestWorkingHoursCards(FrappeTestCase):
 		)  # net 8.0
 		self.filters = json.dumps({"company": self.company, "month": 3, "year": 2026})
 
+	def _count_filters(self):
+		return frappe._dict(company=self.company, month=3, year=2026)
+
 	def test_total_card(self):
+		# chỉ nhân sự có chấm công đóng góp -> đúng 8.0 bất kể mẫu số
 		res = get_total_working_hours_card(self.filters)
 		self.assertEqual(res["fieldtype"], "Float")
-		self.assertGreaterEqual(res["value"], 8.0)
+		self.assertEqual(res["value"], 8.0)
 
 	def test_avg_card(self):
+		# TB = tổng giờ (8.0) / số nhân sự Active
+		headcount = get_active_employee_count(self._count_filters())
 		res = get_avg_working_hours_card(self.filters)
-		self.assertGreater(res["value"], 0.0)
+		self.assertEqual(res["value"], round(8.0 / headcount, 2))
 
 	def test_under_target_card(self):
-		# 1 ngày công 8h nhưng định mức cả tháng lớn hơn -> thiếu giờ
+		# tháng test: mọi nhân sự Active đều dưới định mức (max 8h << định mức tháng)
+		headcount = get_active_employee_count(self._count_filters())
 		res = get_under_target_count_card(self.filters)
-		self.assertGreaterEqual(res["value"], 1)
+		self.assertEqual(res["value"], headcount)
+
+	def test_cards_count_all_active_employees(self):
+		# thêm nhân sự Active KHÔNG chấm công -> tăng mẫu số, và bị tính là thiếu giờ
+		before = get_active_employee_count(self._count_filters())
+		make_employee("wh_card_test2@example.com", company=self.company)
+		after = get_active_employee_count(self._count_filters())
+		self.assertEqual(after, before + 1)
+		self.assertEqual(get_under_target_count_card(self.filters)["value"], after)
+		self.assertEqual(get_avg_working_hours_card(self.filters)["value"], round(8.0 / after, 2))
