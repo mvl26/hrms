@@ -10,6 +10,7 @@ from frappe.utils import cint, flt, getdate, time_diff_in_hours
 from frappe.utils.nestedset import get_descendants_of
 
 LUNCH_BREAK_HOURS = 1.5
+STANDARD_HOURS_PER_DAY = 8.0
 FULL_DAY_STATUSES = ("Present", "Work From Home")
 
 
@@ -146,3 +147,107 @@ def get_hours_by_department(filters):
 	labels = list(totals.keys())
 	values = [round(totals[d], 2) for d in labels]
 	return {"labels": labels, "values": values}
+
+
+# ---------------------------------------------------------------------------
+# Định mức (standard hours = 8h × số ngày công theo Holiday List)
+# ---------------------------------------------------------------------------
+
+
+def get_standard_hours(total_days, num_holidays):
+	"""Giờ định mức = 8h × số ngày công (tổng ngày trừ ngày nghỉ/lễ)."""
+	working_days = max(cint(total_days) - cint(num_holidays), 0)
+	return round(STANDARD_HOURS_PER_DAY * working_days, 2)
+
+
+def _count_holidays_in_month(holiday_list, year, month):
+	if not holiday_list:
+		return 0
+	last_day = monthrange(cint(year), cint(month))[1]
+	first = getdate(f"{year}-{cint(month):02d}-01")
+	last = getdate(f"{year}-{cint(month):02d}-{last_day:02d}")
+	return frappe.db.count(
+		"Holiday", {"parent": holiday_list, "holiday_date": ["between", [first, last]]}
+	)
+
+
+def get_standard_hours_map(filters, employees=None):
+	"""{employee: standard_hours} theo Holiday List của từng nhân sự."""
+	filters = prepare_filters(filters)
+	total_days = monthrange(filters.year, filters.month)[1]
+	company = filters.get("company") or (filters.companies[0] if filters.get("companies") else None)
+	default_holiday_list = (
+		frappe.get_cached_value("Company", company, "default_holiday_list") if company else None
+	)
+
+	emp_filters = {}
+	if employees:
+		emp_filters["name"] = ["in", employees]
+	elif filters.get("companies"):
+		emp_filters["company"] = ["in", filters.companies]
+	emp_rows = frappe.get_all("Employee", filters=emp_filters, fields=["name", "holiday_list"])
+
+	holiday_cache = {}
+	result = {}
+	for emp in emp_rows:
+		hlist = emp.holiday_list or default_holiday_list
+		if hlist not in holiday_cache:
+			holiday_cache[hlist] = _count_holidays_in_month(hlist, filters.year, filters.month)
+		result[emp.name] = get_standard_hours(total_days, holiday_cache[hlist])
+
+	return result
+
+
+# ---------------------------------------------------------------------------
+# KPI number card methods (type Custom -> trả {"value", "fieldtype"})
+# ---------------------------------------------------------------------------
+
+
+def _parse_card_filters(filters):
+	if isinstance(filters, str):
+		filters = frappe.parse_json(filters)
+	if isinstance(filters, (list, tuple)):
+		parsed = {}
+		for f in filters:
+			if isinstance(f, (list, tuple)) and len(f) >= 4:
+				parsed[f[1]] = f[3]
+		filters = parsed
+	filters = frappe._dict(filters or {})
+	if not filters.get("company"):
+		filters.company = frappe.defaults.get_user_default("Company")
+	return prepare_filters(filters)
+
+
+@frappe.whitelist()
+def get_total_working_hours_card(filters=None):
+	frappe.has_permission("Attendance", throw=True)
+	filters = _parse_card_filters(filters)
+	net_map = get_net_hours_map(filters)
+	total = sum(_employee_total(shift_hours) for shift_hours in net_map.values())
+	return {"value": round(total, 2), "fieldtype": "Float"}
+
+
+@frappe.whitelist()
+def get_avg_working_hours_card(filters=None):
+	frappe.has_permission("Attendance", throw=True)
+	filters = _parse_card_filters(filters)
+	net_map = get_net_hours_map(filters)
+	if not net_map:
+		return {"value": 0.0, "fieldtype": "Float"}
+	total = sum(_employee_total(shift_hours) for shift_hours in net_map.values())
+	return {"value": round(total / len(net_map), 2), "fieldtype": "Float"}
+
+
+@frappe.whitelist()
+def get_under_target_count_card(filters=None):
+	frappe.has_permission("Attendance", throw=True)
+	filters = _parse_card_filters(filters)
+	net_map = get_net_hours_map(filters)
+	if not net_map:
+		return {"value": 0, "fieldtype": "Int"}
+	std_map = get_standard_hours_map(filters, employees=list(net_map.keys()))
+	count = 0
+	for employee, shift_hours in net_map.items():
+		if _employee_total(shift_hours) < std_map.get(employee, 0.0):
+			count += 1
+	return {"value": count, "fieldtype": "Int"}

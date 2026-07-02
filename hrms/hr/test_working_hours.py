@@ -1,6 +1,8 @@
 # Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
 # License: GNU General Public License v3. See license.txt
 
+import json
+
 import frappe
 from frappe import _
 from frappe.tests.utils import FrappeTestCase
@@ -11,9 +13,13 @@ from erpnext.setup.doctype.employee.test_employee import make_employee
 from hrms.hr.doctype.attendance.attendance import mark_attendance
 from hrms.hr.working_hours import (
 	compute_net_hours,
+	get_avg_working_hours_card,
 	get_hours_by_department,
 	get_hours_by_week,
 	get_net_hours_map,
+	get_standard_hours,
+	get_total_working_hours_card,
+	get_under_target_count_card,
 	get_week_buckets,
 )
 
@@ -117,3 +123,43 @@ class TestHoursAggregation(FrappeTestCase):
 		data = get_hours_by_department(self.filters)
 		self.assertEqual(len(data["labels"]), len(data["values"]))
 		self.assertEqual(round(sum(data["values"]), 2), 8.0)
+
+
+class TestStandardHours(FrappeTestCase):
+	def test_standard_hours_excludes_holidays(self):
+		# tháng 31 ngày, 5 ngày nghỉ -> 26 ngày công x 8h = 208
+		self.assertEqual(get_standard_hours(31, 5), 208.0)
+
+	def test_standard_hours_no_holidays(self):
+		self.assertEqual(get_standard_hours(30, 0), 240.0)
+
+	def test_standard_hours_floor_non_negative(self):
+		self.assertEqual(get_standard_hours(5, 10), 0.0)
+
+
+class TestWorkingHoursCards(FrappeTestCase):
+	def setUp(self):
+		self.company = "_Test Company"
+		self.employee = make_employee("wh_card_test@example.com", company=self.company)
+		frappe.db.delete("Attendance", {"employee": self.employee})
+		name = mark_attendance(self.employee, getdate("2026-03-02"), "Present")
+		frappe.db.set_value(
+			"Attendance",
+			name,
+			{"in_time": "2026-03-02 08:00:00", "out_time": "2026-03-02 17:30:00"},
+		)  # net 8.0
+		self.filters = json.dumps({"company": self.company, "month": 3, "year": 2026})
+
+	def test_total_card(self):
+		res = get_total_working_hours_card(self.filters)
+		self.assertEqual(res["fieldtype"], "Float")
+		self.assertGreaterEqual(res["value"], 8.0)
+
+	def test_avg_card(self):
+		res = get_avg_working_hours_card(self.filters)
+		self.assertGreater(res["value"], 0.0)
+
+	def test_under_target_card(self):
+		# 1 ngày công 8h nhưng định mức cả tháng lớn hơn -> thiếu giờ
+		res = get_under_target_count_card(self.filters)
+		self.assertGreaterEqual(res["value"], 1)
