@@ -14,6 +14,7 @@ from hrms.hr.doctype.attendance.attendance import mark_attendance
 from hrms.hr.working_hours import (
 	compute_net_hours,
 	get_active_employee_count,
+	prepare_filters,
 	get_avg_working_hours_card,
 	get_effective_days_in_month,
 	get_hours_by_department,
@@ -24,6 +25,7 @@ from hrms.hr.working_hours import (
 	get_under_target_count_card,
 	get_week_buckets,
 )
+from hrms.tests.test_utils import create_company
 
 
 class TestComputeNetHours(FrappeTestCase):
@@ -197,3 +199,12 @@ class TestWorkingHoursCards(FrappeTestCase):
 		self.assertEqual(after, before + 1)
 		self.assertEqual(get_under_target_count_card(self.filters)["value"], after)
 		self.assertEqual(get_avg_working_hours_card(self.filters)["value"], round(8.0 / after, 2))
+
+
+class TestPrepareFilters(FrappeTestCase):
+	def test_includes_company_descendants(self):
+		parent = create_company("_WH Parent Co", is_group=1)
+		child = create_company("_WH Child Co", parent_company=parent.name)
+		f = prepare_filters({"company": parent.name, "month": 3, "year": 2026})
+		self.assertIn(parent.name, f.companies)
+		self.assertIn(child.name, f.companies)

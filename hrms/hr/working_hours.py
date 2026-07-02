@@ -59,7 +59,8 @@ def prepare_filters(filters):
 	if not filters.get("companies"):
 		company = filters.get("company")
 		companies = [company] if company else []
-		if company and filters.get("include_company_descendants"):
+		if company:
+			# gồm cả company con (nhất quán với báo cáo chấm công)
 			companies.extend(get_descendants_of("Company", company))
 		filters.companies = companies
 

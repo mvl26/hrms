@@ -12,7 +12,7 @@ from frappe.query_builder.functions import Count, Extract, Sum
 from frappe.utils import cint, cstr, getdate
 from frappe.utils.nestedset import get_descendants_of
 
-from hrms.hr.working_hours import get_net_hours_map, get_standard_hours, get_week_buckets
+from hrms.hr.working_hours import compute_net_hours, get_standard_hours, get_week_buckets
 
 Filters = frappe._dict
 
@@ -44,13 +44,13 @@ def execute(filters: Filters | None = None) -> tuple:
 		if filters.include_company_descendants:
 			filters.companies.extend(get_descendants_of("Company", filters.company))
 
-	attendance_map = get_attendance_map(filters)
+	attendance_map, net_hours_map = get_attendance_map(filters)
 	if not attendance_map:
 		frappe.msgprint(_("No attendance records found."), alert=True, indicator="orange")
 		return [], [], None, None
 
 	columns = get_columns(filters)
-	data = get_data(filters, attendance_map)
+	data = get_data(filters, attendance_map, net_hours_map)
 
 	if not data:
 		frappe.msgprint(_("No attendance records found for this criteria."), alert=True, indicator="orange")
@@ -225,10 +225,9 @@ def get_total_days_in_month(filters: Filters) -> int:
 	return monthrange(cint(filters.year), cint(filters.month))[1]
 
 
-def get_data(filters: Filters, attendance_map: dict) -> list[dict]:
+def get_data(filters: Filters, attendance_map: dict, net_hours_map: dict) -> list[dict]:
 	employee_details, group_by_param_values = get_employee_related_details(filters)
 	holiday_map = get_holiday_map(filters)
-	net_hours_map = get_net_hours_map(filters)
 	data = []
 
 	if filters.group_by:
@@ -267,9 +266,16 @@ def get_attendance_map(filters: Filters) -> dict:
 	"""
 	attendance_list = get_attendance_records(filters)
 	attendance_map = {}
+	net_hours_map = {}
 	leave_map = {}
 
 	for d in attendance_list:
+		# giờ làm net dựng từ chính lượt quét này (tránh quét Attendance lần 2)
+		shift_key = d.shift or ""
+		net_hours_map.setdefault(d.employee, {}).setdefault(shift_key, {})[d.day_of_month] = compute_net_hours(
+			d.raw_status, d.in_time, d.out_time, d.working_hours
+		)
+
 		if d.status == "On Leave":
 			leave_map.setdefault(d.employee, {}).setdefault(d.shift, []).append(d.day_of_month)
 			continue
@@ -291,7 +297,7 @@ def get_attendance_map(filters: Filters) -> dict:
 				for shift in attendance_map[employee].keys():
 					attendance_map[employee][shift][day] = "On Leave"
 
-	return attendance_map
+	return attendance_map, net_hours_map
 
 
 def get_attendance_records(filters: Filters) -> list[dict]:
@@ -314,7 +320,11 @@ def get_attendance_records(filters: Filters) -> list[dict]:
 			Attendance.employee,
 			Extract("day", Attendance.attendance_date).as_("day_of_month"),
 			(status).as_("status"),
+			Attendance.status.as_("raw_status"),
 			Attendance.shift,
+			Attendance.in_time,
+			Attendance.out_time,
+			Attendance.working_hours,
 		)
 		.where(
 			(Attendance.docstatus == 1)
