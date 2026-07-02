@@ -12,7 +12,7 @@ from frappe.query_builder.functions import Count, Extract, Sum
 from frappe.utils import cint, cstr, getdate
 from frappe.utils.nestedset import get_descendants_of
 
-from hrms.hr.working_hours import get_net_hours_map, get_week_buckets
+from hrms.hr.working_hours import get_net_hours_map, get_standard_hours, get_week_buckets
 
 Filters = frappe._dict
 
@@ -187,6 +187,11 @@ def get_working_hours_columns(filters: Filters) -> list[dict]:
 		columns.append(
 			{"label": _("Total Working Hours"), "fieldname": "total_working_hours", "fieldtype": "Float", "width": 130}
 		)
+
+	columns.append(
+		{"label": _("Standard Hours"), "fieldname": "standard_hours", "fieldtype": "Float", "width": 110}
+	)
+	columns.append({"label": _("Variance"), "fieldname": "variance", "fieldtype": "Float", "width": 100})
 	return columns
 
 
@@ -436,6 +441,7 @@ def get_rows(
 		if filters.get("working_hours_period") == "Week"
 		else None
 	)
+	total_days = get_total_days_in_month(filters)
 
 	for employee, details in employee_details.items():
 		emp_holiday_list = details.holiday_list or default_holiday_list
@@ -459,6 +465,7 @@ def get_rows(
 
 			emp_day_hours = _flatten_employee_hours(net_hours_map.get(employee, {}))
 			set_working_hours_on_row(row, emp_day_hours, filters, week_buckets)
+			set_standard_and_variance(row, total_days, holidays)
 
 			records.append(row)
 		else:
@@ -474,6 +481,7 @@ def get_rows(
 				shift_key = record.get("shift") or ""
 				day_hours = net_hours_map.get(employee, {}).get(shift_key, {})
 				set_working_hours_on_row(record, day_hours, filters, week_buckets)
+				set_standard_and_variance(record, total_days, holidays)
 				record.update({"employee": employee, "employee_name": details.employee_name})
 
 			records.extend(attendance_for_employee)
@@ -499,6 +507,12 @@ def set_working_hours_on_row(row: dict, day_hours: dict, filters: Filters, week_
 		row["total_working_hours"] = round(total, 2)
 	else:
 		row["total_working_hours"] = round(sum(day_hours.values()), 2)
+
+
+def set_standard_and_variance(row: dict, total_days: int, holidays) -> None:
+	standard = get_standard_hours(total_days, len(holidays or []))
+	row["standard_hours"] = standard
+	row["variance"] = round(row.get("total_working_hours", 0.0) - standard, 2)
 
 
 def set_defaults_for_summarized_view(filters, row):

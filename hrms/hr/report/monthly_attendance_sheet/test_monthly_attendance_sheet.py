@@ -94,6 +94,33 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 		self.assertEqual(row["total_working_hours"], 14.5)
 
 	@set_holiday_list("Salary Slip Test Holiday List", "_Test Company")
+	def test_standard_and_variance_columns(self):
+		first = get_first_day_for_prev_month()
+		n0 = mark_attendance(self.employee, first, "Present")
+		frappe.db.set_value(
+			"Attendance",
+			n0,
+			{"in_time": f"{first} 08:00:00", "out_time": f"{first} 17:30:00"},
+		)  # net 8.0
+
+		filters = frappe._dict(
+			month=first.month,
+			year=first.year,
+			company=self.company,
+			working_hours_period="Month",
+		)
+		report = execute(filters=filters)
+		fieldnames = [c["fieldname"] for c in report[0]]
+		self.assertIn("standard_hours", fieldnames)
+		self.assertIn("variance", fieldnames)
+
+		row = next(r for r in report[1] if r.get("employee") == self.employee)
+		self.assertGreater(row["standard_hours"], 0)
+		self.assertEqual(
+			row["variance"], round(row["total_working_hours"] - row["standard_hours"], 2)
+		)
+
+	@set_holiday_list("Salary Slip Test Holiday List", "_Test Company")
 	def test_working_hours_week_mode_columns(self):
 		first = get_first_day_for_prev_month()
 		n0 = mark_attendance(self.employee, first, "Present")
