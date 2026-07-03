@@ -39,23 +39,23 @@ running · ⬜ ready to build.
   - Files: `hrms/fixtures/attendance_code.json`, `hooks.py`.
   - Depends on: Task 1 (leave_type links), Task 2.
 
-- [ ] ✋ Task 4 (Phase 2a): Custom fields on Attendance via fixtures.
+- [x] Task 4 (Phase 2a): Custom fields on Attendance via fixtures. DONE `c26786e`.
   - `custom_attendance_code`, `custom_morning_code`, `custom_afternoon_code`,
     `custom_cong` (read-only, computed).
   - Ask-first: adds fields to core Attendance (fixtures → all sites).
   - Files: `hrms/fixtures/custom_field.json`, `hooks.py`.
   - Depends on: Task 2.
 
-- [ ] ✋ Task 5 (Phase 2 GATE): Payroll-invariance test — MUST exist and pass before the
-      bridge merges.
+- [x] Task 5 (Phase 2 GATE): Payroll-invariance test. DONE `f00d163` — native vs code entry
+      give identical payment_days/absent_days/LWP. Gate passed.
   - Build a Salary Slip on fixed data; record `payment_days`/`absent_days`/LWP; add codes +
     run the bridge; rebuild; assert the three are identical.
   - Verify: rollback harness (no `bench run-tests` — before_tests commits into live DB).
   - Files: `hrms/hr/doctype/attendance/test_attendance.py` (or a new test module).
   - Depends on: Task 4.
 
-- [ ] 🔴✋ Task 6 (Phase 2b): `before_validate` two-way bridge (forward: codes→native
-      status/leave_type/half_day + `custom_cong`; reverse: status/leave_type→codes).
+- [x] Task 6 (Phase 2b): `before_validate` two-way bridge. DONE `e141745` — 6 bridge unit tests
+      green; payroll-invariance (Task 5) green; shift_type regression (29) green.
   - HIGH-RISK: touches core Attendance validation feeding payroll. Correct mapping depends on
     the confirmed symbol table (Task 3). Ask-first sign-off before merge.
   - Acceptance: forward + reverse mappings correct; payroll-invariance test (Task 5) green.
@@ -63,7 +63,8 @@ running · ⬜ ready to build.
   - Depends on: Task 3, Task 5.
 
 - [ ] 🔴✋ Task 7 (Phase 2c): Backfill patch to populate `custom_attendance_code` on existing
-      Attendance.
+      Attendance. **← STOP HERE. Not run: data migration that mutates existing rows, NOT
+      reversible via git revert. Needs explicit sign-off + dry-run plan.**
   - HIGH-RISK data migration — NOT reversible via `git revert` alone (mutates rows).
     Explicit sign-off + a dry-run/rollback plan required before running on any site.
   - Files: `hrms/patches/*`, `patches.txt`.
