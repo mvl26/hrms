@@ -366,3 +366,24 @@ company_data_to_be_ignored = [
 	"Employee Onboarding Template",
 	"Employee Separation Template",
 ]
+
+# VN timekeeping (mã công) master data — deployed to all sites via `bench migrate`.
+# Leave Type is filtered to only the VN anchors so existing/standard Leave Types are not exported.
+fixtures = [
+	{
+		"dt": "Leave Type",
+		"filters": {
+			"name": [
+				"in",
+				[
+					"Nghỉ phép năm",
+					"Nghỉ ốm",
+					"Nghỉ chăm con ốm",
+					"Nghỉ thai sản",
+					"Nghỉ bù",
+					"Nghỉ không lương",
+				],
+			]
+		},
+	},
+]
