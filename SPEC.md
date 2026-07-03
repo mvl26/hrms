@@ -115,9 +115,9 @@ still pass.
 
 ## Success Criteria
 
-- [ ] `test_reset_skip_auto_attendance_on_cancel` passes.
-- [ ] `test_reset_skip_auto_attendance_on_delete` passes (draft blocker deleted → skip=0).
-- [ ] `test_skip_auto_attendance_for_duplicate_record` still passes.
-- [ ] `test_skip_auto_attendance_for_overlapping_shift` still passes.
-- [ ] Change is confined to `attendance.py` (+ the new test) and is reversible via
+- [x] `test_reset_skip_auto_attendance_on_cancel` passes.
+- [x] `test_reset_skip_auto_attendance_on_delete` passes (draft blocker deleted → skip=0).
+- [x] `test_skip_auto_attendance_for_duplicate_record` still passes.
+- [x] `test_skip_auto_attendance_for_overlapping_shift` still passes.
+- [x] Change is confined to `attendance.py` (+ the new test) and is reversible via
       `git revert`.
