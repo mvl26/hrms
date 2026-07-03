@@ -10,6 +10,7 @@ from frappe.utils import (
 	add_days,
 	cint,
 	cstr,
+	flt,
 	format_date,
 	get_datetime,
 	get_link_to_form,
@@ -35,9 +36,76 @@ class OverlappingShiftAttendanceError(frappe.ValidationError):
 
 
 class Attendance(Document):
+	def before_validate(self):
+		self.apply_attendance_code_bridge()
+
 	def before_insert(self):
 		if self.half_day_status == "":
 			self.half_day_status = None
+
+	def apply_attendance_code_bridge(self):
+		"""Two-way bridge between VN attendance codes (mã công) and the native status fields
+		that payroll reads (status / leave_type / half_day_status). It never touches the
+		skip logic and only sets fields native entry would set, so payroll stays invariant.
+
+		Forward (user entered code(s)): morning/afternoon (or a single day code) -> native fields
+		+ custom_cong (Σ work_fraction of Công-category halves).
+		Reverse (record has a status but no code, e.g. from auto-attendance / leave): derive
+		custom_attendance_code for display only, without changing native fields.
+		"""
+		if not frappe.get_meta("Attendance").has_field("custom_attendance_code"):
+			return  # custom-field fixtures not installed yet
+
+		morning = self.get("custom_morning_code") or self.get("custom_attendance_code")
+		afternoon = self.get("custom_afternoon_code") or self.get("custom_attendance_code")
+
+		if morning or afternoon:
+			self._apply_codes_forward(morning or afternoon, afternoon or morning)
+		else:
+			self._derive_attendance_code_reverse()
+
+	def _get_attendance_code(self, name):
+		if not name:
+			return None
+		return frappe.db.get_value(
+			"Attendance Code",
+			name,
+			["category", "work_fraction", "is_paid", "maps_to_status", "leave_type"],
+			as_dict=True,
+		)
+
+	def _apply_codes_forward(self, morning, afternoon):
+		m = self._get_attendance_code(morning)
+		a = self._get_attendance_code(afternoon)
+		if not (m and a):
+			return
+
+		# công đi làm thực tế: only Công-category counts; each half = work_fraction * 0.5
+		self.custom_cong = sum(flt(c.work_fraction) * 0.5 for c in (m, a) if c.category == "Công")
+		# single display code only when the whole day is one code
+		self.custom_attendance_code = morning if morning == afternoon else None
+
+		if m.maps_to_status == a.maps_to_status:
+			self.status = m.maps_to_status
+			self.leave_type = m.leave_type if m.maps_to_status in ("On Leave", "Half Day") else None
+		else:
+			# one working half + one non-working half -> Half Day; the non-working half sets leave_type
+			self.status = "Half Day"
+			leave_half = m if m.maps_to_status not in ("Present", "Work From Home") else a
+			self.leave_type = leave_half.leave_type
+			self.half_day_status = "Present" if leave_half.maps_to_status == "On Leave" else "Absent"
+
+	def _derive_attendance_code_reverse(self):
+		if self.get("custom_attendance_code") or not self.status:
+			return
+		# ["is","not set"] reliably matches NULL/'' Link values (unlike ["in", ["", None]])
+		filters = {"maps_to_status": self.status, "leave_type": self.leave_type or ["is", "not set"]}
+		code = frappe.db.get_value("Attendance Code", filters, "name")
+		if not code:
+			return
+		self.custom_attendance_code = code
+		c = self._get_attendance_code(code)
+		self.custom_cong = flt(c.work_fraction) if c and c.category == "Công" else 0
 
 	def validate(self):
 		from erpnext.controllers.status_updater import validate_status
