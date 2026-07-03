@@ -70,14 +70,16 @@ running · ⬜ ready to build.
   - Files: `hrms/patches/*`, `patches.txt`.
   - Depends on: Task 6.
 
-- [ ] ⬜ Task 8 (Phase 3a): Script Report "Bảng chấm công tháng" (read-only pivot:
-      employee × day = code; summary columns sum `work_fraction` by category).
-  - Data-safe (read-only). Files: `hrms/hr/report/bang_cham_cong_thang/*`.
-  - Depends on: Task 3 (codes exist to display).
+- [x] Task 8 (Phase 3a): Script Report "Bảng chấm công tháng". DONE `779e53c` — pivot
+      employee × day = mã công + category totals (work_fraction). Read-only; verified via the
+      framework report runner + unit test. Report name "Bang Cham Cong Thang" (ASCII so
+      frappe.scrub matches the folder). Printable via Frappe's report view. **MVP read-layer done.**
 
-- [ ] ⬜ Task 9 (Phase 3b): VN paper-form Print Format (symbols, totals, sign-off boxes).
-  - Data-safe. Files: print format fixture / `hrms/fixtures`.
-  - Depends on: Task 8.
+- [ ] Task 9 (Phase 3b): VN paper-form Print Format (symbols, totals, sign-off boxes).
+      **DEFERRED — needs a print target.** A Frappe Print Format attaches to a DocType; the
+      monthly sheet is a Report, so a formal "paper form with sign-off boxes" belongs on the
+      Phase 5 submittable "Bảng công tháng" DocType. The Task 8 report is already printable via
+      the report view, so the MVP read-layer stands without it. Build with Phase 5.
 
 ## Execution note
 
