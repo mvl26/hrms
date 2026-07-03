@@ -36,6 +36,12 @@ class TestAttendanceCodeFixtures(FrappeTestCase):
 			self.assertEqual(int(row.is_lwp), flags["is_lwp"], f"{name}.is_lwp")
 			self.assertEqual(int(row.is_compensatory), flags["is_compensatory"], f"{name}.is_compensatory")
 
+	def test_attendance_custom_fields_exist(self):
+		for fn in ("custom_attendance_code", "custom_morning_code", "custom_afternoon_code", "custom_cong"):
+			self.assertTrue(
+				frappe.db.exists("Custom Field", f"Attendance-{fn}"), f"Missing Custom Field: Attendance-{fn}"
+			)
+
 	def test_vn_attendance_codes_resolve(self):
 		valid_status = {"Present", "Absent", "Half Day", "On Leave", "Work From Home"}
 		for code, (category, wf, is_paid, status, leave_type) in VN_ATTENDANCE_CODES.items():

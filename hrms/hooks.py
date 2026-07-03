@@ -387,4 +387,18 @@ fixtures = [
 		},
 	},
 	"Attendance Code",
+	{
+		"dt": "Custom Field",
+		"filters": {
+			"name": [
+				"in",
+				[
+					"Attendance-custom_attendance_code",
+					"Attendance-custom_morning_code",
+					"Attendance-custom_afternoon_code",
+					"Attendance-custom_cong",
+				],
+			]
+		},
+	},
 ]
