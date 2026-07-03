@@ -19,7 +19,7 @@ running · ⬜ ready to build.
   - Verify: fixture load on miyano via rollback harness; assert flags.
   - Files: `hrms/fixtures` (leave_type), `hooks.py` (fixtures list).
 
-- [ ] ⬜ Task 2 (Phase 1a): `Attendance Code` DocType (schema only, no seed data).
+- [x] Task 2 (Phase 1a): `Attendance Code` DocType (schema only, no seed data).
   - Fields from spec: `code` (unique), `code_name`, `category`, `work_fraction` (0/0.5/1),
     `is_paid`, `maps_to_status` (Present/Absent/Half Day/On Leave/Work From Home),
     `leave_type` (Link, nullable), `color`.
