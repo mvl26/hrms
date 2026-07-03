@@ -262,6 +262,9 @@ class Attendance(Document):
 
 	def after_delete(self):
 		self.publish_update()
+		# a deleted draft Attendance can also have been the record blocking auto attendance
+		# (duplicate check uses docstatus < 2); un-stick those check-ins too
+		self.reset_skipped_checkins()
 
 	def publish_update(self):
 		employee_user = frappe.db.get_value("Employee", self.employee, "user_id", cache=True)

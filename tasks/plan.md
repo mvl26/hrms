@@ -18,7 +18,7 @@ Derived from `SPEC.md`. One vertical slice; additive change to `Attendance.on_ca
     `hrms/hr/doctype/shift_type/test_shift_type.py`
   - Depends on: Task 0.
 
-- [ ] Task 2: Also reset skipped check-ins when a blocking *draft* Attendance is deleted (TDD).
+- [x] Task 2: Also reset skipped check-ins when a blocking *draft* Attendance is deleted (TDD).
   - Rationale: a draft Attendance (docstatus 0) also blocks auto attendance (the duplicate
     check uses `docstatus < 2`) but is deleted directly, never firing `on_cancel`. Closes
     the delete gap symmetrically with Task 1.
