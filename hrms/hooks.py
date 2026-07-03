@@ -386,4 +386,5 @@ fixtures = [
 			]
 		},
 	},
+	"Attendance Code",
 ]

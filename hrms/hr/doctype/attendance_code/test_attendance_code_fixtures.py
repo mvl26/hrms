@@ -35,3 +35,27 @@ class TestAttendanceCodeFixtures(FrappeTestCase):
 			row = frappe.db.get_value("Leave Type", name, ["is_lwp", "is_compensatory"], as_dict=True)
 			self.assertEqual(int(row.is_lwp), flags["is_lwp"], f"{name}.is_lwp")
 			self.assertEqual(int(row.is_compensatory), flags["is_compensatory"], f"{name}.is_compensatory")
+
+	def test_vn_attendance_codes_resolve(self):
+		valid_status = {"Present", "Absent", "Half Day", "On Leave", "Work From Home"}
+		for code, (category, wf, is_paid, status, leave_type) in VN_ATTENDANCE_CODES.items():
+			self.assertTrue(frappe.db.exists("Attendance Code", code), f"Missing Attendance Code: {code}")
+			row = frappe.db.get_value(
+				"Attendance Code",
+				code,
+				["category", "work_fraction", "is_paid", "maps_to_status", "leave_type"],
+				as_dict=True,
+			)
+			self.assertEqual(row.category, category, f"{code}.category")
+			self.assertEqual(float(row.work_fraction), wf, f"{code}.work_fraction")
+			self.assertEqual(int(row.is_paid), is_paid, f"{code}.is_paid")
+			self.assertIn(row.maps_to_status, valid_status, f"{code}.maps_to_status")
+			self.assertEqual(row.maps_to_status, status, f"{code}.maps_to_status")
+			# every code that names a leave_type must point at one that actually exists
+			if leave_type:
+				self.assertEqual(row.leave_type, leave_type, f"{code}.leave_type")
+				self.assertTrue(
+					frappe.db.exists("Leave Type", row.leave_type), f"{code} -> missing Leave Type {row.leave_type}"
+				)
+			else:
+				self.assertIn(row.leave_type, (None, ""), f"{code} should have no leave_type")
