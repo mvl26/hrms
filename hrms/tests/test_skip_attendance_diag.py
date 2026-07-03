@@ -9,7 +9,7 @@ from frappe.utils import getdate, now_datetime
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
-from hrms.skip_attendance_diag import diagnose, reset_wrongly_skipped
+from hrms.skip_attendance_diag import diagnose, export_csv, reset_wrongly_skipped
 
 
 def make_skipped_checkin(employee, minutes_ago=1, log_type="IN", reason=None, linked=False):
@@ -149,3 +149,29 @@ class TestSkipAttendanceDiag(FrappeTestCase):
 		res = diagnose()
 		self.assertIn("skipped", res)
 		self.assertGreaterEqual(res["skipped"], 0)
+
+	# --- export_csv -----------------------------------------------------------
+
+	def test_export_csv_writes_skipped_checkins_with_reasons(self):
+		import csv as _csv
+		import os
+		import tempfile
+
+		with_reason = make_skipped_checkin(
+			self.employee, minutes_ago=1, reason="Attendance already marked for the date"
+		)
+		without_reason = make_skipped_checkin(self.employee, minutes_ago=2)
+
+		path = os.path.join(tempfile.gettempdir(), f"skip_diag_test_{frappe.generate_hash(length=8)}.csv")
+		try:
+			export_csv(path=path)
+			with open(path, newline="") as f:
+				by_name = {row["checkin"]: row for row in _csv.DictReader(f)}
+		finally:
+			if os.path.exists(path):
+				os.remove(path)
+
+		self.assertIn(with_reason.name, by_name)
+		self.assertIn(without_reason.name, by_name)
+		self.assertIn("already marked", by_name[with_reason.name]["skip_reason_comment"])
+		self.assertEqual(by_name[without_reason.name]["skip_reason_comment"], "")
