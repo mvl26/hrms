@@ -27,16 +27,16 @@ check-ins reprocessed on the next run — no manual unticking.
 
 ## Scope & non-goals
 
-- **In scope:** additive recovery on `Attendance.on_cancel`. The *decision* to skip is
-  left exactly as upstream ships it.
+- **In scope:** additive recovery on `Attendance.on_cancel` **and `Attendance.after_delete`**
+  (a draft Attendance also blocks auto attendance but is deleted without firing
+  `on_cancel`). The *decision* to skip is left exactly as upstream ships it.
 - **Explicitly NOT changing** `handle_attendance_exception` / the skip-setting logic, so
   the existing upstream tests that assert `skip_auto_attendance == 1`
   (`test_skip_auto_attendance_for_duplicate_record`,
   `test_skip_auto_attendance_for_overlapping_shift`) keep passing. No fork of core skip
   behaviour, no upstream-merge conflicts.
-- **Out of scope (future):** resetting on delete of a *draft* Attendance
-  (`after_delete`); a Shift Type toggle; auto-triggering processing immediately on cancel
-  (we rely on the existing scheduled/manual run).
+- **Out of scope (future):** a Shift Type toggle; auto-triggering processing immediately
+  on cancel/delete (we rely on the existing scheduled/manual run).
 
 ## Tech Stack
 
@@ -59,6 +59,10 @@ In `hrms/hr/doctype/attendance/attendance.py`:
 def on_cancel(self):
     self.unlink_attendance_from_checkins()
     self.reset_skipped_checkins()
+
+def after_delete(self):
+    self.publish_update()
+    self.reset_skipped_checkins()  # a deleted draft blocker must also un-stick check-ins
 
 def reset_skipped_checkins(self):
     """Re-enable auto attendance for check-ins that were auto-skipped (and are still
@@ -112,6 +116,7 @@ still pass.
 ## Success Criteria
 
 - [ ] `test_reset_skip_auto_attendance_on_cancel` passes.
+- [ ] `test_reset_skip_auto_attendance_on_delete` passes (draft blocker deleted → skip=0).
 - [ ] `test_skip_auto_attendance_for_duplicate_record` still passes.
 - [ ] `test_skip_auto_attendance_for_overlapping_shift` still passes.
 - [ ] Change is confined to `attendance.py` (+ the new test) and is reversible via
