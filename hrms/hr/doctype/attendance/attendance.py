@@ -5,6 +5,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from frappe.query_builder.functions import Date
 from frappe.utils import (
 	add_days,
 	cint,
@@ -51,6 +52,25 @@ class Attendance(Document):
 
 	def on_cancel(self):
 		self.unlink_attendance_from_checkins()
+		self.reset_skipped_checkins()
+
+	def reset_skipped_checkins(self):
+		"""Re-enable auto attendance for check-ins that were auto-skipped (and are still
+		unlinked) for this employee & date, so the next `process_auto_attendance` run can
+		reprocess them. This Attendance may have been the record that blocked them (e.g. a
+		duplicate/overlapping-shift attendance), so cancelling it should un-stick them
+		instead of leaving `skip_auto_attendance` set forever."""
+		EmployeeCheckin = frappe.qb.DocType("Employee Checkin")
+		(
+			frappe.qb.update(EmployeeCheckin)
+			.set(EmployeeCheckin.skip_auto_attendance, 0)
+			.where(
+				(EmployeeCheckin.employee == self.employee)
+				& (EmployeeCheckin.skip_auto_attendance == 1)
+				& (EmployeeCheckin.attendance.isnull() | (EmployeeCheckin.attendance == ""))
+				& (Date(EmployeeCheckin.shift_start) == self.attendance_date)
+			)
+		).run()
 
 	def validate_attendance_date(self):
 		date_of_joining = frappe.db.get_value("Employee", self.employee, "date_of_joining")

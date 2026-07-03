@@ -765,6 +765,40 @@ class TestShiftType(FrappeTestCase):
 		self.assertEqual(log_in.skip_auto_attendance, 1)
 		self.assertEqual(log_out.skip_auto_attendance, 1)
 
+	def test_reset_skip_auto_attendance_on_cancel(self):
+		# Cancelling the Attendance that blocked auto attendance should re-enable the
+		# check-ins that were skipped because of it, so the next run reprocesses them.
+		from hrms.hr.doctype.attendance.attendance import mark_attendance
+		from hrms.hr.doctype.employee_checkin.test_employee_checkin import make_checkin
+
+		employee = make_employee("test_employee_checkin@example.com", company="_Test Company")
+
+		shift_type = setup_shift_type()
+		date = getdate()
+
+		# a pre-existing attendance blocks auto attendance for the check-ins
+		attendance_name = mark_attendance(employee, date, "Present")
+		make_shift_assignment(shift_type.name, employee, date)
+
+		log_in = make_checkin(employee, datetime.combine(date, get_time("08:00:00")))
+		log_out = make_checkin(employee, datetime.combine(date, get_time("12:00:00")))
+
+		# auto attendance skips marking because of the duplicate attendance
+		shift_type.process_auto_attendance()
+
+		log_in.reload()
+		log_out.reload()
+		self.assertEqual(log_in.skip_auto_attendance, 1)
+		self.assertEqual(log_out.skip_auto_attendance, 1)
+
+		# cancelling the blocking attendance re-enables the skipped check-ins
+		frappe.get_doc("Attendance", attendance_name).cancel()
+
+		log_in.reload()
+		log_out.reload()
+		self.assertEqual(log_in.skip_auto_attendance, 0)
+		self.assertEqual(log_out.skip_auto_attendance, 0)
+
 	def test_mark_attendance_for_default_shift_when_shift_assignment_is_not_overlapping(self):
 		shift_1 = setup_shift_type(shift_type="Deafult Shift", start_time="08:00:00", end_time="12:00:00")
 		shift_2 = setup_shift_type(shift_type="Not Default Shift", start_time="10:00:00", end_time="18:00:00")

@@ -5,7 +5,7 @@ Derived from `SPEC.md`. One vertical slice; additive change to `Attendance.on_ca
 - [x] Task 0: Write SPEC.md + this plan. Commit as preparatory commit.
   - Files: SPEC.md, tasks/plan.md
 
-- [ ] Task 1: Reset skipped check-ins when a blocking Attendance is cancelled (TDD).
+- [x] Task 1: Reset skipped check-ins when a blocking Attendance is cancelled (TDD).
   - Acceptance:
     - New `test_reset_skip_auto_attendance_on_cancel` passes.
     - Existing `test_skip_auto_attendance_for_duplicate_record` and
