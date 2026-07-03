@@ -10,7 +10,8 @@ running · ⬜ ready to build.
 - [x] Task 0: Write this plan (preparatory commit).
   - Files: `tasks/plan-attendance-code-timekeeping.md`
 
-- [ ] 🔴✋ Task 1 (Phase 0): Leave Type anchors.
+- [x] Task 1 (Phase 0): Leave Type anchors. DONE (`4428184`) — created 6 VN Leave Types
+      (create-if-missing; existing English ones untouched), filtered fixture. Integrity test green.
   - Blocked by OQ#4: exact VN/EN Leave Type names + flags (`is_lwp`, `is_compensatory`),
     and policy — create-if-missing only, or may we modify Leave Types that already exist on
     live sites (risk to existing leave data)?
@@ -28,7 +29,9 @@ running · ⬜ ready to build.
   - Files: `hrms/hr/doctype/attendance_code/*`.
   - Depends on: Task 0. (Structurally independent of the symbol data.)
 
-- [ ] 🔴 Task 3 (Phase 1b): Seed the VN symbol set via fixtures.
+- [x] Task 3 (Phase 1b): Seed the VN symbol set via fixtures. DONE (`4e90cd4`) — user provided
+      the 7 mã (X/P/Ô/Cô/TS/NB/KL); seeded as Attendance Code fixtures linked to Phase-0 Leave
+      Types. Integrity test green. **STOP HERE — Task 4 (Phase 2) is ask-first (core + payroll).**
   - Blocked by OQ#3: the authoritative mã-công table (all symbols + the 7 columns). The
     spec's draft table is explicitly NOT authoritative and must not be seeded as-is.
   - Acceptance: confirmed symbols present as fixtures; each maps to a valid status/leave_type.
