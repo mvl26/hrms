@@ -8,6 +8,7 @@ import fs from "fs"
 
 export default defineConfig({
 	server: {
+		allowedHosts: ["miyano"],
 		port: 8080,
 		proxy: getProxyOptions(),
 	},
