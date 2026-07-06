@@ -21,8 +21,6 @@
   "recipients_name",
   "expense_details",
   "expenses",
-  "invoices_section",
-  "expense_invoice",
   "taxes_and_charges_sb",
   "taxes",
   "advance_payments_sb",
@@ -417,24 +415,13 @@
    "fieldtype": "Link",
    "label": "Travel Request",
    "options": "Travel Request"
-  },
-  {
-   "fieldname": "invoices_section",
-   "fieldtype": "Section Break",
-   "label": "Invoices"
-  },
-  {
-   "fieldname": "expense_invoice",
-   "fieldtype": "Table",
-   "label": "Expense Invoice",
-   "options": "Expense Invoice"
   }
  ],
  "icon": "fa fa-money",
  "idx": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-03-05 23:55:57.796467",
+ "modified": "2026-07-02 00:00:00.000000",
  "modified_by": "hieu.cv2@miyano.com.vn",
  "module": "HR",
  "name": "Expense Claim",
