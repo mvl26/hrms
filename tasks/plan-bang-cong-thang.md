@@ -12,7 +12,7 @@ Tests run via the session rollback harness (NEVER `bench run-tests` on `miyano`)
 - [x] Task 3: `Bang Cong Thang` parent DocType (is_submittable): company/department/month/year/
       from_date/to_date/prepared_by/remarks/employees/amended_from + `validate` (derive dates,
       no-duplicate guard). Files: `hrms/hr/doctype/bang_cong_thang/*` (json/py/__init__).
-- [ ] Task 4: `populate_from_attendance()` (whitelist, draft-only) + client button (`.js`) that fills
+- [x] Task 4: `populate_from_attendance()` (whitelist, draft-only) + client button (`.js`) that fills
       child rows from `get_sheet_rows`. Files: `bang_cong_thang.py`/`.js` + test.
 - [ ] Task 5: Lifecycle + read-only/payroll-neutral + no-duplicate tests (submit freezes; create+
       populate+submit writes 0 Attendance & payroll unchanged; duplicate raises). Files: test only.
