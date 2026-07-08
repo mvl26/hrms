@@ -9,7 +9,7 @@ Task 5 adds a custom field to core **Expense Claim** = ask-first.
 
 - [x] Task 1: `Cong Tac Traveler` child DocType (employee, is_registrant, estimated_cost,
       expense_claim, notes). Files: `hrms/hr/doctype/cong_tac_traveler/*`.
-- [ ] Task 2: `Cong Tac` parent DocType (fields + validate: dates, ≥1 traveler, approver required
+- [x] Task 2: `Cong Tac` parent DocType (fields + validate: dates, ≥1 traveler, approver required
       before leaving Nháp). Files: `hrms/hr/doctype/cong_tac/*`. Depends: Task 1.
 - [ ] 🔒 Task 3: Workflow "Cong Tac Approval" + Roles COO/HCNSPC + tests. **SIGN-OFF (auth): needs
       Q1 answer (create COO/HCNSPC vs map existing).** Depends: Task 2.
