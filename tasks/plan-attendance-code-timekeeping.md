@@ -62,12 +62,15 @@ running · ⬜ ready to build.
   - Files: `hrms/hr/doctype/attendance/attendance.py`.
   - Depends on: Task 3, Task 5.
 
-- [ ] 🔴✋ Task 7 (Phase 2c): Backfill patch to populate `custom_attendance_code` on existing
-      Attendance. **← STOP HERE. Not run: data migration that mutates existing rows, NOT
-      reversible via git revert. Needs explicit sign-off + dry-run plan.**
-  - HIGH-RISK data migration — NOT reversible via `git revert` alone (mutates rows).
-    Explicit sign-off + a dry-run/rollback plan required before running on any site.
-  - Files: `hrms/patches/*`, `patches.txt`.
+- [~] 🔴✋ Task 7 (Phase 2c): Backfill patch to populate `custom_attendance_code` on existing
+      Attendance. **CODE BUILT + TESTED + DRY-RUN 2026-07-08 (`hrms/patches/v15_0/backfill_attendance_codes.py`,
+      3 tests green). NOT yet executed on any site + NOT yet in patches.txt — awaiting sign-off.**
+  - Writes ONLY display fields `custom_attendance_code` + `custom_cong` (never status/leave_type/
+    half_day_status) → payroll untouched; idempotent; preserves manually-set codes; reversible by
+    clearing the two fields. Reverse-derives from (status, leave_type) like `before_validate`.
+  - Dry-run on `miyano` (3 rows total): would set `V`×2 (Absent), `NN`×1 (Half Day). No writes made.
+  - **Remaining for sign-off:** run `backfill()` on miyano + add the patches.txt line for deployment.
+  - Files: `hrms/patches/v15_0/backfill_attendance_codes.py` (+ test), later `patches.txt`.
   - Depends on: Task 6.
 
 - [x] Task 8 (Phase 3a): Script Report "Bảng chấm công tháng". DONE `779e53c` — pivot
