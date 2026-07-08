@@ -153,3 +153,18 @@ class TestCongTac(FrappeTestCase):
 		link_claim_to_trip(frappe._dict(custom_business_trip=doc.name, employee=self.emp, name="TEST-EC-0002"))
 		doc.reload()  # pick up the write-back on the traveler row
 		self.assertRaises(frappe.ValidationError, doc.make_expense_claim, self.emp)
+
+	# --- print formats ---
+	def test_print_qd_and_giay_di_duong_render(self):
+		doc = self._approved_trip()
+		frappe.db.set_value("Cong Tac", doc.name, "decision_no", "01/QĐ-CT", update_modified=False)
+
+		qd = frappe.get_print("Cong Tac", doc.name, print_format="QD Cu Di Cong Tac")
+		self.assertIn("QUYẾT ĐỊNH", qd)
+		self.assertIn(doc.destination, qd)
+
+		gdd = frappe.get_print("Cong Tac", doc.name, print_format="Giay Di Duong")
+		self.assertIn("GIẤY ĐI ĐƯỜNG", gdd)
+		emp_name = frappe.db.get_value("Employee", self.emp, "employee_name")
+		if emp_name:
+			self.assertIn(emp_name, gdd)  # giấy đi đường lists each traveler by name
