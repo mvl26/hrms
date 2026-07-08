@@ -9,7 +9,7 @@ Tests run via the session rollback harness (NEVER `bench run-tests` on `miyano`)
       Parity locked by existing report tests + a structural test. Files: report `.py` + its test.
 - [x] Task 2: `Bang Cong Thang Detail` child DocType (istable): employee, employee_name, d01..d31,
       8 category totals. Files: `hrms/hr/doctype/bang_cong_thang_detail/*`.
-- [ ] Task 3: `Bang Cong Thang` parent DocType (is_submittable): company/department/month/year/
+- [x] Task 3: `Bang Cong Thang` parent DocType (is_submittable): company/department/month/year/
       from_date/to_date/prepared_by/remarks/employees/amended_from + `validate` (derive dates,
       no-duplicate guard). Files: `hrms/hr/doctype/bang_cong_thang/*` (json/py/__init__).
 - [ ] Task 4: `populate_from_attendance()` (whitelist, draft-only) + client button (`.js`) that fills
