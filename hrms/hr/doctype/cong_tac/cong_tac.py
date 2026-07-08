@@ -14,6 +14,7 @@ class CongTac(Document):
 	def validate(self):
 		self.validate_dates()
 		self.validate_travelers()
+		self.validate_approver()
 
 	def validate_dates(self):
 		if self.from_date and self.to_date and getdate(self.from_date) > getdate(self.to_date):
@@ -23,6 +24,7 @@ class CongTac(Document):
 		if not self.travelers:
 			frappe.throw(_("Vui lòng thêm ít nhất một người đi công tác."))
 
-	def before_submit(self):
-		if not self.approver_coo:
+	def validate_approver(self):
+		# Người duyệt (COO) bắt buộc trước khi rời trạng thái Nháp (trình duyệt qua workflow).
+		if self.workflow_state and self.workflow_state != "Nháp" and not self.approver_coo:
 			frappe.throw(_("Cần chọn người duyệt (COO) trước khi trình duyệt."))

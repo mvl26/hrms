@@ -12,7 +12,7 @@ fixture (user OK'd). Proceeding autonomously; Task 8 must pass the payroll-invar
       expense_claim, notes). Files: `hrms/hr/doctype/cong_tac_traveler/*`.
 - [x] Task 2: `Cong Tac` parent DocType (fields + validate: dates, ≥1 traveler, approver required
       before leaving Nháp). Files: `hrms/hr/doctype/cong_tac/*`. Depends: Task 1.
-- [ ] Task 3: Role "COO" (new) + Workflow "Cong Tac Approval" (states/transitions/docstatus;
+- [x] Task 3: Role "COO" (new) + Workflow "Cong Tac Approval" (states/transitions/docstatus;
       COO duyệt, HR Manager ra QĐ) + tests. Depends: Task 2.
 - [ ] Task 4: Notifications + ToDo assignment on state changes + tests. Depends: Task 3.
 - [ ] Task 5: Expense Claim custom field `custom_business_trip` (fixture) + "Tạo đề nghị thanh toán"

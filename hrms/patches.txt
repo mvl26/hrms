@@ -34,3 +34,4 @@ hrms.patches.v15_0.fix_timesheet_status
 hrms.patches.v15_0.update_advance_payment_ledger_amount #2025-09-23
 hrms.patches.v15_0.call_set_total_advance_paid_on_advance_documents #2025-09-23
 hrms.patches.v15_0.backfill_attendance_codes #2026-07-08
+hrms.patches.v15_0.setup_cong_tac_workflow #2026-07-08
