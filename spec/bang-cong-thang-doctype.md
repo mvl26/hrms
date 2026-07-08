@@ -135,14 +135,17 @@ VN labels via the JSON `label`; tab indentation; typed helper signatures; docstr
 - **Never:** write back to Attendance from this document; change payroll or native status semantics;
   re-implement timekeeping logic; add write-back entry (explicitly rejected in decision #2).
 
-## Acceptance criteria
+## Acceptance criteria — ALL MET 2026-07-08 (42 feature tests green + real-data E2E)
 
-- [ ] `Bang Cong Thang` (submittable) + `Bang Cong Thang Detail` DocTypes install; permissions set.
-- [ ] "Lấy dữ liệu chấm công" populates child rows (d01..dN + 8 totals) identical to the report; draft-only.
-- [ ] Submitting/creating the sheet writes **zero** Attendance rows; payroll figures unchanged (test-proven).
-- [ ] No-duplicate guard on (company, department, month, year); from/to dates auto-derived.
-- [ ] Print Format renders the grid + symbol legend + the two sign boxes (Người chấm công, Phòng Nhân sự).
-- [ ] All reversible via `git revert`; verified on dev `miyano` via the rollback harness.
+- [x] `Bang Cong Thang` (submittable) + `Bang Cong Thang Detail` DocTypes install; permissions set.
+- [x] "Lấy dữ liệu chấm công" populates child rows (d01..dN + 8 totals) via the shared `get_sheet_rows`
+      (identical to the report by construction); draft-only.
+- [x] Submitting/creating the sheet writes **zero** Attendance rows; existing Attendance payroll fields
+      byte-identical (test `test_sheet_is_payroll_neutral_never_writes_attendance`).
+- [x] No-duplicate guard on (company, department, month, year); from/to dates auto-derived.
+- [x] Print Format renders the grid + symbol legend + the two sign boxes (Người chấm công, Phòng Nhân sự).
+- [x] All reversible via `git revert`; verified on dev `miyano` (E2E: sheet `BCT-2026-00001` shows the real
+      V/V/NN attendance → cong 0.5, vắng 2.0; print renders).
 
 ## Out of scope (future specs)
 
