@@ -14,7 +14,7 @@ Tests run via the session rollback harness (NEVER `bench run-tests` on `miyano`)
       no-duplicate guard). Files: `hrms/hr/doctype/bang_cong_thang/*` (json/py/__init__).
 - [x] Task 4: `populate_from_attendance()` (whitelist, draft-only) + client button (`.js`) that fills
       child rows from `get_sheet_rows`. Files: `bang_cong_thang.py`/`.js` + test.
-- [ ] Task 5: Lifecycle + read-only/payroll-neutral + no-duplicate tests (submit freezes; create+
+- [x] Task 5: Lifecycle + read-only/payroll-neutral + no-duplicate tests (submit freezes; create+
       populate+submit writes 0 Attendance & payroll unchanged; duplicate raises). Files: test only.
 - [ ] Task 6: Print Format "Bảng Công Tháng" (grid d01..dN + 8 totals + symbol legend + 2 sign boxes:
       Người chấm công, Phòng Nhân sự). Files: `hrms/hr/print_format/bang_cong_thang/*` + render test.

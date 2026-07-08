@@ -76,3 +76,39 @@ class TestBangCongThang(FrappeTestCase):
 		sheet.insert()
 		sheet.submit()
 		self.assertRaises(frappe.ValidationError, sheet.populate_from_attendance)
+
+	def test_sheet_is_payroll_neutral_never_writes_attendance(self):
+		# creating + populating + submitting the sheet must not create or modify ANY Attendance
+		emp = frappe.db.get_value("Employee", {"company": self.company}, "name")
+		if not emp:
+			self.skipTest("no employee in company")
+		Y, M = 2097, 10
+		self._seed_attendance(emp, Y, M, 3, custom_attendance_code="P")
+		att = frappe.db.get_value(
+			"Attendance", {"employee": emp, "attendance_date": f"{Y}-{M:02d}-03"},
+			["name", "status", "leave_type", "half_day_status"], as_dict=True,
+		)
+		before_count = frappe.db.count("Attendance")
+
+		sheet = self._sheet(month=str(M), year=Y)
+		sheet.insert()
+		sheet.populate_from_attendance()
+		sheet.save()
+		sheet.submit()
+
+		self.assertEqual(frappe.db.count("Attendance"), before_count)  # no new Attendance rows
+		after = frappe.db.get_value(
+			"Attendance", att.name, ["status", "leave_type", "half_day_status"], as_dict=True
+		)
+		# payroll-relevant fields on the existing Attendance are byte-identical
+		self.assertEqual(after.status, att.status)
+		self.assertEqual(after.leave_type, att.leave_type)
+		self.assertEqual(after.half_day_status, att.half_day_status)
+
+	def test_submit_and_cancel_lifecycle(self):
+		sheet = self._sheet(month="11", year=2097)
+		sheet.insert()
+		sheet.submit()
+		self.assertEqual(sheet.docstatus, 1)
+		sheet.cancel()
+		self.assertEqual(sheet.docstatus, 2)
