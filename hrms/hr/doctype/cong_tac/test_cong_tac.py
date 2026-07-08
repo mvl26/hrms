@@ -154,6 +154,25 @@ class TestCongTac(FrappeTestCase):
 		doc.reload()  # pick up the write-back on the traveler row
 		self.assertRaises(frappe.ValidationError, doc.make_expense_claim, self.emp)
 
+	# --- attendance integration ---
+	def test_approval_creates_ct_attendance(self):
+		doc = self._trip(approver=self.user, from_d="2097-07-01", to_d="2097-07-03")
+		doc.insert()
+		apply_workflow(doc, "Gửi duyệt")
+		apply_workflow(doc, "Duyệt")  # -> COO đã duyệt triggers CT attendance
+		atts = frappe.get_all(
+			"Attendance",
+			filters={
+				"employee": self.emp,
+				"attendance_date": ["between", ["2097-07-01", "2097-07-03"]],
+				"custom_attendance_code": "CT",
+			},
+			fields=["name", "status"],
+		)
+		self.assertTrue(atts, "CT attendance phải được tạo khi chuyến được duyệt")
+		for a in atts:
+			self.assertEqual(a.status, "Work From Home")  # paid working day (payroll-neutral)
+
 	# --- print formats ---
 	def test_print_qd_and_giay_di_duong_render(self):
 		doc = self._approved_trip()

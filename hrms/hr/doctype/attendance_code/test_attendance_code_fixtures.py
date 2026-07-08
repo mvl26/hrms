@@ -33,6 +33,7 @@ VN_ATTENDANCE_CODES = {
 	"K": ("Không lương", 0.0, 0, "On Leave", "Nghỉ không lương"),
 	"1/2K": ("Không lương", 0.5, 0, "Half Day", "Nghỉ không lương"),
 	"V": ("Vắng", 0.0, 0, "Absent", None),  # vắng không lý do — hiển thị cho ngày Absent
+	"CT": ("Công", 1.0, 1, "Work From Home", None),  # đi công tác — tính công, paid
 }
 
 

@@ -166,5 +166,19 @@
   "modified": "2026-07-08 00:00:00.000000",
   "name": "V",
   "work_fraction": 0.0
+ },
+ {
+  "category": "Công",
+  "code": "CT",
+  "code_name": "Đi công tác",
+  "color": null,
+  "docstatus": 0,
+  "doctype": "Attendance Code",
+  "is_paid": 1,
+  "leave_type": null,
+  "maps_to_status": "Work From Home",
+  "modified": "2026-07-08 00:00:00.000000",
+  "name": "CT",
+  "work_fraction": 1.0
  }
 ]

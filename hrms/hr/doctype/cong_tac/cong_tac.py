@@ -44,6 +44,7 @@ class CongTac(Document):
 		if state == "Chờ COO duyệt":
 			self.assign_actor(self.approver_coo, _("Duyệt đề nghị công tác {0}").format(self.name))
 		elif state == "COO đã duyệt":
+			self.create_travel_attendance()  # approved → mark travel days as CT (đi công tác)
 			for user in self.hr_manager_users():
 				self.assign_actor(user, _("Ra QĐ cử đi công tác {0}").format(self.name))
 		elif state == "Đã ra QĐ":
@@ -71,6 +72,44 @@ class CongTac(Document):
 
 	def employee_user(self, employee):
 		return frappe.db.get_value("Employee", employee, "user_id") if employee else None
+
+	# --- attendance integration (đi công tác → mã CT) ---
+	def create_travel_attendance(self):
+		"""On approval, mark each traveler's working days in the trip window as 'CT' (đi công tác).
+		Skips holidays/weekends and days that already have an Attendance record. CT maps to native
+		Work From Home (a paid working day) via the attendance-code bridge — payroll-neutral."""
+		from erpnext.setup.doctype.employee.employee import is_holiday
+		from frappe.utils import add_days, getdate
+
+		if not frappe.db.exists("Attendance Code", "CT"):
+			return
+		start, end = getdate(self.from_date), getdate(self.to_date)
+		for t in self.travelers:
+			day = start
+			while day <= end:
+				if not self.has_attendance(t.employee, day) and not is_holiday(
+					t.employee, day, raise_exception=False
+				):
+					att = frappe.get_doc(
+						{
+							"doctype": "Attendance",
+							"employee": t.employee,
+							"attendance_date": day,
+							"custom_attendance_code": "CT",
+							"company": self.company or frappe.db.get_value("Employee", t.employee, "company"),
+						}
+					)
+					att.flags.ignore_permissions = True
+					att.insert(ignore_permissions=True)
+					att.submit()
+				day = add_days(day, 1)
+
+	def has_attendance(self, employee, date):
+		return bool(
+			frappe.db.exists(
+				"Attendance", {"employee": employee, "attendance_date": date, "docstatus": ["<", 2]}
+			)
+		)
 
 	# --- expense claim (per-traveler payment) ---
 	@frappe.whitelist()

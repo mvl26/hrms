@@ -18,6 +18,6 @@ fixture (user OK'd). Proceeding autonomously; Task 8 must pass the payroll-invar
 - [x] Task 5: Expense Claim custom field `custom_business_trip` (fixture) + "Tạo đề nghị thanh toán"
       button/method (expense_approver = approver_coo) + tests. Depends: Task 2.
 - [x] Task 6: Print formats QĐ cử đi công tác + giấy đi đường (1 tờ/người) + render tests. Depends: Task 2.
-- [ ] Task 8: Auto-generate "CT" attendance on trip approval (add CT code; create Attendance for travel
+- [x] Task 8: Auto-generate "CT" attendance on trip approval (add CT code; create Attendance for travel
       days skipping holidays/existing) + **payroll-invariance gate**. Depends: Task 3.
 - [ ] Task 7: Permissions/fixtures + migrate miyano + E2E verify + docs. Depends: all.
