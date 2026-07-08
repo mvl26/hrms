@@ -112,3 +112,20 @@ class TestBangCongThang(FrappeTestCase):
 		self.assertEqual(sheet.docstatus, 1)
 		sheet.cancel()
 		self.assertEqual(sheet.docstatus, 2)
+
+	def test_print_format_renders(self):
+		emp = frappe.db.get_value("Employee", {"company": self.company}, "name")
+		if not emp:
+			self.skipTest("no employee in company")
+		Y, M = 2097, 12
+		self._seed_attendance(emp, Y, M, 2, custom_attendance_code="X")
+		sheet = self._sheet(month=str(M), year=Y)
+		sheet.insert()
+		sheet.populate_from_attendance()
+		sheet.save()
+
+		html = frappe.get_print("Bang Cong Thang", sheet.name, print_format="Bang Cong Thang")
+		self.assertIn("BẢNG CHẤM CÔNG THÁNG", html)
+		self.assertIn("NGƯỜI CHẤM CÔNG", html)  # sign box 1
+		self.assertIn("PHÒNG NHÂN SỰ", html)  # sign box 2
+		self.assertIn("Chú thích", html)  # symbol legend

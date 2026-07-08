@@ -16,7 +16,7 @@ Tests run via the session rollback harness (NEVER `bench run-tests` on `miyano`)
       child rows from `get_sheet_rows`. Files: `bang_cong_thang.py`/`.js` + test.
 - [x] Task 5: Lifecycle + read-only/payroll-neutral + no-duplicate tests (submit freezes; create+
       populate+submit writes 0 Attendance & payroll unchanged; duplicate raises). Files: test only.
-- [ ] Task 6: Print Format "Bảng Công Tháng" (grid d01..dN + 8 totals + symbol legend + 2 sign boxes:
+- [x] Task 6: Print Format "Bảng Công Tháng" (grid d01..dN + 8 totals + symbol legend + 2 sign boxes:
       Người chấm công, Phòng Nhân sự). Files: `hrms/hr/print_format/bang_cong_thang/*` + render test.
 - [ ] Task 7: Permissions/fixtures + `bench migrate`/reload on `miyano` + end-to-end verify + docs/plan.
 
