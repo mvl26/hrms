@@ -81,6 +81,24 @@ running · ⬜ ready to build.
       Phase 5 submittable "Bảng công tháng" DocType. The Task 8 report is already printable via
       the report view, so the MVP read-layer stands without it. Build with Phase 5.
 
+## 2026-07-08 — full symbol set completed (Phases A–C)
+
+User supplied the authoritative 13-symbol table + confirmed 4 decisions (all recommended).
+Built on `feat/skip-attendance-diag`, TDD via the rollback harness, all committed:
+
+- **Phase A** (`df2699c`): expanded to 11 enterable codes (added T / 1/2P / 1/2K / NN; renamed
+  KL→K) + new Leave Type "Nghỉ tai nạn lao động". `work_fraction` re-defined as worked-công
+  fraction. Fixtures synced to `miyano`; deprecated KL deleted (0 refs).
+- **Phase B** (`6ae0cb4`): bridge handles single Half-Day codes (sets `half_day_status=Present`);
+  `custom_cong` sums worked fraction over both halves. Payroll-invariance gate extended with a
+  half-day scenario — still identical.
+- **Phase C** (`d46100f`): report renders CN/NL/N calendar markers (from Holiday List +
+  relieving date, no Attendance records) over a full employee roster; totals use worked-công
+  semantics + new "Tai nạn LĐ" category.
+
+Verified on `miyano`: 27 feature tests green + an end-to-end sheet render. Still deferred:
+Task 7 (backfill patch), Task 9 (print format), Phases 4–5.
+
 ## Execution note
 
 Dependency order starts at Task 1 (Phase 0), which is 🔴 BLOCKED (OQ#4) and ✋ ask-first.

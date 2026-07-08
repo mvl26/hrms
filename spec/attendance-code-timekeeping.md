@@ -157,8 +157,9 @@ so `bench migrate` deploys to all hospital sites. Fixture deploy to production s
 
 ## Success Criteria (MVP)
 
-- [ ] `Attendance Code` DocType + confirmed VN symbols seeded via fixtures.
-- [ ] Two-way bridge sets native fields correctly; `custom_cong` = Σ work_fraction.
-- [ ] Payroll-invariance test passes (payment_days/absent_days/LWP unchanged).
-- [ ] "Bảng chấm công tháng" report + Print Format render a correct monthly sheet.
-- [ ] All new work reversible via `git revert`; fixtures additive.
+- [x] `Attendance Code` DocType + confirmed VN symbols (13) seeded via fixtures.
+- [x] Two-way bridge sets native fields correctly (incl. single half-day codes); `custom_cong` = Σ worked work_fraction.
+- [x] Payroll-invariance test passes (payment_days/absent_days/LWP unchanged) — full-day + half-day scenarios.
+- [x] "Bảng chấm công tháng" report renders a correct monthly sheet: symbols per day, CN/NL/N calendar
+      markers, per-category totals. (Print Format still deferred to Phase 5 submittable sheet.)
+- [x] All new work reversible via `git revert`; fixtures additive; verified on dev site `miyano` (27 tests green).
