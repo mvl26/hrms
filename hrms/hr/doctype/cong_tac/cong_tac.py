@@ -71,3 +71,45 @@ class CongTac(Document):
 
 	def employee_user(self, employee):
 		return frappe.db.get_value("Employee", employee, "user_id") if employee else None
+
+	# --- expense claim (per-traveler payment) ---
+	@frappe.whitelist()
+	def make_expense_claim(self, employee=None):
+		"""Return a PREFILLED (unsaved) Expense Claim for one traveler — linked to this trip, with
+		the trip's COO as expense_approver. The traveler completes the expense rows and saves; the
+		claim links back via the Expense Claim hook. Defaults to the current user's employee."""
+		if self.workflow_state not in ("Đã ra QĐ", "Hoàn tất"):
+			frappe.throw(_("Chỉ tạo đề nghị thanh toán sau khi chuyến đã được duyệt và ra QĐ."))
+
+		employee = employee or frappe.db.get_value("Employee", {"user_id": frappe.session.user}, "name")
+		if not employee:
+			frappe.throw(_("Không xác định được nhân viên của bạn."))
+
+		row = next((t for t in self.travelers if t.employee == employee), None)
+		if not row:
+			frappe.throw(_("Nhân viên không có trong danh sách người đi công tác của chuyến này."))
+		existing = row.expense_claim or frappe.db.exists(
+			"Expense Claim", {"custom_business_trip": self.name, "employee": employee, "docstatus": ["<", 2]}
+		)
+		if existing:
+			frappe.throw(_("Đã có đề nghị thanh toán cho người này: {0}").format(existing))
+
+		claim = frappe.new_doc("Expense Claim")
+		claim.employee = employee
+		claim.company = self.company or frappe.db.get_value("Employee", employee, "company")
+		claim.custom_business_trip = self.name
+		claim.expense_approver = self.approver_coo
+		return claim.as_dict()
+
+
+def link_claim_to_trip(doc, method=None):
+	"""Expense Claim hook: when a claim carrying custom_business_trip is created, write it back onto
+	the matching traveler row so per-person trip costs are traceable."""
+	trip = doc.get("custom_business_trip")
+	if not trip or not doc.get("employee"):
+		return
+	row = frappe.db.get_value(
+		"Cong Tac Traveler", {"parent": trip, "employee": doc.employee}, "name"
+	)
+	if row:
+		frappe.db.set_value("Cong Tac Traveler", row, "expense_claim", doc.name, update_modified=False)

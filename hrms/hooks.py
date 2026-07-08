@@ -158,6 +158,9 @@ override_doctype_class = {
 # Hook on document methods and events
 
 doc_events = {
+	"Expense Claim": {
+		"after_insert": "hrms.hr.doctype.cong_tac.cong_tac.link_claim_to_trip",
+	},
 	"User": {
 		"validate": [
 			"erpnext.setup.doctype.employee.employee.validate_employee_role",
@@ -397,6 +400,7 @@ fixtures = [
 					"Attendance-custom_morning_code",
 					"Attendance-custom_afternoon_code",
 					"Attendance-custom_cong",
+					"Expense Claim-custom_business_trip",
 				],
 			]
 		},

@@ -106,3 +106,50 @@ class TestCongTac(FrappeTestCase):
 		self.assertEqual(by_action["Duyệt"], "COO")
 		self.assertEqual(by_action["Từ chối"], "COO")
 		self.assertEqual(by_action["Ra QĐ"], "HR Manager")
+
+	# --- expense claim ---
+	def _approved_trip(self):
+		doc = self._trip(approver=self.user)
+		doc.insert()
+		apply_workflow(doc, "Gửi duyệt")
+		apply_workflow(doc, "Duyệt")
+		apply_workflow(doc, "Ra QĐ")
+		return doc
+
+	def test_make_expense_claim_prefills_trip_and_approver(self):
+		doc = self._approved_trip()
+		claim = doc.make_expense_claim(employee=self.emp)  # returns a prefilled, unsaved dict
+		self.assertEqual(claim["doctype"], "Expense Claim")
+		self.assertEqual(claim["custom_business_trip"], doc.name)
+		self.assertEqual(claim["expense_approver"], self.user)
+		self.assertEqual(claim["employee"], self.emp)
+
+	def test_make_expense_claim_blocked_before_qd(self):
+		doc = self._trip(approver=self.user)
+		doc.insert()
+		apply_workflow(doc, "Gửi duyệt")  # still "Chờ COO duyệt"
+		self.assertRaises(frappe.ValidationError, doc.make_expense_claim, self.emp)
+
+	def test_make_expense_claim_rejects_non_traveler(self):
+		other = frappe.db.get_value("Employee", {"name": ["!=", self.emp]}, "name")
+		if not other:
+			self.skipTest("need a second employee")
+		doc = self._approved_trip()
+		self.assertRaises(frappe.ValidationError, doc.make_expense_claim, other)
+
+	def test_expense_claim_hook_writes_back_to_traveler(self):
+		from hrms.hr.doctype.cong_tac.cong_tac import link_claim_to_trip
+
+		doc = self._approved_trip()
+		fake_claim = frappe._dict(custom_business_trip=doc.name, employee=self.emp, name="TEST-EC-0001")
+		link_claim_to_trip(fake_claim)
+		row = next(t for t in frappe.get_doc("Cong Tac", doc.name).travelers if t.employee == self.emp)
+		self.assertEqual(row.expense_claim, "TEST-EC-0001")
+
+	def test_make_expense_claim_blocked_when_already_linked(self):
+		from hrms.hr.doctype.cong_tac.cong_tac import link_claim_to_trip
+
+		doc = self._approved_trip()
+		link_claim_to_trip(frappe._dict(custom_business_trip=doc.name, employee=self.emp, name="TEST-EC-0002"))
+		doc.reload()  # pick up the write-back on the traveler row
+		self.assertRaises(frappe.ValidationError, doc.make_expense_claim, self.emp)
