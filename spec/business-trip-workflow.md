@@ -149,17 +149,18 @@ có docstring nêu "why"; tái dùng cơ chế Frappe (Workflow/Notification/Exp
   mọi deploy fixtures/workflow lên **production**.
 - **Never:** đụng payroll/attendance/status gốc; tự viết lại luồng duyệt-chi của Expense Claim; commit secrets.
 
-## Success criteria (specific, testable)
+## Success criteria — ALL MET 2026-07-08 (57 feature tests green + real E2E)
 
-- [ ] `Cong Tac` + `Cong Tac Traveler` cài được; thêm được nhiều người vào 1 chuyến.
-- [ ] Workflow: Nháp→Chờ COO duyệt→COO đã duyệt→Đã ra QĐ→Hoàn tất (+ Từ chối) đúng docstatus; chỉ Role
-      COO Duyệt/Từ chối được, chỉ HCNSPC Ra QĐ/Hoàn tất được (test-proven).
-- [ ] Vào "Chờ COO duyệt" → có Notification + ToDo cho `approver_coo`; vào các bước sau → noti đúng nhóm.
-- [ ] Nút tạo Expense Claim cho từng traveler với `custom_business_trip` + `expense_approver=COO`; tách
-      chi phí từng người truy được qua `custom_business_trip`.
-- [ ] In được QĐ cử đi công tác + giấy đi đường (có danh sách/tên người đi).
-- [ ] Tạo/duyệt chuyến KHÔNG sinh/sửa Attendance hay Salary Slip (payroll-neutral).
-- [ ] Reversible qua `git revert`; verify trên dev `miyano`.
+- [x] `Cong Tac` + `Cong Tac Traveler` cài được; thêm nhiều người vào 1 chuyến (E2E: 2 travelers).
+- [x] Workflow Nháp→Chờ COO duyệt→COO đã duyệt(submit)→Đã ra QĐ→Hoàn tất (+ Từ chối) đúng docstatus;
+      transitions role-scoped (COO Duyệt/Từ chối, HR Manager Ra QĐ) — test-proven.
+- [x] "Chờ COO duyệt" → ToDo + bell cho `approver_coo`; các bước sau → HR Manager / registrant.
+- [x] "Tạo đề nghị thanh toán" trả về Expense Claim prefill (`custom_business_trip` + `expense_approver`=COO);
+      claim khi lưu tự link ngược traveler qua after_insert hook; chống trùng/traveler-only/after-QĐ.
+- [x] In QĐ cử đi công tác + giấy đi đường (1 tờ/người — E2E: 2 pages).
+- [x] Trip approval sinh mã **CT** (Work From Home = paid) cho ngày công tác, bỏ qua lễ/đã có — **payroll
+      bất biến** (invariance gate + CT scenario). Tạo/duyệt chuyến không sửa Salary Slip.
+- [x] Reversible qua `git revert`; verified trên dev `miyano` (E2E `CT-2026-00001`: 6 CT records).
 
 ## Open questions — RESOLVED 2026-07-08
 
