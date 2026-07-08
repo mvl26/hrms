@@ -1,8 +1,11 @@
 # Spec: Vietnamese attendance-code timekeeping ("Bảng chấm công" / quản lý công)
 
-> Status: **DRAFT for approval.** Nothing here is built yet. This transcribes the user's
-> 5-phase plan into a reviewable spec and flags the decisions/data still needed. Do not
-> start implementation until the Open Questions are resolved and the plan is approved.
+> Status: **MVP (Phase 0–3a) BUILT & committed** on `feat/skip-attendance-diag`. **2026-07-08:**
+> user supplied the authoritative 13-symbol table and confirmed the 4 open decisions (all
+> recommended) → this revision finalizes the full symbol set (adds T, 1/2P, 1/2K, NN, K, and
+> calendar markers CN/NL/N) and the `work_fraction = worked-công fraction` semantics. Build
+> scope this round: code + fixtures + tests + `bench migrate` on the **dev** site `miyano` +
+> commit. **No production deploy** (still ask-first).
 
 ## Objective
 
@@ -42,32 +45,59 @@ Fields (from the user's plan): `code` (unique, e.g. "X"), `code_name`, `category
 `is_paid` (check), `maps_to_status` (Present / Absent / Half Day / On Leave / Work From Home),
 `leave_type` (Link, nullable), `color`.
 
-### Proposed starter symbol set — ⚠ DRAFT, NEEDS YOUR CONFIRMATION
+### Authoritative symbol set — CONFIRMED 2026-07-08
 
-These are a **tentative** guess to react to, NOT authoritative. Correct/replace before seeding
-— this is exactly the domain data I must not invent.
+`work_fraction` = **phần ngày tính là công đi làm thực tế** (worked-công fraction: 1 / 0.5 / 0).
+`half_day_status` is NOT a field on Attendance Code — the bridge derives it (any code whose
+`maps_to_status = Half Day` → `half_day_status = Present`, i.e. the worked half is present).
+
+**Mã nhập trực tiếp (tạo 1 bản ghi Attendance/ngày):**
 
 | code | code_name | category | work_fraction | is_paid | maps_to_status | leave_type |
 |------|-----------|----------|:---:|:---:|-----------|-----------|
-| X  | Công (đủ ngày) | Công | 1.0 | ✔ | Present | — |
-| X/2| Nửa công | Công | 0.5 | ✔ | Half Day | — |
-| P  | Nghỉ phép năm | Phép | 1.0 | ✔ | On Leave | Nghỉ phép năm |
-| Ô  | Nghỉ ốm | Ốm | 1.0 | ✔ | On Leave | Nghỉ ốm |
-| TS | Thai sản | Ốm/Chế độ | 1.0 | ✔ | On Leave | Thai sản |
-| KL | Nghỉ không lương | Không lương | 0.0 | ✘ | On Leave | Nghỉ không lương (is_lwp=1) |
-| NB | Nghỉ bù | Công | 1.0 | ✔ | On Leave | Nghỉ bù (is_compensatory) |
-| CT | Đi công tác | Công tác | 1.0 | ✔ | Work From Home / Present | — |
-| K  | Vắng không lý do | Không lương | 0.0 | ✘ | Absent | — |
+| X    | Đi làm đủ công          | Công        | 1.0 | ✔ | Present  | — |
+| NN   | Làm nửa ngày (hưởng lương) | Công     | 0.5 | ✔ | Half Day | — |
+| P    | Nghỉ phép năm           | Phép        | 0.0 | ✔ | On Leave | Nghỉ phép năm |
+| 1/2P | Nghỉ phép nửa ngày      | Phép        | 0.5 | ✔ | Half Day | Nghỉ phép năm |
+| Ô    | Nghỉ ốm (bản thân)      | Ốm          | 0.0 | ✔ | On Leave | Nghỉ ốm |
+| Cô   | Nghỉ chăm con ốm        | Ốm          | 0.0 | ✔ | On Leave | Nghỉ chăm con ốm |
+| TS   | Nghỉ thai sản           | Thai sản    | 0.0 | ✔ | On Leave | Nghỉ thai sản |
+| T    | Nghỉ tai nạn lao động   | Tai nạn LĐ  | 0.0 | ✔ | On Leave | Nghỉ tai nạn lao động |
+| NB   | Nghỉ bù                 | Nghỉ bù     | 0.0 | ✔ | On Leave | Nghỉ bù (is_compensatory) |
+| K    | Nghỉ không lương cả ngày | Không lương | 0.0 | ✘ | On Leave | Nghỉ không lương (is_lwp=1) |
+| 1/2K | Nghỉ không lương nửa ngày | Không lương | 0.5 | ✘ | Half Day | Nghỉ không lương (is_lwp=1) |
 
-**Please provide the real table** (all symbols your hospitals use + the 7 columns above).
+For a **single Half-Day code** (NN / 1/2P / 1/2K) the bridge sets `status=Half Day`,
+`half_day_status=Present`, `leave_type = code.leave_type` (None for NN → worked half + unpaid
+absent half; the leave half for 1/2P/1/2K). This is byte-identical to what a human entering
+Half Day natively would set → payroll stays invariant.
+
+**Mã hiển thị trên bảng, suy ra từ lịch (KHÔNG tạo Attendance record, KHÔNG đụng payroll):**
+
+| code | ý nghĩa | nguồn suy ra |
+|------|---------|--------------|
+| CN | Chủ nhật (nghỉ tuần) | Holiday List của nhân viên, `weekly_off = 1` |
+| NL | Nghỉ lễ trong năm | Holiday List, ngày lễ (không phải weekly_off) |
+| N  | Đã ngừng làm việc | ngày > `relieving_date`, hoặc Employee status Inactive/Left |
+
+Priority khi tô ô: `N` (đã nghỉ việc) > bản ghi Attendance > `NL` > `CN` > trống.
+
+### work_fraction & totals semantics (report)
+
+- **Cột Công** = Σ `custom_cong` = Σ (`work_fraction` × 0.5) trên từng nửa ngày → công thực đi làm.
+- **Mỗi cột nghỉ** (Phép / Ốm / Thai sản / Tai nạn LĐ / Nghỉ bù / Không lương) = Σ
+  (1 − `work_fraction`) × 0.5 của các nửa ngày có `category` tương ứng.
+- Ví dụ 1/2P: worked 0.5 → Công +0.5; leave 0.5, category Phép → Phép +0.5. NN: Công +0.5,
+  nửa còn lại là vắng không lương (không cộng vào cột nghỉ nào).
 
 ## Phase 0 — Leave Type anchors (VN law)
 
-Standardize/ensure these Leave Types exist with correct flags so codes can point at them:
-Nghỉ phép năm (`is_lwp=0`), Nghỉ ốm, Thai sản, Nghỉ không lương (`is_lwp=1`),
-Nghỉ bù (`is_compensatory=1`), … Exported as fixtures. **Open:** exact names (VN vs EN),
-and whether we may modify Leave Types that already exist on live sites (risk to existing
-leave data) or only create missing ones.
+Standardize/ensure these Leave Types exist with correct flags so codes can point at them
+(all `is_lwp=0` unless noted): Nghỉ phép năm, Nghỉ ốm, Nghỉ chăm con ốm, Nghỉ thai sản,
+**Nghỉ tai nạn lao động** (new 2026-07-08), Nghỉ bù (`is_compensatory=1`), Nghỉ không lương
+(`is_lwp=1`). Exported as fixtures. **Resolved:** create-if-missing only, never modify existing
+live Leave Types (OQ#4). BHXH-funded leaves (Ô/Cô/TS/T) stay `is_lwp=0` so company payroll is
+unchanged — BHXH benefit computed outside this system (user decision 2026-07-08).
 
 ## Phase 2 — the bridge (core of the feature)
 
@@ -114,13 +144,16 @@ so `bench migrate` deploys to all hospital sites. Fixture deploy to production s
 - **Never:** edit payroll (Salary Slip) logic; change native `status` semantics; relax the
   payroll-invariance test to make things pass; deploy fixtures to production without sign-off.
 
-## Open Questions (block start)
+## Open Questions — RESOLVED
 
-1. **Baseline** — how to handle the unrelated uncommitted changes (frontend/*, expense_*, .claude).
-2. **Branch base** — new feature branch off develop / feat/skip-attendance-diag / version-15?
-3. **The VN symbol table** — the authoritative list (see draft above).
-4. **Leave Types** — exact names + may we modify existing ones, or create-if-missing only?
-5. **Run scope** — spec+plan-only for now, or build through Phase 1, or full MVP (1–3)?
+1. **Baseline** — build continues on `feat/skip-attendance-diag`; unrelated dirty files left alone,
+   staging is per-task/surgical.
+2. **Branch base** — `feat/skip-attendance-diag` (MVP already lives here).
+3. **The VN symbol table** — CONFIRMED 2026-07-08 (see "Authoritative symbol set" above).
+4. **Leave Types** — create-if-missing only; never modify existing. Names as listed in Phase 0.
+5. **Run scope (this round)** — full symbol set end-to-end: code + fixtures + tests +
+   `bench migrate` on dev site `miyano` + commit. No production deploy.
+6. **CN/NL/N** — calendar markers rendered by the report (no Attendance records, no schema change).
 
 ## Success Criteria (MVP)
 
