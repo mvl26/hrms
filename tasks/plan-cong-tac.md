@@ -7,7 +7,7 @@ Additive Desk feature — never touches payroll/attendance. Tests via rollback h
 open questions — esp. **Q1 role names (COO/HCNSPC)** = an auth/permission decision → STOP for sign-off.
 Task 5 adds a custom field to core **Expense Claim** = ask-first.
 
-- [ ] Task 1: `Cong Tac Traveler` child DocType (employee, is_registrant, estimated_cost,
+- [x] Task 1: `Cong Tac Traveler` child DocType (employee, is_registrant, estimated_cost,
       expense_claim, notes). Files: `hrms/hr/doctype/cong_tac_traveler/*`.
 - [ ] Task 2: `Cong Tac` parent DocType (fields + validate: dates, ≥1 traveler, approver required
       before leaving Nháp). Files: `hrms/hr/doctype/cong_tac/*`. Depends: Task 1.
