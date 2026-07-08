@@ -6,25 +6,32 @@ Attendance Codes). These assert the fixtures shipped by the app resolve correctl
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-# VN Leave Type anchors (Phase 0) — name -> expected flags.
+# VN Leave Type anchors (Phase 0) — name -> expected flags. All BHXH-funded leaves stay
+# is_lwp=0 so company payroll is unchanged (user decision 2026-07-08).
 VN_LEAVE_TYPES = {
 	"Nghỉ phép năm": {"is_lwp": 0, "is_compensatory": 0},
 	"Nghỉ ốm": {"is_lwp": 0, "is_compensatory": 0},
 	"Nghỉ chăm con ốm": {"is_lwp": 0, "is_compensatory": 0},
 	"Nghỉ thai sản": {"is_lwp": 0, "is_compensatory": 0},
+	"Nghỉ tai nạn lao động": {"is_lwp": 0, "is_compensatory": 0},
 	"Nghỉ bù": {"is_lwp": 0, "is_compensatory": 1},
 	"Nghỉ không lương": {"is_lwp": 1, "is_compensatory": 0},
 }
 
-# Attendance Codes (Phase 1b) — code -> (category, work_fraction, is_paid, maps_to_status, leave_type)
+# Attendance Codes — code -> (category, work_fraction, is_paid, maps_to_status, leave_type).
+# work_fraction = phần ngày tính là CÔNG đi làm thực tế (1 / 0.5 / 0). Confirmed 2026-07-08.
 VN_ATTENDANCE_CODES = {
 	"X": ("Công", 1.0, 1, "Present", None),
-	"P": ("Phép", 1.0, 1, "On Leave", "Nghỉ phép năm"),
-	"Ô": ("Ốm", 1.0, 1, "On Leave", "Nghỉ ốm"),
-	"Cô": ("Ốm", 1.0, 1, "On Leave", "Nghỉ chăm con ốm"),
-	"TS": ("Thai sản", 1.0, 1, "On Leave", "Nghỉ thai sản"),
-	"NB": ("Nghỉ bù", 1.0, 1, "On Leave", "Nghỉ bù"),
-	"KL": ("Không lương", 0.0, 0, "On Leave", "Nghỉ không lương"),
+	"NN": ("Công", 0.5, 1, "Half Day", None),
+	"P": ("Phép", 0.0, 1, "On Leave", "Nghỉ phép năm"),
+	"1/2P": ("Phép", 0.5, 1, "Half Day", "Nghỉ phép năm"),
+	"Ô": ("Ốm", 0.0, 1, "On Leave", "Nghỉ ốm"),
+	"Cô": ("Ốm", 0.0, 1, "On Leave", "Nghỉ chăm con ốm"),
+	"TS": ("Thai sản", 0.0, 1, "On Leave", "Nghỉ thai sản"),
+	"T": ("Tai nạn LĐ", 0.0, 1, "On Leave", "Nghỉ tai nạn lao động"),
+	"NB": ("Nghỉ bù", 0.0, 1, "On Leave", "Nghỉ bù"),
+	"K": ("Không lương", 0.0, 0, "On Leave", "Nghỉ không lương"),
+	"1/2K": ("Không lương", 0.5, 0, "Half Day", "Nghỉ không lương"),
 }
 
 
@@ -35,6 +42,10 @@ class TestAttendanceCodeFixtures(FrappeTestCase):
 			row = frappe.db.get_value("Leave Type", name, ["is_lwp", "is_compensatory"], as_dict=True)
 			self.assertEqual(int(row.is_lwp), flags["is_lwp"], f"{name}.is_lwp")
 			self.assertEqual(int(row.is_compensatory), flags["is_compensatory"], f"{name}.is_compensatory")
+
+	def test_deprecated_kl_code_removed(self):
+		# 'KL' was renamed to 'K' (+ half-day '1/2K') on 2026-07-08; the old code must be gone.
+		self.assertFalse(frappe.db.exists("Attendance Code", "KL"), "deprecated code 'KL' should be removed")
 
 	def test_attendance_custom_fields_exist(self):
 		for fn in ("custom_attendance_code", "custom_morning_code", "custom_afternoon_code", "custom_cong"):

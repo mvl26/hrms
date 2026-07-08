@@ -42,7 +42,7 @@
   },
   {
    "default": "1",
-   "description": "Portion of a work day this code counts as (0, 0.5 or 1).",
+   "description": "Phần ngày tính là công đi làm thực tế / worked-công fraction (0, 0.5 or 1).",
    "fieldname": "work_fraction",
    "fieldtype": "Float",
    "in_list_view": 1,
