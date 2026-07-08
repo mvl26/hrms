@@ -80,14 +80,20 @@ class Attendance(Document):
 		if not (m and a):
 			return
 
-		# công đi làm thực tế: only Công-category counts; each half = work_fraction * 0.5
-		self.custom_cong = sum(flt(c.work_fraction) * 0.5 for c in (m, a) if c.category == "Công")
+		# công đi làm thực tế = Σ work_fraction (worked-công fraction) of each half × 0.5.
+		# work_fraction already excludes non-working codes (P/Ô/K = 0), so no category filter needed;
+		# this also lets a single half-day code (NN/1/2P/1/2K, work_fraction 0.5) count its worked half.
+		self.custom_cong = sum(flt(c.work_fraction) * 0.5 for c in (m, a))
 		# single display code only when the whole day is one code
 		self.custom_attendance_code = morning if morning == afternoon else None
 
 		if m.maps_to_status == a.maps_to_status:
 			self.status = m.maps_to_status
 			self.leave_type = m.leave_type if m.maps_to_status in ("On Leave", "Half Day") else None
+			if m.maps_to_status == "Half Day":
+				# a single Half-Day code (NN/1/2P/1/2K): worked half is present, the other half is
+				# leave (if leave_type set) or unpaid absence (NN). Mirrors native Half-Day entry.
+				self.half_day_status = "Present"
 		else:
 			# one working half + one non-working half -> Half Day; the non-working half sets leave_type
 			self.status = "Half Day"
@@ -105,7 +111,7 @@ class Attendance(Document):
 			return
 		self.custom_attendance_code = code
 		c = self._get_attendance_code(code)
-		self.custom_cong = flt(c.work_fraction) if c and c.category == "Công" else 0
+		self.custom_cong = flt(c.work_fraction) if c else 0
 
 	def validate(self):
 		from erpnext.controllers.status_updater import validate_status
