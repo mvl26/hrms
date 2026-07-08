@@ -78,6 +78,19 @@ class TestAttendanceCodeBridge(FrappeTestCase):
 		self.assertEqual(d.leave_type, "Nghỉ tai nạn lao động")
 		self.assertEqual(d.custom_cong, 0)
 
+	def test_forward_unexplained_absence(self):
+		# V = vắng không lý do -> native Absent, no leave, không công
+		d = self._bridge(custom_attendance_code="V")
+		self.assertEqual(d.status, "Absent")
+		self.assertIn(d.leave_type, (None, ""))
+		self.assertEqual(d.custom_cong, 0)
+
+	def test_reverse_derives_absent_code(self):
+		# an auto-attendance Absent record (checkin thiếu giờ / vắng) -> display code V
+		d = self._bridge(status="Absent")
+		self.assertEqual(d.custom_attendance_code, "V")
+		self.assertEqual(d.custom_cong, 0)
+
 	def test_reverse_derives_half_day_leave_code(self):
 		# native half-day annual leave (no code) -> derive display code 1/2P + worked công 0.5
 		d = self._bridge(status="Half Day", leave_type="Nghỉ phép năm")

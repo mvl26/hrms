@@ -98,6 +98,13 @@ class TestBangChamCongThang(FrappeTestCase):
 		self.assertEqual(row["day_1"], "CN")  # weekly off
 		self.assertEqual(row["day_2"], "NL")  # public holiday
 
+	def test_absent_day_renders_v(self):
+		labels = self._cat_labels()
+		self._mk(15, status="Absent")  # ngày vắng (auto-attendance / checkin thiếu giờ), no code
+		row = self._row(self.emp)
+		self.assertEqual(row["day_15"], "V")
+		self.assertEqual(row[labels["Vắng"]], 1.0)
+
 	def test_terminated_marker_after_relieving(self):
 		emp = make_employee("bcct_terminated@codes.com")
 		frappe.db.set_value(

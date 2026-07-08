@@ -66,6 +66,23 @@ Fields (from the user's plan): `code` (unique, e.g. "X"), `code_name`, `category
 | NB   | Nghỉ bù                 | Nghỉ bù     | 0.0 | ✔ | On Leave | Nghỉ bù (is_compensatory) |
 | K    | Nghỉ không lương cả ngày | Không lương | 0.0 | ✘ | On Leave | Nghỉ không lương (is_lwp=1) |
 | 1/2K | Nghỉ không lương nửa ngày | Không lương | 0.5 | ✘ | Half Day | Nghỉ không lương (is_lwp=1) |
+| V    | Vắng không lý do        | Vắng        | 0.0 | ✘ | Absent   | — |
+
+`V` (added 2026-07-08) is the display symbol for an **Absent** day — an auto-attendance record
+marked Absent (checkin below the hours threshold) or a manual Absent. Display-only: `Absent`
+already docks a full day in payroll, so mapping it to a symbol changes nothing.
+
+### Auto-flows: checkin & leave → Attendance (verified 2026-07-08)
+
+The bridge's reverse-derivation runs in `before_validate`, which Frappe executes **even under
+`flags.ignore_validate=True`** — so both auto-flows populate the mã công with no extra hooks:
+
+- **Employee Checkin → auto-attendance:** Present→`X`, Absent→`V`, Half Day→`NN` (công from work_fraction).
+- **Leave Application → Attendance:** On Leave + leave_type → `P/Ô/Cô/TS/T/NB/K`; Half Day + leave_type → `1/2P`.
+
+Half-day payroll: only `half_day_status="Absent"` docks pay (salary_slip.py ~line 555). For `NN`
+(no leave application) `check_leave_record` forces `half_day_status=Absent` → paid half; for `1/2P`/`1/2K`
+the leave half is handled by its leave_type. The payroll-invariance gate covers X/K/P/**V**/half-day.
 
 For a **single Half-Day code** (NN / 1/2P / 1/2K) the bridge sets `status=Half Day`,
 `half_day_status=Present`, `leave_type = code.leave_type` (None for NN → worked half + unpaid

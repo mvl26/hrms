@@ -152,5 +152,19 @@
   "modified": "2026-07-08 00:00:00.000000",
   "name": "1/2K",
   "work_fraction": 0.5
+ },
+ {
+  "category": "Vắng",
+  "code": "V",
+  "code_name": "Vắng không lý do",
+  "color": null,
+  "docstatus": 0,
+  "doctype": "Attendance Code",
+  "is_paid": 0,
+  "leave_type": null,
+  "maps_to_status": "Absent",
+  "modified": "2026-07-08 00:00:00.000000",
+  "name": "V",
+  "work_fraction": 0.0
  }
 ]

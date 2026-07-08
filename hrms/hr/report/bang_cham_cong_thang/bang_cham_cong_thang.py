@@ -61,7 +61,7 @@ def get_code_map() -> dict:
 
 def get_categories(code_map: dict) -> list[str]:
 	# stable, human order first; then any extra categories present in the data
-	preferred = ["Công", "Phép", "Ốm", "Thai sản", "Tai nạn LĐ", "Nghỉ bù", "Không lương"]
+	preferred = ["Công", "Phép", "Ốm", "Thai sản", "Tai nạn LĐ", "Nghỉ bù", "Không lương", "Vắng"]
 	present = {r.category for r in code_map.values() if r.category}
 	ordered = [c for c in preferred if c in present]
 	ordered += sorted(present - set(preferred))

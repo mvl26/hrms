@@ -25,6 +25,7 @@ SCENARIOS = [
 	(1, "Present", None, "X"),
 	(2, "On Leave", "Nghỉ không lương", "K"),  # LWP
 	(3, "On Leave", "Nghỉ phép năm", "P"),  # paid leave
+	(4, "Absent", None, "V"),  # vắng không lý do
 ]
 
 
@@ -73,9 +74,9 @@ class TestAttendanceCodePayrollInvariance(FrappeTestCase):
 		self.assertEqual(ss_codes.absent_days, ss_native.absent_days)
 		self.assertEqual(ss_codes.payment_days, ss_native.payment_days)
 
-		# sanity: the scenario actually exercised LWP (K) and paid leave (P, no LWP)
+		# sanity: the scenarios actually exercised LWP (K), paid leave (P), and an Absent day (V)
 		self.assertEqual(ss_native.leave_without_pay, 1)
-		self.assertEqual(ss_native.absent_days, 0)
+		self.assertEqual(ss_native.absent_days, 1)
 
 	@change_settings(
 		"Payroll Settings", {"payroll_based_on": "Attendance", "daily_wages_fraction_for_half_day": 0.5}
