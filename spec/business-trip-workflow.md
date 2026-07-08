@@ -104,8 +104,9 @@ Frappe **Notification** (system + email) + **ToDo assignment**:
 
 ## Roles needed
 
-Tạo (nếu chưa có) Role **"COO"** và **"HCNSPC"**; gán vào workflow transitions + Notification. Quyền
-DocType `Cong Tac`: HR User (tạo/sửa nháp), COO (đọc/duyệt), HCNSPC (đọc/ra QĐ/hoàn tất), System Manager.
+Tạo Role mới **"COO"**; **HCNSPC = HR Manager** (role sẵn có, không tạo mới). Gán vào workflow transitions +
+Notification. Quyền DocType `Cong Tac`: HR User (tạo/sửa nháp), COO (đọc/duyệt), HR Manager=HCNSPC
+(đọc/ra QĐ/hoàn tất), System Manager.
 
 ## Commands
 
@@ -160,15 +161,15 @@ có docstring nêu "why"; tái dùng cơ chế Frappe (Workflow/Notification/Exp
 - [ ] Tạo/duyệt chuyến KHÔNG sinh/sửa Attendance hay Salary Slip (payroll-neutral).
 - [ ] Reversible qua `git revert`; verify trên dev `miyano`.
 
-## Open questions (need human input before Plan)
+## Open questions — RESOLVED 2026-07-08
 
-1. **Role names:** dùng đúng "COO"/"HCNSPC" hay map vào role sẵn có (vd HR Manager)? Có sẵn user COO chưa?
-2. **Giấy đi đường:** một tờ/người (in lặp) hay một tờ chung cả đoàn? Mẫu cụ thể (các ô xác nhận nơi đến)?
-3. **QĐ số:** HCNSPC tự nhập số QĐ, hay sinh tự động theo series riêng?
-4. **Ngày công khi đi công tác:** chuyến công tác có tự sinh mã công (vd "CT") trên bảng chấm công cho
-   những ngày đi không, hay tách rời hoàn toàn khỏi chấm công? (Ảnh hưởng liên kết ngược về feature chấm công.)
-5. **Expense payment approver:** COO duyệt chi có luôn = `approver_coo` của chuyến, hay approver Expense
-   Claim theo cấu hình sẵn có của HRMS?
+1. **Roles:** HCNSPC = **HR Manager** (role sẵn có); COO = **Role mới "COO"** (chỉ tạo 1 role mới).
+2. **Giấy đi đường:** **một tờ / người** (in lặp theo travelers).
+3. **QĐ số:** HCNSPC **tự nhập** `decision_no` khi ra QĐ (không sinh tự động).
+4. **Ngày công tác ↔ chấm công:** **CÓ** — khi chuyến được duyệt, tự sinh Attendance mã **"CT"** (đi công
+   tác, tính công) cho các ngày làm việc của từng traveler. → thêm **Task 8** (attendance integration,
+   payroll-adjacent → BẮT BUỘC qua payroll-invariance gate; bỏ qua ngày lễ/CN + ngày đã có Attendance).
+5. **Expense approver:** `expense_approver` của mỗi Expense Claim = **`approver_coo`** của chuyến.
 
 ## Task breakdown (for /build auto — after approval)
 
