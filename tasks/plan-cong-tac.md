@@ -14,7 +14,7 @@ fixture (user OK'd). Proceeding autonomously; Task 8 must pass the payroll-invar
       before leaving Nháp). Files: `hrms/hr/doctype/cong_tac/*`. Depends: Task 1.
 - [x] Task 3: Role "COO" (new) + Workflow "Cong Tac Approval" (states/transitions/docstatus;
       COO duyệt, HR Manager ra QĐ) + tests. Depends: Task 2.
-- [ ] Task 4: Notifications + ToDo assignment on state changes + tests. Depends: Task 3.
+- [x] Task 4: Notifications + ToDo assignment on state changes + tests. Depends: Task 3.
 - [ ] Task 5: Expense Claim custom field `custom_business_trip` (fixture) + "Tạo đề nghị thanh toán"
       button/method (expense_approver = approver_coo) + tests. Depends: Task 2.
 - [ ] Task 6: Print formats QĐ cử đi công tác + giấy đi đường (1 tờ/người) + render tests. Depends: Task 2.

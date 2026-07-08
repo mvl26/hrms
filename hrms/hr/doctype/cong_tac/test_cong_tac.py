@@ -89,6 +89,16 @@ class TestCongTac(FrappeTestCase):
 		self.assertEqual(doc.workflow_state, "Từ chối")
 		self.assertEqual(doc.docstatus, 0)
 
+	def test_assigns_todo_to_coo_on_send_for_approval(self):
+		doc = self._trip(approver=self.user)
+		doc.insert()
+		apply_workflow(doc, "Gửi duyệt")
+		todos = frappe.get_all(
+			"ToDo",
+			filters={"reference_type": "Cong Tac", "reference_name": doc.name, "allocated_to": self.user},
+		)
+		self.assertTrue(todos, "COO phải nhận ToDo khi chuyến được gửi duyệt")
+
 	def test_transitions_are_role_scoped(self):
 		# the workflow defines COO-only approval and HR Manager-only decision steps
 		wf = frappe.get_doc("Workflow", "Cong Tac Approval")

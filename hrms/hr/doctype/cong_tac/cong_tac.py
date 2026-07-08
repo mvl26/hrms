@@ -28,3 +28,46 @@ class CongTac(Document):
 		# Người duyệt (COO) bắt buộc trước khi rời trạng thái Nháp (trình duyệt qua workflow).
 		if self.workflow_state and self.workflow_state != "Nháp" and not self.approver_coo:
 			frappe.throw(_("Cần chọn người duyệt (COO) trước khi trình duyệt."))
+
+	# --- notifications / assignment on workflow state change ---
+	def on_update(self):
+		self.notify_on_state_change()
+
+	def on_update_after_submit(self):
+		self.notify_on_state_change()
+
+	def notify_on_state_change(self):
+		"""Assign a ToDo (+ bell notification) to the right actor when the workflow moves on."""
+		if not self.has_value_changed("workflow_state"):
+			return
+		state = self.workflow_state
+		if state == "Chờ COO duyệt":
+			self.assign_actor(self.approver_coo, _("Duyệt đề nghị công tác {0}").format(self.name))
+		elif state == "COO đã duyệt":
+			for user in self.hr_manager_users():
+				self.assign_actor(user, _("Ra QĐ cử đi công tác {0}").format(self.name))
+		elif state == "Đã ra QĐ":
+			self.assign_actor(
+				self.employee_user(self.registered_by),
+				_("Làm đề nghị thanh toán công tác {0}").format(self.name),
+			)
+
+	def assign_actor(self, user, description):
+		if not user:
+			return
+		if frappe.get_all(
+			"ToDo",
+			filters={"reference_type": "Cong Tac", "reference_name": self.name, "allocated_to": user, "status": "Open"},
+			limit=1,
+		):
+			return  # already assigned — don't duplicate
+		from frappe.desk.form.assign_to import add as assign_add
+
+		assign_add({"assign_to": [user], "doctype": "Cong Tac", "name": self.name, "description": description})
+
+	def hr_manager_users(self):
+		users = frappe.get_all("Has Role", filters={"role": "HR Manager", "parenttype": "User"}, pluck="parent")
+		return [u for u in set(users) if frappe.db.get_value("User", u, "enabled")]
+
+	def employee_user(self, employee):
+		return frappe.db.get_value("Employee", employee, "user_id") if employee else None
