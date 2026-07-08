@@ -55,6 +55,19 @@ class TestBangChamCongThang(FrappeTestCase):
 		self.assertEqual(row["cat_0"], 1.5)
 		self.assertEqual(row["cat_1"], 1.5)
 
+	def test_get_sheet_rows_semantic_shape(self):
+		# the shared derivation used by the Bảng Công Tháng DocType returns semantic rows
+		from hrms.hr.report.bang_cham_cong_thang.bang_cham_cong_thang import get_sheet_rows
+
+		self._mk(5, custom_attendance_code="X")
+		self._mk(6, custom_attendance_code="P")
+		rows = get_sheet_rows({"month": self.month, "year": self.year})
+		row = next(r for r in rows if r["employee"] == self.emp)
+		self.assertEqual(row["days"][5], "X")
+		self.assertEqual(row["days"][6], "P")
+		self.assertEqual(row["totals"]["Công"], 1.0)
+		self.assertEqual(row["totals"]["Phép"], 1.0)
+
 	def test_new_categories_present(self):
 		# all seeded categories must have a totals column, including the new ones
 		labels = self._cat_labels()

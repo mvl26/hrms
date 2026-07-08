@@ -4,7 +4,7 @@ Derived from `spec/bang-cong-thang-doctype.md`. Branch: `feat/skip-attendance-di
 Read-only snapshot feature — additive, git-revertable, never writes Attendance → no payroll risk.
 Tests run via the session rollback harness (NEVER `bench run-tests` on `miyano`). One commit per task.
 
-- [ ] Task 1: `get_sheet_rows(filters)` shared refactor in the report — semantic rows
+- [x] Task 1: `get_sheet_rows(filters)` shared refactor in the report — semantic rows
       `{employee, employee_name, days:{d->sym}, totals:{cat->float}}`; report `get_data` consumes it.
       Parity locked by existing report tests + a structural test. Files: report `.py` + its test.
 - [ ] Task 2: `Bang Cong Thang Detail` child DocType (istable): employee, employee_name, d01..d31,

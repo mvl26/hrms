@@ -36,17 +36,12 @@ def execute(filters: Filters | None = None) -> tuple:
 
 	year, month = cint(filters.year), cint(filters.month)
 	days = monthrange(year, month)[1]
-	start = getdate(f"{year}-{month:02d}-01")
-	end = getdate(f"{year}-{month:02d}-{days:02d}")
 
-	code_map = get_code_map()
-	categories = get_categories(code_map)
-	employees = get_employees(filters, start, end)
-	attendances = get_attendances(filters, start, end)
-	holidays = get_holidays(employees, start, end)
+	categories = get_categories(get_code_map())
+	rows = get_sheet_rows(filters)
 
 	columns = get_columns(days, categories)
-	data = get_data(employees, attendances, holidays, days, year, month, categories, code_map)
+	data = _rows_to_report_data(rows, days, categories)
 	return columns, data
 
 
@@ -181,53 +176,74 @@ def _reverse_code(status, leave_type, code_map: dict):
 	return None
 
 
-def get_data(
-	employees: list,
-	attendances: dict,
-	holidays: dict,
-	days: int,
-	year: int,
-	month: int,
-	categories: list[str],
-	code_map: dict,
-) -> list:
-	cat_index = {cat: idx for idx, cat in enumerate(categories)}
-	cong_idx = cat_index.get("Công")
-	data = []
+def get_sheet_rows(filters: Filters) -> list[dict]:
+	"""Semantic per-employee rows shared by this report AND the Bảng Công Tháng DocType:
+	``{employee, employee_name, days: {day-of-month: symbol}, totals: {category: float}}``.
+	Công total = Σ work_fraction × 0.5 (worked-công); each other category = Σ (1 − work_fraction) × 0.5.
+	This is the single source of timekeeping derivation — consumers must not re-implement it."""
+	filters = frappe._dict(filters or {})
+	year, month = cint(filters.year), cint(filters.month)
+	days = monthrange(year, month)[1]
+	start = getdate(f"{year}-{month:02d}-01")
+	end = getdate(f"{year}-{month:02d}-{days:02d}")
+
+	code_map = get_code_map()
+	employees = get_employees(filters, start, end)
+	attendances = get_attendances(filters, start, end)
+	holidays = get_holidays(employees, start, end)
+
+	rows = []
 	for e in employees:
-		row = {
-			"employee": e.name,
-			"employee_name": e.employee_name,
-			**{f"cat_{i}": 0.0 for i in range(len(categories))},
-		}
 		emp_att = attendances.get(e.name, {})
 		emp_hol = holidays.get(e.name, {})
 		relieving = getdate(e.relieving_date) if e.relieving_date else None
 		joining = getdate(e.date_of_joining) if e.date_of_joining else None
+		day_syms = {}
+		totals = {}
 
 		for day in range(1, days + 1):
 			d = getdate(f"{year}-{month:02d}-{day:02d}")
 			# priority: đã ngừng việc > bản ghi Attendance > ngày lễ/CN > (trước khi vào làm →) trống
 			if relieving and d > relieving:
-				row[f"day_{day}"] = MARKER_TERMINATED
+				day_syms[day] = MARKER_TERMINATED
 				continue
 			att = emp_att.get(day)
 			if att:
 				display, morning, afternoon = _resolve_day(att, code_map)
-				row[f"day_{day}"] = display
+				day_syms[day] = display
 				for half in (morning, afternoon):
 					c = code_map.get(half)
 					if not c:
 						continue
 					wf = flt(c.work_fraction)
-					if cong_idx is not None:
-						row[f"cat_{cong_idx}"] += wf * 0.5  # công thực đi làm
-					if c.category != "Công" and c.category in cat_index:
-						row[f"cat_{cat_index[c.category]}"] += (1 - wf) * 0.5  # phần nghỉ
+					totals["Công"] = totals.get("Công", 0.0) + wf * 0.5  # công thực đi làm
+					if c.category != "Công":
+						totals[c.category] = totals.get(c.category, 0.0) + (1 - wf) * 0.5  # phần nghỉ
 			elif joining and d < joining:
 				continue  # chưa vào làm → để trống
 			elif day in emp_hol:
-				row[f"day_{day}"] = MARKER_WEEKLY_OFF if emp_hol[day] else MARKER_HOLIDAY
+				day_syms[day] = MARKER_WEEKLY_OFF if emp_hol[day] else MARKER_HOLIDAY
 
+		rows.append(
+			{"employee": e.name, "employee_name": e.employee_name, "days": day_syms, "totals": totals}
+		)
+	return rows
+
+
+def _rows_to_report_data(rows: list[dict], days: int, categories: list[str]) -> list:
+	"""Map the shared semantic rows onto this report's flat column layout (day_N / cat_i)."""
+	cat_index = {cat: idx for idx, cat in enumerate(categories)}
+	data = []
+	for r in rows:
+		row = {
+			"employee": r["employee"],
+			"employee_name": r["employee_name"],
+			**{f"cat_{i}": 0.0 for i in range(len(categories))},
+		}
+		for day, sym in r["days"].items():
+			row[f"day_{day}"] = sym
+		for cat, val in r["totals"].items():
+			if cat in cat_index:
+				row[f"cat_{cat_index[cat]}"] = flt(val)
 		data.append(row)
 	return data
