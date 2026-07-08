@@ -7,7 +7,7 @@ Tests run via the session rollback harness (NEVER `bench run-tests` on `miyano`)
 - [x] Task 1: `get_sheet_rows(filters)` shared refactor in the report — semantic rows
       `{employee, employee_name, days:{d->sym}, totals:{cat->float}}`; report `get_data` consumes it.
       Parity locked by existing report tests + a structural test. Files: report `.py` + its test.
-- [ ] Task 2: `Bang Cong Thang Detail` child DocType (istable): employee, employee_name, d01..d31,
+- [x] Task 2: `Bang Cong Thang Detail` child DocType (istable): employee, employee_name, d01..d31,
       8 category totals. Files: `hrms/hr/doctype/bang_cong_thang_detail/*`.
 - [ ] Task 3: `Bang Cong Thang` parent DocType (is_submittable): company/department/month/year/
       from_date/to_date/prepared_by/remarks/employees/amended_from + `validate` (derive dates,
