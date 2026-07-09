@@ -4,6 +4,14 @@ Spec: `spec/geofence-map-and-default-setup.md` (Phase 1 approved, decisions lock
 Branch: `feat/skip-attendance-diag`. All additive + `git revert`-able. Test via the rollback harness
 (NEVER `bench run-tests` on `miyano`).
 
+> **STATUS 2026-07-09 — ALL TASKS DONE + COMMITTED.** T1–T5 complete; 10 harness tests green;
+> `bench migrate miyano` clean (`ensure_defaults` → `{"workflow":true,"coo_role":true,"missing":{}}`).
+> Commits: `d98bd70` (docs/plan), `d614bdb` (Part A: T1–T3), `7499a7a` (Part B: T4–T5).
+> **Only remaining item:** manual browser verify of the map JS (T2/T3) — the Chrome extension was not
+> connected this session. Steps: HR Settings → enable geolocation tracking; open a Shift Location (circle
+> shows, click moves it, radius resizes it); open a saved Employee Checkin with lat/long + an active
+> shift-location assignment (geofence overlay appears).
+
 ## Dependency graph / order
 
 ```
