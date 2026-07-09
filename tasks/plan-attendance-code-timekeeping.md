@@ -76,11 +76,13 @@ running · ⬜ ready to build.
       framework report runner + unit test. Report name "Bang Cham Cong Thang" (ASCII so
       frappe.scrub matches the folder). Printable via Frappe's report view. **MVP read-layer done.**
 
-- [ ] Task 9 (Phase 3b): VN paper-form Print Format (symbols, totals, sign-off boxes).
-      **DEFERRED — needs a print target.** A Frappe Print Format attaches to a DocType; the
-      monthly sheet is a Report, so a formal "paper form with sign-off boxes" belongs on the
-      Phase 5 submittable "Bảng công tháng" DocType. The Task 8 report is already printable via
-      the report view, so the MVP read-layer stands without it. Build with Phase 5.
+- [x] Task 9 (Phase 3b): VN paper-form Print Format (symbols, totals, sign-off boxes).
+      **DONE via supersession (Phase 5a).** A Frappe Print Format attaches to a DocType; the
+      monthly sheet is a Report, so this was deferred to the Phase 5 submittable "Bảng Công Tháng"
+      DocType — which shipped the print format at `hrms/hr/print_format/bang_cong_thang/bang_cong_thang.json`
+      (grid d01..dN + 8 category totals + symbol legend + 2 sign boxes: Người chấm công + Phòng Nhân
+      sự). No separate print format on the Report is needed; the Task 8 report also prints via its
+      report view. See `tasks/plan-bang-cong-thang.md` Task 6.
 
 ## 2026-07-08 — full symbol set completed (Phases A–C)
 
