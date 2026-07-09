@@ -96,7 +96,11 @@ jinja = {
 
 # before_install = "hrms.install.before_install"
 after_install = "hrms.install.after_install"
-after_migrate = "hrms.setup.update_select_perm_after_install"
+after_migrate = [
+	"hrms.setup.update_select_perm_after_install",
+	# Fork defaults: self-heal Công Tác workflow + COO role and verify fixture master data every migrate.
+	"hrms.setup_vn_defaults.ensure_defaults",
+]
 
 setup_wizard_complete = "hrms.subscription_utils.update_erpnext_access"
 
