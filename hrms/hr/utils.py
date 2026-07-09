@@ -900,13 +900,21 @@ def set_geolocation_from_coordinates(doc):
 	if not (doc.latitude and doc.longitude):
 		return
 
+	# For a Shift Location with a positive checkin radius, render the point as a circle of that
+	# radius so Frappe's Geolocation control (which draws features with point_type == "circle" as
+	# an L.circle) shows the geofence area. Other docs (e.g. Employee Checkin) stay a plain point.
+	properties = {}
+	checkin_radius = getattr(doc, "checkin_radius", 0)
+	if checkin_radius and checkin_radius > 0:
+		properties = {"point_type": "circle", "radius": checkin_radius}
+
 	doc.geolocation = frappe.json.dumps(
 		{
 			"type": "FeatureCollection",
 			"features": [
 				{
 					"type": "Feature",
-					"properties": {},
+					"properties": properties,
 					# geojson needs coordinates in reverse order: long, lat instead of lat, long
 					"geometry": {"type": "Point", "coordinates": [doc.longitude, doc.latitude]},
 				}

@@ -23,6 +23,7 @@ from hrms.hr.doctype.employee_checkin.employee_checkin import (
 	add_log_based_on_employee_field,
 	bulk_fetch_shift,
 	calculate_working_hours,
+	get_checkin_geofence,
 	mark_attendance_and_link_log,
 )
 from hrms.hr.doctype.leave_type.test_leave_type import create_leave_type
@@ -70,6 +71,55 @@ class TestEmployeeCheckin(FrappeTestCase):
 				}
 			),
 		)
+
+	@change_settings("HR Settings", {"allow_geolocation_tracking": 1})
+	def test_shift_location_geolocation_is_a_circle(self):
+		# A Shift Location with a positive checkin radius renders as a circle feature so the
+		# Geolocation control draws the geofence area; an Employee Checkin stays a plain point.
+		location = make_shift_location("Geofence Loc", 24.5, 72.5, checkin_radius=300)
+		feature = frappe.json.loads(location.geolocation)["features"][0]
+		self.assertEqual(feature["properties"]["point_type"], "circle")
+		self.assertEqual(feature["properties"]["radius"], 300)
+		self.assertEqual(feature["geometry"]["coordinates"], [72.5, 24.5])
+
+		employee = make_employee("test_geo_point@example.com", company="_Test Company")
+		checkin = make_checkin(employee, latitude=24.5, longitude=72.5)
+		checkin_feature = frappe.json.loads(checkin.geolocation)["features"][0]
+		self.assertEqual(checkin_feature["properties"], {})
+		self.assertEqual(checkin_feature["geometry"]["type"], "Point")
+
+	@change_settings("HR Settings", {"allow_geolocation_tracking": 1})
+	def test_get_checkin_geofence(self):
+		employee = make_employee("test_geofence_helper@example.com", company="_Test Company")
+		date = getdate()
+		shift = setup_shift_type()
+		location = make_shift_location("Helper Loc", 24, 72, checkin_radius=400)
+		make_shift_assignment(shift.name, employee, date, shift_location=location.name)
+
+		geofence = get_checkin_geofence(employee)
+		self.assertIsNotNone(geofence)
+		self.assertEqual(geofence["location_name"], location.name)
+		self.assertEqual(geofence["checkin_radius"], 400)
+		self.assertEqual(geofence["latitude"], 24)
+		self.assertEqual(geofence["longitude"], 72)
+
+		# An employee with no shift assignment has no geofence
+		other = make_employee("test_geofence_none@example.com", company="_Test Company")
+		self.assertIsNone(get_checkin_geofence(other))
+
+	@change_settings("HR Settings", {"allow_geolocation_tracking": 1})
+	def test_get_checkin_geofence_none_when_radius_zero(self):
+		employee = make_employee("test_geofence_zero@example.com", company="_Test Company")
+		date = getdate()
+		shift = setup_shift_type()
+		location = make_shift_location("Zero Radius Loc", 24, 72, checkin_radius=0)
+		make_shift_assignment(shift.name, employee, date, shift_location=location.name)
+		self.assertIsNone(get_checkin_geofence(employee))
+
+	def test_get_checkin_geofence_none_when_tracking_off(self):
+		# setUp() turns geolocation tracking off
+		employee = make_employee("test_geofence_off@example.com", company="_Test Company")
+		self.assertIsNone(get_checkin_geofence(employee))
 
 	def test_add_log_based_on_employee_field(self):
 		employee = make_employee("test_add_log_based_on_employee_field@example.com")

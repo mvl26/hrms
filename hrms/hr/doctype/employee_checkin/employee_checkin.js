@@ -22,6 +22,9 @@ frappe.ui.form.on("Employee Checkin", {
 			hide_field(["fetch_geolocation", "latitude", "longitude", "geolocation"]);
 			return;
 		}
+
+		// Overlay the applicable geofence circle so HR sees the check-in point in/out of the allowed area.
+		overlay_geofence(frm);
 	},
 
 	fetch_geolocation: (frm) => {
@@ -57,3 +60,44 @@ frappe.ui.form.on("Employee Checkin", {
 		});
 	},
 });
+
+// Fetch the employee's current geofence and draw a read-only circle on the check-in map.
+// Polls briefly for the Leaflet map instance created by the Geolocation control.
+async function overlay_geofence(frm, attempts = 0) {
+	if (frm.doc.__islocal || !frm.doc.employee) return;
+
+	const field = frm.get_field("geolocation");
+	const map = field && field.map;
+	if (!map) {
+		if (attempts < 20) setTimeout(() => overlay_geofence(frm, attempts + 1), 250);
+		return;
+	}
+	if (map._geofence_overlaid) return;
+	map._geofence_overlaid = true;
+
+	const geofence = await frappe.xcall(
+		"hrms.hr.doctype.employee_checkin.employee_checkin.get_checkin_geofence",
+		{ employee: frm.doc.employee },
+	);
+	if (!(geofence && geofence.latitude && geofence.longitude && geofence.checkin_radius)) return;
+
+	const center = [geofence.latitude, geofence.longitude];
+	const circle = L.circle(center, {
+		radius: geofence.checkin_radius,
+		color: frappe.ui.color.get("blue"),
+		weight: 1,
+		fillOpacity: 0.08,
+	}).addTo(map);
+	circle.bindTooltip(
+		__("Allowed area: {0} ({1} m)", [geofence.location_name, geofence.checkin_radius]),
+	);
+
+	// Show both the geofence and the check-in point.
+	const bounds = circle.getBounds();
+	if (frm.doc.latitude && frm.doc.longitude) bounds.extend([frm.doc.latitude, frm.doc.longitude]);
+	try {
+		map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 });
+	} catch (e) {
+		// ignore fit errors on degenerate bounds
+	}
+}
