@@ -387,6 +387,7 @@ fixtures = [
 					"Nghỉ ốm",
 					"Nghỉ chăm con ốm",
 					"Nghỉ thai sản",
+					"Nghỉ tai nạn lao động",
 					"Nghỉ bù",
 					"Nghỉ không lương",
 				],

@@ -34,3 +34,23 @@ class TestSetupVnDefaults(FrappeTestCase):
 		ensure_defaults()
 		after = {dt: frappe.db.count(dt) for dt in ("Attendance", "Salary Slip", "Employee Checkin")}
 		self.assertEqual(before, after)
+
+	def test_hooks_fixture_filters_match_fixture_files(self):
+		# A fixtures `name in [...]` filter must list exactly the records in its JSON file, else a
+		# `bench export-fixtures` would silently drop the records missing from the filter.
+		import hrms.hooks as hooks
+		from hrms.setup_vn_defaults import _fixture_names
+
+		for entry in hooks.fixtures:
+			if not isinstance(entry, dict):
+				continue
+			name_filter = (entry.get("filters") or {}).get("name")
+			if not (isinstance(name_filter, (list, tuple)) and name_filter and name_filter[0] == "in"):
+				continue
+			filtered = set(name_filter[1])
+			file_names = set(_fixture_names(frappe.scrub(entry["dt"])))
+			self.assertEqual(
+				filtered,
+				file_names,
+				f"hooks.py fixtures filter for {entry['dt']} is out of sync with its fixture file",
+			)
