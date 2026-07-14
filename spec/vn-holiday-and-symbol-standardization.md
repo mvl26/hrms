@@ -1,4 +1,4 @@
-# Spec: Chuẩn hoá chấm công & nghỉ lễ theo chuẩn Việt Nam — Holiday List (WS1) + ký hiệu TT200 / logic nửa ngày (WS2)
+# Spec: Chuẩn hoá chấm công & nghỉ lễ theo chuẩn Việt Nam — Holiday List (WS1) + ký hiệu VN / logic nửa ngày (WS2)
 
 > Status: **DRAFT for approval (Phase 1 / SPECIFY).** Scope + 6 quyết định chốt trong phiên
 > 2026-07-14. Nối tiếp bộ VN attendance-code đã ship (`spec/attendance-code-timekeeping.md`,
@@ -15,17 +15,19 @@ của ERP** (không thêm doctype mới). Hai workstream độc lập nhưng b�
   cáo bảng công không tô được **CN/NL**, và (về sau) payroll không tính đúng nghỉ lễ. WS1 tạo một
   Holiday List VN đúng chuẩn (ngày nghỉ hàng tuần + nghỉ lễ Điều 112 BLLĐ 2019) và rà soát logic resolve
   lịch cho từng nhân viên.
-- **WS2 — Ký hiệu bảng chấm công theo TT200 + logic nửa ngày.** Đối chiếu 13 mã công hiện có với **mẫu
-  bảng chấm công 01a-LĐTL (Thông tư 200/2014/TT-BTC)**, thống nhất ký hiệu, vá các chỗ lệch/thiếu, và
-  làm **chính xác logic nửa ngày** (đi làm nửa ngày vs nghỉ phép nửa ngày vs tổ hợp sáng/chiều) — tất cả
-  **bất biến lương** (payroll-neutral), có test chứng minh.
+- **WS2 — Ký hiệu (HR chốt) + logic nửa ngày.** Giữ nguyên bộ mã hiện có (X, P, Ô…), chỉ (a) hiển thị
+  **ngày nghỉ = "-"** trên bảng công, (b) thêm **mã N** = nghỉ việc riêng có lương (kết hôn/tang), (c) làm
+  **chính xác logic nửa ngày** (đi làm nửa ngày vs nghỉ phép nửa ngày vs tổ hợp sáng/chiều) — tất cả
+  **bất biến lương** (payroll-neutral), có test chứng minh. TT200 (01a-LĐTL) chỉ là tham chiếu, **không**
+  rename hàng loạt.
 
 **Success (đợt này):**
 1. HR tạo được **một Holiday List VN / công ty / năm** qua một helper idempotent: ngày nghỉ hàng tuần
    (CN, hoặc T7+CN) + các ngày lễ **dương lịch** cố định tự sinh; **Tết Âm lịch + Giỗ Tổ HR nhập tay**.
-2. Báo cáo/bảng công tô đúng **CN/NL** từ Holiday List đó; auto-attendance bỏ qua ngày lễ đúng.
-3. Bộ mã công được **thống nhất theo TT200** (đổi/bổ sung có tài liệu hoá), mọi tổ hợp nửa ngày tính
-   `custom_cong` đúng, và **payroll bất biến** trước/sau (cổng invariance mở rộng).
+2. Báo cáo/bảng công tô đúng **"-" (ngày nghỉ) / "NL" (lễ)** từ Holiday List đó; auto-attendance bỏ qua
+   ngày lễ đúng.
+3. **X giữ nguyên**; ngày nghỉ hiển thị **"-"**; **mã N** (việc riêng có lương) + Leave Type nền hoạt động;
+   mọi tổ hợp nửa ngày tính `custom_cong` đúng; **payroll bất biến** trước/sau (cổng invariance mở rộng).
 4. WS1 để lại một Holiday List **đúng** làm nền cho bước chẩn đoán payroll "nghỉ lễ có lương" sau này.
 
 ## Locked decisions (2026-07-14)
@@ -36,8 +38,17 @@ của ERP** (không thêm doctype mới). Hai workstream độc lập nhưng b�
    Slip`). Không tạo doctype mới; chỉ thêm fixtures/helper/config + chỉnh sửa nhỏ có kiểm soát.
 3. **Cơ sở tính lương** = lương tháng cố định, **chia theo số ngày làm việc thực của tháng** (mẫu số =
    ngày làm việc, không kể ngày nghỉ hàng tuần). → nghỉ lễ phải được tính là **công hưởng lương**.
-4. **Chuẩn ký hiệu = bám sát TT200 (01a-LĐTL)**, chỉ **mở rộng** cho khái niệm TT200 không có
-   (nửa ngày, công tác, vắng — vẫn giữ vì bộ máy Miyano cần).
+4. **Ký hiệu do HR chốt (2026-07-14); TT200 (01a-LĐTL) chỉ là *tham chiếu* — KHÔNG rename hàng loạt:**
+   - **X** = ngày làm việc đủ/bình thường → **giữ nguyên** (không đổi sang "+").
+   - **"-"** = **ngày nghỉ** (nghỉ hàng tuần / ngày không làm việc không có bản ghi) → hiển thị dấu gạch
+     trên bảng công (thay marker "CN" cũ). Đây là **marker suy từ lịch** (không phải Attendance Code, không
+     tạo bản ghi).
+   - **N** = **nghỉ việc riêng có lương** (kết hôn, đám tang — Điều 115) → **mã công mới** gắn một **Leave
+     Type có lương** ("Nghỉ việc riêng"/hiếu hỉ, `is_lwp = 0`).
+   - Các mã còn lại **giữ nguyên** (P, 1/2P, Ô, Cô, TS, T, NB, K, 1/2K, NN, V, CT) — **không** đổi K→KL,
+     **không** thêm H trừ khi HR yêu cầu sau. → tránh migrate mã hàng loạt + rủi ro vận hành.
+   - Xung đột "N" cũ (báo cáo dùng N = *đã nghỉ việc*): **N nay = việc riêng**; ngày sau `relieving_date`
+     hiển thị **"-"** (ngày nghỉ) thay vì "N".
 5. **Ngày lễ âm lịch (Tết, Giỗ Tổ) = HR nhập tay hằng năm.** Helper chỉ tự sinh ngày nghỉ hàng tuần +
    lễ **dương lịch** (01/01, 30/04, 01/05, 02/09 ×2). Không cần thư viện/âm lịch.
 6. **Phần "nghỉ lễ có lương" (đụng payroll) = TÁCH RA, KHÔNG build đợt này.** Trình tự bắt buộc: (a) build
@@ -62,8 +73,10 @@ của ERP** (không thêm doctype mới). Hai workstream độc lập nhưng b�
 - **Live `miyano`:** `payroll_based_on = 'Leave'`, `include_holidays_in_total_working_days = 0`,
   `consider_unmarked_attendance_as = 'Present'`; **chỉ có Holiday List test**. (Đây là bản dev gần trống:
   10 nhân viên, 0 salary structure/slip — dữ liệu thật ở prod.)
-- **Xung đột ký hiệu "N":** TT200 **N = Ngừng việc**; báo cáo Miyano đang dùng **N = đã nghỉ việc**
-  (suy từ `relieving_date`, `spec/attendance-code-timekeeping.md:98`). Phải giải quyết ở WS2.
+- **Ký hiệu "N" — đã chốt lại:** báo cáo cũ dùng N = *đã nghỉ việc* (suy từ `relieving_date`,
+  `spec/attendance-code-timekeeping.md:98`). HR chốt (2026-07-14): **N = nghỉ việc riêng có lương
+  (kết hôn/tang)**; ngày sau `relieving_date` chuyển hiển thị **"-"** (ngày nghỉ). (TT200 dùng N = ngừng
+  việc — Miyano không dùng khái niệm này.)
 
 ## WS1 — Holiday List VN
 
@@ -92,42 +105,48 @@ Holiday List là **tạo dữ liệu**, đụng công ty thật → **ask-first*
 - Không sửa `get_holiday_list_for_employee` (ERP chuẩn) trừ khi test phát hiện sai; nếu sai → sửa nhỏ,
   có test.
 
-## WS2 — Ký hiệu TT200 + logic nửa ngày
+## WS2 — Ký hiệu (HR chốt) + logic nửa ngày
 
-### Bảng đối chiếu 13 mã hiện có ↔ TT200 (bản nháp để anh chốt)
+Phạm vi WS2 đã **thu hẹp** theo chốt của HR (2026-07-14): **giữ nguyên bộ mã hiện có**, chỉ (a) thêm
+marker **"-"** cho ngày nghỉ, (b) thêm **mã N** cho việc riêng có lương, (c) làm chính xác logic nửa ngày.
+**Không** rename hàng loạt theo TT200 → **không** migrate mã cũ.
 
-Mẫu TT200 (01a-LĐTL) quy định: **+/X** lương thời gian · **Ô** ốm · **Cô** con ốm · **TS** thai sản ·
-**T** tai nạn · **P** nghỉ phép · **H** hội nghị/học tập · **NB** nghỉ bù · **KL** không lương ·
-**N** ngừng việc · **LĐ** nghĩa vụ.
+### Thay đổi ký hiệu (chốt)
 
-| Miyano hiện tại | Nghĩa | TT200 | Hành động đề xuất |
+| Ký hiệu | Nghĩa | Loại | Hành động |
 |---|---|---|---|
-| X | Đi làm đủ công | +/X | **Giữ X** (TT200 chấp nhận X). |
-| Ô, Cô, TS, T, P, NB | ốm / con ốm / thai sản / TNLĐ / phép / nghỉ bù | Ô,Cô,TS,T,P,NB | **Khớp — giữ.** |
-| K | Nghỉ không lương cả ngày | **KL** | **Đổi K → KL** (khớp TT200). ⚠ cần migrate dữ liệu cũ. |
-| — (thiếu) | Hội nghị / học tập (có lương) | **H** | **Thêm mã H** + (tuỳ) Leave Type/không, maps_to Present/WFH, paid. |
-| — (thiếu) | Việc riêng có lương (cưới 3, con cưới 1, tang 3 — Điều 115) | (ngoài TT200) | **Thêm mã** (VD **R**) + Leave Type "Nghỉ việc riêng có lương" (`is_lwp = 0`). |
-| N (báo cáo) | **đã nghỉ việc** | N = **ngừng việc** | **Giải xung đột:** đổi marker "đã nghỉ việc" sang ký hiệu khác (VD giữ nội bộ / dùng khác), trả **N** về đúng nghĩa TT200 hoặc bỏ nếu không dùng ngừng việc. |
-| NN, 1/2P, 1/2K, V, CT | nửa ngày / vắng / công tác | (TT200 không có) | **Giữ — mở rộng Miyano**, tài liệu hoá là phần ngoài TT200. |
+| **X** | Đi làm đủ công | Attendance Code (đã có) | **Giữ nguyên.** |
+| **"-"** | **Ngày nghỉ** (nghỉ hàng tuần / ngày trống không bản ghi / sau `relieving_date`) | **Marker suy từ lịch** (không tạo bản ghi) | **Thêm ở báo cáo/bảng công** thay marker "CN"; ngày lễ vẫn hiển thị **"NL"** riêng (vì có lương). |
+| **N** | **Nghỉ việc riêng có lương** (kết hôn 3, con kết hôn 1, tang 3 — Điều 115) | **Attendance Code mới** + **Leave Type mới** ("Nghỉ việc riêng", `is_lwp = 0`, có lương) | **Thêm fixture** (`maps_to_status = On Leave`, `is_paid = 1`, `work_fraction = 0`) + bridge test. |
+| P, 1/2P, Ô, Cô, TS, T, NB, K, 1/2K, NN, V, CT | (như hiện tại) | Attendance Code (đã có) | **Giữ nguyên — KHÔNG đổi** (không K→KL, không thêm H). |
 
-> Ghi chú: "bám sát TT200" = dùng ký hiệu TT200 ở đâu TT200 có; những khái niệm TT200 **không** định nghĩa
-> (nửa ngày, công tác, vắng) vẫn giữ mã Miyano. Bảng cuối cùng do anh duyệt trước khi sửa fixtures.
+> Hệ quả: **không có patch migrate mã** trong đợt này (không đổi giá trị `custom_*_code` cũ). "-" là thay
+> đổi **hiển thị** ở lớp báo cáo; "N" là **thêm mới** (không đụng bản ghi cũ). Cả hai payroll-neutral.
+
+### Hai diễn giải cần anh xác nhận (nếu sai thì sửa spec)
+
+1. **"-" chỉ cho ngày nghỉ hàng tuần**; **ngày lễ vẫn hiển thị "NL"** (để phân biệt "lễ có lương" với
+   "nghỉ thường"). Nếu anh muốn ngày lễ cũng là "-" thì nói.
+2. **Leave Type mới "Nghỉ việc riêng"** (`is_lwp = 0`, có lương) làm nền cho mã **N** — thêm vào
+   `leave_type.json` + fixtures filter. (Thêm Leave Type mới = ask-first theo CLAUDE.md; đây là *create-if-
+   missing*, không sửa Leave Type đang có.)
 
 ### Logic nửa ngày / sáng–chiều (làm chính xác)
 
 - Kiểm chứng **forward bridge** cho mọi tổ hợp sáng/chiều: `X|P` (đi làm nửa + phép nửa → Half Day,
-  `half_day_status=Present`, `leave_type=phép`, `cong=0.5`), `X|K(L)`, `X|Ô`, `NN`, `1/2P`, `1/2K`, `H`…
+  `half_day_status=Present`, `leave_type=phép`, `cong=0.5`), `X|Ô`, `X|K`, `X|N` (việc riêng nửa ngày),
+  `NN`, `1/2P`, `1/2K`…
 - `custom_cong = Σ (work_fraction × 0.5)` đúng cho từng nửa; mỗi cột nghỉ = `Σ (1 − work_fraction) × 0.5`
   theo `category` (đã có ở `attendance.py`; đợt này **verify + phủ test**, không viết lại).
-- **Bất biến lương:** mọi mã/tổ hợp mới phải qua `test_attendance_code_payroll_invariance.py` mở rộng
-  (payment_days / absent_days / LWP byte-identical so với nhập native).
+- **Bất biến lương:** mã **N** mới + mọi tổ hợp nửa ngày phải qua
+  `test_attendance_code_payroll_invariance.py` mở rộng (payment_days / absent_days / LWP byte-identical so
+  với nhập native).
 
-### Migrate dữ liệu đổi mã (nếu đổi K→KL, thêm H/R, đổi N)
+### Không migrate mã cũ trong đợt này
 
-- Đổi **giá trị hiển thị** `custom_attendance_code`/`custom_morning_code`/`custom_afternoon_code` trên
-  Attendance cũ — **các field này KHÔNG feed payroll** → **payroll-neutral** (giống backfill patch
-  `hrms/patches/v15_0/backfill_attendance_codes.py`). Vẫn **ask-first** khi chạy trên prod, có runner
-  chụp payroll trước/sau chứng minh 0 thay đổi, idempotent, revert được bằng cách map ngược.
+Vì **không rename** mã nào (K, X… giữ nguyên) → **không cần patch migrate dữ liệu**. Chỉ **thêm** mã `N`
+(không đụng bản ghi cũ) + đổi **hiển thị** ngày nghỉ sang "-" ở lớp báo cáo. Nếu về sau HR muốn align sâu
+hơn theo TT200 (K→KL, thêm H) thì đó là spec/patch riêng, kèm runner chụp payroll trước/sau (0 thay đổi).
 
 ## Tech Stack
 
@@ -150,16 +169,16 @@ bench build --app hrms                # nếu sửa .js bảng công/print
 
 ```
 hrms/setup_vn_holiday.py                             (mới — create_vn_holiday_list + test)
-hrms/fixtures/attendance_code.json                   (sửa — chuẩn hoá theo TT200: KL, H, R, giải N)
-hrms/fixtures/leave_type.json                        (sửa — +"Nghỉ việc riêng có lương" nếu chốt mã R)
-hrms/hr/doctype/attendance/attendance.py             (verify/tighten bridge nửa ngày — sửa nhỏ nếu cần)
-hrms/hr/report/bang_cham_cong_thang/…                (giải marker "đã nghỉ việc" vs N; hiển thị KL/H/R)
-hrms/hr/doctype/bang_cong_thang/…                    (thêm cột/category nếu bộ mã đổi — nếu cần)
-hrms/patches/v15_0/normalize_attendance_codes.py     (mới — migrate mã cũ→TT200, ask-first) + test
-hrms/payroll/doctype/salary_slip/test_attendance_code_payroll_invariance.py  (mở rộng test)
+hrms/fixtures/leave_type.json                        (sửa — + "Nghỉ việc riêng" is_lwp=0, create-if-missing)
+hrms/fixtures/attendance_code.json                   (sửa — + mã "N" (On Leave, is_paid, →"Nghỉ việc riêng"))
+hrms/hooks.py                                        (sửa — fixtures filter thêm Leave Type mới)
+hrms/hr/doctype/attendance/attendance.py             (verify bridge N + nửa ngày — sửa nhỏ nếu test đòi)
+hrms/hr/report/bang_cham_cong_thang/…                (marker "-" thay "CN"; sau relieving_date → "-"; giữ "NL")
+hrms/hr/doctype/bang_cong_thang/…                    (marker "-" trong print/grid nếu cần đồng bộ report)
+hrms/payroll/doctype/salary_slip/test_attendance_code_payroll_invariance.py  (mở rộng: mã N + nửa ngày)
 spec/vn-holiday-and-symbol-standardization.md        (spec này)
 ```
-> Chỉ tạo file khi task tương ứng cần; không đổi mã nào chưa chốt ở bảng đối chiếu.
+> Chỉ tạo file khi task tương ứng cần. **Không** rename/đổi mã đã có → **không** có patch migrate đợt này.
 
 ## Code style
 
@@ -172,10 +191,12 @@ nhỏ, có docstring nêu "why"; guard idempotent (`frappe.db.exists` trước k
 - **WS1:** `create_vn_holiday_list` sinh đúng số dòng weekly_off (CN → ~52; T7+CN → ~104) + 5 dòng lễ
   dương lịch; **idempotent** (chạy 2 lần không nhân đôi); resolve Company-default cho nhân viên trống
   `holiday_list`; báo cáo tô CN/NL từ list này.
-- **WS2 (bất biến lương — GATE):** mở rộng payroll-invariance cho **mọi** mã/tổ hợp mới (KL, H, R, X|P,
-  NN, 1/2P, 1/2K): dựng Salary Slip trên data cố định, ghi `payment_days`/`absent_days`/LWP, chạy bridge,
-  dựng lại → **giống hệt**. Bridge unit-test cho từng tổ hợp sáng/chiều.
-- **Migrate mã:** runner chụp payroll trước/sau đổi `custom_*_code` → **0 thay đổi**; idempotent.
+- **WS2 (bất biến lương — GATE):** mở rộng payroll-invariance cho **mã N** + các tổ hợp nửa ngày (`X|P`,
+  `X|N`, `NN`, `1/2P`, `1/2K`): dựng Salary Slip trên data cố định, ghi `payment_days`/`absent_days`/LWP,
+  chạy bridge, dựng lại → **giống hệt** (mã N có lương → không dock; nửa ngày đúng fraction). Bridge
+  unit-test cho từng tổ hợp sáng/chiều + mã N cả ngày.
+- **Report marker:** ngày `weekly_off` → "-"; ngày lễ (`weekly_off=0`) → "NL"; ngày sau `relieving_date`
+  → "-"; ngày có Attendance vẫn ưu tiên mã của bản ghi. Test `_resolve_day` cho 4 case này.
 - Chạy song song 1 tháng với quy trình cũ trước khi cut-over (WS1 Holiday List).
 
 ## Boundaries
@@ -194,14 +215,13 @@ nhỏ, có docstring nêu "why"; guard idempotent (`frappe.db.exists` trước k
 
 - [ ] `create_vn_holiday_list(year, company, weekly_off_days)` tạo Holiday List VN đúng (weekly-off + 5 lễ
       dương lịch), idempotent, có test; Tết/Giỗ Tổ để HR nhập tay (có ghi chú).
-- [ ] Nhân viên không set `holiday_list` resolve về Company default; báo cáo bảng công tô đúng **CN/NL**;
-      auto-attendance bỏ qua ngày lễ — có test/kiểm chứng.
-- [ ] Bộ mã công **thống nhất theo TT200** (đổi K→KL, thêm H + việc-riêng-có-lương, giải xung đột N) theo
-      bảng đối chiếu **anh đã duyệt**; các mã Miyano ngoài TT200 được tài liệu hoá.
-- [ ] Mọi tổ hợp nửa ngày/sáng-chiều tính `custom_cong` đúng; **payroll bất biến** (gate mở rộng xanh).
-- [ ] Nếu đổi mã: patch migrate `custom_*_code` chứng minh **0 thay đổi payroll**, idempotent, ask-first
-      khi chạy prod.
-- [ ] Tất cả reversible `git revert`; verify trên dev `miyano` qua rollback harness.
+- [ ] Nhân viên không set `holiday_list` resolve về Company default; báo cáo bảng công tô đúng
+      **"-" (ngày nghỉ) / "NL" (lễ)**; auto-attendance bỏ qua ngày lễ — có test/kiểm chứng.
+- [ ] **Ký hiệu chốt**: X giữ nguyên; ngày nghỉ → **"-"**; **mã N** = việc riêng có lương (+ Leave Type
+      "Nghỉ việc riêng" `is_lwp=0`); các mã khác giữ nguyên. Không rename → không migrate mã.
+- [ ] Mọi tổ hợp nửa ngày/sáng-chiều + **mã N** tính `custom_cong` đúng; **payroll bất biến** (gate mở
+      rộng xanh: N có lương không dock, nửa ngày đúng fraction).
+- [ ] Tất cả reversible `git revert`; fixtures additive; verify trên dev `miyano` qua rollback harness.
 
 ## Out of scope (spec/đợt sau)
 
@@ -210,9 +230,14 @@ nhỏ, có docstring nêu "why"; guard idempotent (`frappe.db.exists` trước k
 - BHXH benefit calc (ốm/thai sản 75%/100%); carry-forward phép năm; nghỉ lễ trùng CN được nghỉ bù.
 - Âm lịch tự sinh (Tết/Giỗ Tổ) — HR nhập tay đợt này.
 
-## Open Questions (cần chốt khi review spec)
+## Open Questions (còn lại — 2 diễn giải + 1 config)
 
-1. **Ngày nghỉ hàng tuần theo site:** CN, hay T7+CN? (mặc định CN; xác nhận cho Miyano.)
-2. **Bảng ký hiệu cuối cùng:** duyệt bảng đối chiếu WS2 (đặc biệt: mã cho "việc riêng có lương" = **R**?
-   và cách giải **N** — trả N về "ngừng việc" hay đổi marker "đã nghỉ việc"?).
-3. **Có thực sự đổi X và K không**, hay giữ X + chỉ đổi K→KL? (đổi mã đã quen = migrate + rủi ro vận hành.)
+1. **"-" có áp cho ngày lễ không?** Diễn giải mặc định: **không** — ngày nghỉ hàng tuần = "-", **ngày lễ
+   vẫn = "NL"** (phân biệt lễ có lương). Nếu HR muốn lễ cũng hiển thị "-" thì sửa.
+2. **Leave Type nền cho mã N** tên chính xác là gì? Mặc định **"Nghỉ việc riêng"** (`is_lwp=0`, có lương),
+   create-if-missing. Có cần tách cưới/tang thành 2 loại, hay chung 1 loại đủ cho bảng công?
+3. **Ngày nghỉ hàng tuần theo site:** mặc định **CN**; nếu Miyano tuần 5 ngày thì thêm **T7** (tham số của
+   helper — chốt khi tạo Holiday List thật, không chặn plan).
+
+> Đã chốt (2026-07-14): X giữ nguyên · ngày nghỉ = "-" · N = việc riêng có lương · các mã khác giữ nguyên
+> (không rename TT200) · payroll nghỉ lễ tách ra · Tết/Giỗ Tổ nhập tay.
