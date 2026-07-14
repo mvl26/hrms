@@ -180,5 +180,19 @@
   "modified": "2026-07-08 00:00:00.000000",
   "name": "CT",
   "work_fraction": 1.0
+ },
+ {
+  "category": "Việc riêng",
+  "code": "N",
+  "code_name": "Nghỉ việc riêng có lương",
+  "color": null,
+  "docstatus": 0,
+  "doctype": "Attendance Code",
+  "is_paid": 1,
+  "leave_type": "Nghỉ việc riêng",
+  "maps_to_status": "On Leave",
+  "modified": "2026-07-14 00:00:00.000000",
+  "name": "N",
+  "work_fraction": 0.0
  }
 ]

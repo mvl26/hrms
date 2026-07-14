@@ -16,6 +16,7 @@ VN_LEAVE_TYPES = {
 	"Nghỉ tai nạn lao động": {"is_lwp": 0, "is_compensatory": 0},
 	"Nghỉ bù": {"is_lwp": 0, "is_compensatory": 1},
 	"Nghỉ không lương": {"is_lwp": 1, "is_compensatory": 0},
+	"Nghỉ việc riêng": {"is_lwp": 0, "is_compensatory": 0},
 }
 
 # Attendance Codes — code -> (category, work_fraction, is_paid, maps_to_status, leave_type).
@@ -34,6 +35,7 @@ VN_ATTENDANCE_CODES = {
 	"1/2K": ("Không lương", 0.5, 0, "Half Day", "Nghỉ không lương"),
 	"V": ("Vắng", 0.0, 0, "Absent", None),  # vắng không lý do — hiển thị cho ngày Absent
 	"CT": ("Công", 1.0, 1, "Work From Home", None),  # đi công tác — tính công, paid
+	"N": ("Việc riêng", 0.0, 1, "On Leave", "Nghỉ việc riêng"),  # nghỉ việc riêng có lương (cưới/tang)
 }
 
 

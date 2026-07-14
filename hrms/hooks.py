@@ -390,6 +390,7 @@ fixtures = [
 					"Nghỉ tai nạn lao động",
 					"Nghỉ bù",
 					"Nghỉ không lương",
+					"Nghỉ việc riêng",
 				],
 			]
 		},
