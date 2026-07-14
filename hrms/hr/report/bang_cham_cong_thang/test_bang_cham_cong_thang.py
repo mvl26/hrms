@@ -71,7 +71,7 @@ class TestBangChamCongThang(FrappeTestCase):
 	def test_new_categories_present(self):
 		# all seeded categories must have a totals column, including the new ones
 		labels = self._cat_labels()
-		for cat in ("Công", "Phép", "Ốm", "Thai sản", "Tai nạn LĐ", "Nghỉ bù", "Không lương"):
+		for cat in ("Công", "Phép", "Việc riêng", "Ốm", "Thai sản", "Tai nạn LĐ", "Nghỉ bù", "Không lương"):
 			self.assertIn(cat, labels, f"missing totals column for {cat}")
 
 	def test_single_half_day_code_totals(self):
@@ -90,8 +90,8 @@ class TestBangChamCongThang(FrappeTestCase):
 		self.assertEqual(row[labels["Phép"]], 0.5)
 		self.assertEqual(row[labels["Không lương"]], 0.5)
 
-	def test_calendar_markers_sunday_and_holiday(self):
-		# an employee whose holiday list has a weekly-off (CN) and a public holiday (NL) in the month
+	def test_calendar_markers_weekly_off_and_holiday(self):
+		# HR convention: weekly-off (rest day) renders "-"; a paid public holiday stays "NL"
 		hl = frappe.get_doc(
 			{
 				"doctype": "Holiday List",
@@ -108,8 +108,8 @@ class TestBangChamCongThang(FrappeTestCase):
 		frappe.db.set_value("Employee", emp, {"holiday_list": hl.name, "relieving_date": None, "status": "Active"})
 
 		row = self._row(emp)
-		self.assertEqual(row["day_1"], "CN")  # weekly off
-		self.assertEqual(row["day_2"], "NL")  # public holiday
+		self.assertEqual(row["day_1"], "-")  # weekly off → rest-day dash
+		self.assertEqual(row["day_2"], "NL")  # public holiday → kept distinct (paid)
 
 	def test_absent_day_renders_v(self):
 		labels = self._cat_labels()
@@ -124,6 +124,6 @@ class TestBangChamCongThang(FrappeTestCase):
 			"Employee", emp, {"relieving_date": f"{self.year}-{self.month:02d}-15", "status": "Left"}
 		)
 		row = self._row(emp)
-		self.assertEqual(row["day_16"], "N")  # day after relieving
-		self.assertEqual(row["day_31"], "N")
-		self.assertNotEqual(row.get("day_10"), "N")  # still employed on day 10
+		self.assertEqual(row["day_16"], "-")  # day after relieving → rest-day dash
+		self.assertEqual(row["day_31"], "-")
+		self.assertNotEqual(row.get("day_10"), "-")  # still employed on day 10

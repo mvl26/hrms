@@ -24,9 +24,9 @@ from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employe
 Filters = frappe._dict
 
 # display-only markers derived from the calendar, not Attendance Code master records
-MARKER_TERMINATED = "N"
-MARKER_WEEKLY_OFF = "CN"
-MARKER_HOLIDAY = "NL"
+MARKER_TERMINATED = "-"  # after relieving_date — HR convention: rest-day dash
+MARKER_WEEKLY_OFF = "-"  # nghỉ hàng tuần (CN/T7) — HR convention: rest-day dash
+MARKER_HOLIDAY = "NL"  # ngày nghỉ lễ có lương — kept distinct so paid holidays stay visible
 
 
 def execute(filters: Filters | None = None) -> tuple:
@@ -56,7 +56,7 @@ def get_code_map() -> dict:
 
 def get_categories(code_map: dict) -> list[str]:
 	# stable, human order first; then any extra categories present in the data
-	preferred = ["Công", "Phép", "Ốm", "Thai sản", "Tai nạn LĐ", "Nghỉ bù", "Không lương", "Vắng"]
+	preferred = ["Công", "Phép", "Việc riêng", "Ốm", "Thai sản", "Tai nạn LĐ", "Nghỉ bù", "Không lương", "Vắng"]
 	present = {r.category for r in code_map.values() if r.category}
 	ordered = [c for c in preferred if c in present]
 	ordered += sorted(present - set(preferred))
