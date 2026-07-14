@@ -71,6 +71,23 @@ class TestBangCongThang(FrappeTestCase):
 		self.assertEqual(row.cong, 1.5)
 		self.assertEqual(row.phep, 1.5)
 
+	def test_populate_personal_leave_total(self):
+		# code N (nghỉ việc riêng có lương) must land in the viec_rieng totals column
+		emp = frappe.db.get_value("Employee", {"company": self.company}, "name")
+		if not emp:
+			self.skipTest("no employee in company")
+		Y, M = 2097, 2
+		self._seed_attendance(emp, Y, M, 7, custom_attendance_code="N")
+
+		sheet = self._sheet(month=str(M), year=Y)
+		sheet.insert()
+		sheet.populate_from_attendance()
+
+		row = next((r for r in sheet.employees if r.employee == emp), None)
+		self.assertIsNotNone(row, "seeded employee missing from the sheet")
+		self.assertEqual(row.d07, "N")
+		self.assertEqual(row.viec_rieng, 1.0)  # full-day personal leave = 1.0
+
 	def test_populate_blocked_after_submit(self):
 		sheet = self._sheet(month="9", year=2097)
 		sheet.insert()

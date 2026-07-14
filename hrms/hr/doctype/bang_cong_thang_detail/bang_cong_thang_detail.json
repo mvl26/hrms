@@ -40,6 +40,7 @@
   "d31",
   "cong",
   "phep",
+  "viec_rieng",
   "om",
   "thai_san",
   "tnld",
@@ -268,6 +269,13 @@
    "precision": "2",
    "in_list_view": 1,
    "columns": 1
+  },
+  {
+   "fieldname": "viec_rieng",
+   "fieldtype": "Float",
+   "label": "Việc riêng",
+   "read_only": 1,
+   "precision": "2"
   },
   {
    "fieldname": "om",
