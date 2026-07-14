@@ -27,6 +27,7 @@ SCENARIOS = [
 	(3, "On Leave", "Nghỉ phép năm", "P"),  # paid leave
 	(4, "Absent", None, "V"),  # vắng không lý do
 	(5, "Work From Home", None, "CT"),  # đi công tác — paid, no deduction
+	(6, "On Leave", "Nghỉ việc riêng", "N"),  # nghỉ việc riêng có lương — paid, no deduction
 ]
 
 

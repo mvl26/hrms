@@ -107,3 +107,16 @@ class TestAttendanceCodeBridge(FrappeTestCase):
 		d = self._bridge(status="On Leave", leave_type="Nghỉ ốm")
 		self.assertEqual(d.custom_attendance_code, "Ô")
 		self.assertEqual(d.custom_cong, 0)
+
+	def test_forward_personal_leave(self):
+		# N = nghỉ việc riêng có lương -> On Leave, leave_type Nghỉ việc riêng, no worked công
+		d = self._bridge(custom_attendance_code="N")
+		self.assertEqual(d.status, "On Leave")
+		self.assertEqual(d.leave_type, "Nghỉ việc riêng")
+		self.assertEqual(d.custom_cong, 0)
+
+	def test_reverse_personal_leave(self):
+		# native On-Leave record of that leave type (no code) -> derive display code N
+		d = self._bridge(status="On Leave", leave_type="Nghỉ việc riêng")
+		self.assertEqual(d.custom_attendance_code, "N")
+		self.assertEqual(d.custom_cong, 0)
