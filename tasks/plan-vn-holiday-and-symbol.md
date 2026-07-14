@@ -17,6 +17,14 @@ change; the payroll-invariance gate is extended to prove it.
 **Tech Stack:** Frappe/ERPNext HRMS v15, Python (`frappe.qb`, controllers), fixtures JSON. Tests run via
 the **rollback console harness** (never `bench run-tests` on `miyano`).
 
+## Status: ✅ DONE 2026-07-14 (all 6 tasks, `/build auto`)
+
+Built on `feat/skip-attendance-diag`, TDD per task, one commit each, **80 tests green** (46 feature +
+5 attendance_code + 29 shift_type regression). Commits: `1967167` (T1 fixtures N + Leave Type) ·
+`7d92bae` (T2 invariance) · `bd0263d` (T3 report `-`/`NL`/Việc riêng) · `ed43143` (T4 sheet `viec_rieng`) ·
+`41d838b` (T5 Holiday List generator) · this commit (T6 docs). **Not yet done (ask-first):** deploy
+fixtures / run `create_vn_holiday_list` on **production**; that is the deliberate deploy step, not autonomous.
+
 ## Global Constraints
 
 - **Payroll-invariance GATE:** any change touching attendance/codes must prove Salary Slip

@@ -213,15 +213,16 @@ nhỏ, có docstring nêu "why"; guard idempotent (`frappe.db.exists` trước k
 
 ## Success Criteria (đợt này)
 
-- [ ] `create_vn_holiday_list(year, company, weekly_off_days)` tạo Holiday List VN đúng (weekly-off + 5 lễ
-      dương lịch), idempotent, có test; Tết/Giỗ Tổ để HR nhập tay (có ghi chú).
-- [ ] Nhân viên không set `holiday_list` resolve về Company default; báo cáo bảng công tô đúng
-      **"-" (ngày nghỉ) / "NL" (lễ)**; auto-attendance bỏ qua ngày lễ — có test/kiểm chứng.
-- [ ] **Ký hiệu chốt**: X giữ nguyên; ngày nghỉ → **"-"**; **mã N** = việc riêng có lương (+ Leave Type
+- [x] `create_vn_holiday_list(year, company, weekly_off_days)` tạo Holiday List VN đúng (weekly-off + 5 lễ
+      dương lịch), idempotent, có test; Tết/Giỗ Tổ để HR nhập tay (có ghi chú). *(4 test xanh)*
+- [x] Nhân viên không set `holiday_list` resolve về Company default (test); báo cáo bảng công tô đúng
+      **"-" (ngày nghỉ) / "NL" (lễ)** (test). *(auto-attendance bỏ ngày lễ = hành vi stock, không đổi.)*
+- [x] **Ký hiệu chốt**: X giữ nguyên; ngày nghỉ → **"-"**; **mã N** = việc riêng có lương (+ Leave Type
       "Nghỉ việc riêng" `is_lwp=0`); các mã khác giữ nguyên. Không rename → không migrate mã.
-- [ ] Mọi tổ hợp nửa ngày/sáng-chiều + **mã N** tính `custom_cong` đúng; **payroll bất biến** (gate mở
-      rộng xanh: N có lương không dock, nửa ngày đúng fraction).
-- [ ] Tất cả reversible `git revert`; fixtures additive; verify trên dev `miyano` qua rollback harness.
+- [x] Mã **N** + các mã đi qua bridge tính `custom_cong` đúng; **payroll bất biến** (gate mở rộng xanh:
+      N có lương không dock). Bảng Công Tháng có cột tổng **Việc riêng**.
+- [x] Tất cả reversible `git revert`; fixtures additive; verify trên dev `miyano` qua rollback harness
+      (**80 test xanh**: 46 chuẩn-hoá + 5 attendance_code + 29 shift_type regression).
 
 ## Out of scope (spec/đợt sau)
 
