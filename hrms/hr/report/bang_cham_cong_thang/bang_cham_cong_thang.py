@@ -5,7 +5,7 @@
 Pivots by employee × day-of-month. Each cell is the mã công for that day:
 - a real Attendance record → its code (or morning/afternoon codes, e.g. "X/P");
 - otherwise a calendar marker derived (NOT stored) from the employee's data:
-  `N` after the relieving date, `CN` on a weekly-off, `NL` on a public holiday.
+  `-` on a weekly-off (rest day) or after the relieving date, `NL` on a public holiday.
 
 Totals columns sum per category: Công = actual worked công (Σ work_fraction), and each leave
 column = Σ (1 − work_fraction) of that category's halves. Read-only: never writes, so it is
