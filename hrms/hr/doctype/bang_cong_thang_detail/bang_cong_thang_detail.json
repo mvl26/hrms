@@ -38,15 +38,15 @@
   "d29",
   "d30",
   "d31",
-  "cong",
-  "phep",
+  "work_days",
+  "annual_leave",
   "personal_leave",
-  "om",
-  "thai_san",
-  "tnld",
-  "nghi_bu",
-  "khong_luong",
-  "vang"
+  "sick_leave",
+  "maternity_leave",
+  "work_accident_leave",
+  "comp_off",
+  "unpaid_leave",
+  "absent"
  ],
  "fields": [
   {
@@ -253,7 +253,7 @@
    "read_only": 1
   },
   {
-   "fieldname": "cong",
+   "fieldname": "work_days",
    "fieldtype": "Float",
    "label": "Công",
    "read_only": 1,
@@ -262,7 +262,7 @@
    "columns": 1
   },
   {
-   "fieldname": "phep",
+   "fieldname": "annual_leave",
    "fieldtype": "Float",
    "label": "Phép",
    "read_only": 1,
@@ -278,35 +278,35 @@
    "precision": "2"
   },
   {
-   "fieldname": "om",
+   "fieldname": "sick_leave",
    "fieldtype": "Float",
    "label": "Ốm",
    "read_only": 1,
    "precision": "2"
   },
   {
-   "fieldname": "thai_san",
+   "fieldname": "maternity_leave",
    "fieldtype": "Float",
    "label": "Thai sản",
    "read_only": 1,
    "precision": "2"
   },
   {
-   "fieldname": "tnld",
+   "fieldname": "work_accident_leave",
    "fieldtype": "Float",
    "label": "Tai nạn LĐ",
    "read_only": 1,
    "precision": "2"
   },
   {
-   "fieldname": "nghi_bu",
+   "fieldname": "comp_off",
    "fieldtype": "Float",
    "label": "Nghỉ bù",
    "read_only": 1,
    "precision": "2"
   },
   {
-   "fieldname": "khong_luong",
+   "fieldname": "unpaid_leave",
    "fieldtype": "Float",
    "label": "Không lương",
    "read_only": 1,
@@ -315,7 +315,7 @@
    "columns": 1
   },
   {
-   "fieldname": "vang",
+   "fieldname": "absent",
    "fieldtype": "Float",
    "label": "Vắng",
    "read_only": 1,

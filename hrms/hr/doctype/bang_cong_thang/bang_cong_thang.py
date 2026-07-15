@@ -60,15 +60,15 @@ class BangCongThang(Document):
 			filters.department = self.department
 
 		category_field = {
-			"Công": "cong",
-			"Phép": "phep",
+			"Công": "work_days",
+			"Phép": "annual_leave",
 			"Việc riêng": "personal_leave",
-			"Ốm": "om",
-			"Thai sản": "thai_san",
-			"Tai nạn LĐ": "tnld",
-			"Nghỉ bù": "nghi_bu",
-			"Không lương": "khong_luong",
-			"Vắng": "vang",
+			"Ốm": "sick_leave",
+			"Thai sản": "maternity_leave",
+			"Tai nạn LĐ": "work_accident_leave",
+			"Nghỉ bù": "comp_off",
+			"Không lương": "unpaid_leave",
+			"Vắng": "absent",
 		}
 
 		self.set("employees", [])

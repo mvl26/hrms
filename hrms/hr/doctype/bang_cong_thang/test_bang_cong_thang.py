@@ -68,8 +68,8 @@ class TestBangCongThang(FrappeTestCase):
 		self.assertEqual(row.d05, "P")
 		self.assertEqual(row.d06, "1/2P")
 		# Công = X 1.0 + 1/2P 0.5 = 1.5 ; Phép = P 1.0 + 1/2P 0.5 = 1.5
-		self.assertEqual(row.cong, 1.5)
-		self.assertEqual(row.phep, 1.5)
+		self.assertEqual(row.work_days, 1.5)
+		self.assertEqual(row.annual_leave, 1.5)
 
 	def test_populate_personal_leave_total(self):
 		# code N (nghỉ việc riêng có lương) must land in the personal_leave totals column
