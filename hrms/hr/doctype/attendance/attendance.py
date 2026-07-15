@@ -2,6 +2,8 @@
 # License: GNU General Public License v3. See license.txt
 
 
+from datetime import datetime, timedelta
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
@@ -37,11 +39,81 @@ class OverlappingShiftAttendanceError(frappe.ValidationError):
 
 class Attendance(Document):
 	def before_validate(self):
+		self.apply_vn_half_day_classifier()
 		self.apply_attendance_code_bridge()
 
 	def before_insert(self):
 		if self.half_day_status == "":
 			self.half_day_status = None
+
+	# module-level fallbacks for shifts that enable the split but leave a config field blank
+	VN_DEFAULT_LUNCH_START = timedelta(hours=12)
+	VN_DEFAULT_LUNCH_END = timedelta(hours=13, minutes=30)
+	VN_DEFAULT_MIN_FRACTION = 0.5
+	VN_DEFAULT_GRACE_MINUTES = 15
+
+	def apply_vn_half_day_classifier(self):
+		"""For a shift that opts into VN split-half-day, derive morning/afternoon codes + a
+		lunch-excluded net working_hours from the day's in/out, so the code bridge produces the
+		correct status/công. Gated + a no-op unless: shift set with custom_split_half_day=1,
+		in/out present, no manual code, and status not On Leave."""
+		if not self.get("shift") or not self.get("in_time") or not self.get("out_time"):
+			return
+		if self.get("custom_attendance_code") or self.get("custom_morning_code") or self.get(
+			"custom_afternoon_code"
+		):
+			return  # respect a manually entered code
+		if self.get("status") == "On Leave":
+			return  # a leave day is not a worked day
+
+		cfg = frappe.db.get_value(
+			"Shift Type",
+			self.shift,
+			[
+				"start_time",
+				"end_time",
+				"custom_split_half_day",
+				"custom_lunch_start",
+				"custom_lunch_end",
+				"custom_half_day_min_fraction",
+				"custom_half_day_grace_minutes",
+			],
+			as_dict=True,
+		)
+		if not cfg or not cint(cfg.custom_split_half_day) or not (cfg.start_time and cfg.end_time):
+			return
+
+		midnight = datetime.combine(getdate(self.attendance_date), datetime.min.time())
+		lunch_start = cfg.custom_lunch_start or self.VN_DEFAULT_LUNCH_START
+		lunch_end = cfg.custom_lunch_end or self.VN_DEFAULT_LUNCH_END
+		m_start, m_end = midnight + cfg.start_time, midnight + lunch_start
+		a_start, a_end = midnight + lunch_end, midnight + cfg.end_time
+		in_t, out_t = get_datetime(self.in_time), get_datetime(self.out_time)
+		grace = timedelta(minutes=cint(cfg.custom_half_day_grace_minutes) or self.VN_DEFAULT_GRACE_MINUTES)
+		min_frac = flt(cfg.custom_half_day_min_fraction) or self.VN_DEFAULT_MIN_FRACTION
+
+		def overlap_hours(lo, hi, w_lo, w_hi):
+			start, end = max(lo, w_lo), min(hi, w_hi)
+			return max(0.0, (end - start).total_seconds() / 3600.0)
+
+		m_net = overlap_hours(in_t, out_t, m_start, m_end)
+		a_net = overlap_hours(in_t, out_t, a_start, a_end)
+		m_dur = (m_end - m_start).total_seconds() / 3600.0
+		a_dur = (a_end - a_start).total_seconds() / 3600.0
+		# coverage uses a grace-expanded interval (tolerate small late-in / early-out); net hours do not
+		m_cov = (overlap_hours(in_t - grace, out_t + grace, m_start, m_end) / m_dur) if m_dur else 0.0
+		a_cov = (overlap_hours(in_t - grace, out_t + grace, a_start, a_end) / a_dur) if a_dur else 0.0
+
+		self.working_hours = round(m_net + a_net, 2)
+		worked_m, worked_a = m_cov >= min_frac, a_cov >= min_frac
+		if worked_m and worked_a:
+			self.custom_morning_code = self.custom_afternoon_code = "X"
+		elif worked_m:
+			self.custom_morning_code, self.custom_afternoon_code = "X", "V"
+		elif worked_a:
+			self.custom_morning_code, self.custom_afternoon_code = "V", "X"
+		else:
+			self.custom_attendance_code = "V"
 
 	def apply_attendance_code_bridge(self):
 		"""Two-way bridge between VN attendance codes (mã công) and the native status fields
