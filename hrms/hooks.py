@@ -407,6 +407,11 @@ fixtures = [
 					"Attendance-custom_afternoon_code",
 					"Attendance-custom_cong",
 					"Expense Claim-custom_business_trip",
+					"Shift Type-custom_split_half_day",
+					"Shift Type-custom_lunch_start",
+					"Shift Type-custom_lunch_end",
+					"Shift Type-custom_half_day_min_fraction",
+					"Shift Type-custom_half_day_grace_minutes",
 				],
 			]
 		},
