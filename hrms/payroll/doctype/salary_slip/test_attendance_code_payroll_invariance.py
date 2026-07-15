@@ -105,3 +105,51 @@ class TestAttendanceCodePayrollInvariance(FrappeTestCase):
 		self.assertEqual(ss_codes.payment_days, ss_native.payment_days)
 		self.assertEqual(ss_codes.absent_days, ss_native.absent_days)
 		self.assertEqual(ss_codes.leave_without_pay, ss_native.leave_without_pay)
+
+	@change_settings(
+		"Payroll Settings", {"payroll_based_on": "Attendance", "daily_wages_fraction_for_half_day": 0.5}
+	)
+	def test_classifier_morning_only_matches_native_half_day(self):
+		"""A shift-classified morning-only day (in 08:00 / out 12:00) must yield the same payroll
+		as a native Half Day with half_day_status Absent."""
+		first_sunday = get_first_sunday()
+		shift = "VN Split PR 08-1730"
+		if not frappe.db.exists("Shift Type", shift):
+			frappe.get_doc(
+				{
+					"doctype": "Shift Type",
+					"__newname": shift,
+					"start_time": "08:00:00",
+					"end_time": "17:30:00",
+					"custom_split_half_day": 1,
+					"custom_lunch_start": "12:00:00",
+					"custom_lunch_end": "13:30:00",
+				}
+			).insert()
+
+		emp_native = make_employee("inv_hd_native@codes.com")
+		emp_class = make_employee("inv_hd_class@codes.com")
+		for e in (emp_native, emp_class):
+			frappe.db.set_value("Employee", e, {"relieving_date": None, "status": "Active"})
+
+		date = add_days(first_sunday, 1)
+		mark_attendance(emp_native, date, "Half Day", half_day_status="Present")  # full validate -> Absent
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": emp_class,
+				"attendance_date": date,
+				"shift": shift,
+				"in_time": f"{date} 08:00:00",
+				"out_time": f"{date} 12:00:00",
+			}
+		)
+		att.insert()  # classifier -> morning X / afternoon V -> Half Day
+		att.submit()
+		self.assertEqual(att.status, "Half Day")
+
+		ss_native = make_employee_salary_slip(emp_native, "Monthly", "Inv HD Native")
+		ss_class = make_employee_salary_slip(emp_class, "Monthly", "Inv HD Class")
+		self.assertEqual(ss_class.payment_days, ss_native.payment_days)
+		self.assertEqual(ss_class.absent_days, ss_native.absent_days)
+		self.assertEqual(ss_class.leave_without_pay, ss_native.leave_without_pay)
