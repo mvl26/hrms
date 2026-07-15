@@ -15,6 +15,16 @@ confirm app loads + tests green → commit. One doctype/field-group per task = c
 
 **Tech Stack:** Frappe/ERPNext HRMS v15. Tests via the rollback harness (`scratch/run_test.sh`).
 
+## Status: ✅ DONE on DEV 2026-07-15 (all 6 tasks)
+
+Renamed to English (labels/UI stay VN via `vi.csv`): fields `cong→work_days … vang→absent`,
+`custom_cong→custom_work_credit`; report `Bang Cham Cong Thang→Monthly Attendance Report`; doctypes
+`Bang Cong Thang(+Detail)→Monthly Attendance Sheet(+Detail)`, `Cong Tac(+Traveler)→Business Trip(+Traveler)`.
+Kept as record names (out of scope): workflow `Cong Tac Approval`, print formats `QD Cu Di Cong Tac` /
+`Giay Di Duong`. **pre_model_sync** `rename_doc` patches + **post_model_sync** field data-carry/drop
+patches → a prod migrate replays the whole rename. Dev migrate clean, app loads, **128 tests green**.
+**Prod = separate signed-off deploy** (rename_doc on real Bảng Công / Công Tác data is not git-revertable).
+
 ## Global Constraints
 
 - **DEV-only.** Do NOT run against prod. Patches are authored so a later prod migrate performs the rename,
