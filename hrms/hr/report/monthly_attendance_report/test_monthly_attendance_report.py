@@ -7,7 +7,7 @@ from frappe.utils import getdate
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
-from hrms.hr.report.bang_cham_cong_thang.bang_cham_cong_thang import execute
+from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
 
 
 class TestBangChamCongThang(FrappeTestCase):
@@ -57,7 +57,7 @@ class TestBangChamCongThang(FrappeTestCase):
 
 	def test_get_sheet_rows_semantic_shape(self):
 		# the shared derivation used by the Bảng Công Tháng DocType returns semantic rows
-		from hrms.hr.report.bang_cham_cong_thang.bang_cham_cong_thang import get_sheet_rows
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
 
 		self._mk(5, custom_attendance_code="X")
 		self._mk(6, custom_attendance_code="P")

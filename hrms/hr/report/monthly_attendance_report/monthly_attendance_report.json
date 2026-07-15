@@ -12,11 +12,11 @@
  "modified": "2026-07-03 18:20:00.000000",
  "modified_by": "Administrator",
  "module": "HR",
- "name": "Bang Cham Cong Thang",
+ "name": "Monthly Attendance Report",
  "owner": "Administrator",
  "prepared_report": 0,
  "ref_doctype": "Attendance",
- "report_name": "Bang Cham Cong Thang",
+ "report_name": "Monthly Attendance Report",
  "report_type": "Script Report",
  "roles": [
   {"role": "System Manager"},

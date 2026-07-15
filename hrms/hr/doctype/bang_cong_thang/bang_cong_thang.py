@@ -44,7 +44,7 @@ class BangCongThang(Document):
 	@frappe.whitelist()
 	def populate_from_attendance(self):
 		"""Fill the employee rows from the month's Attendance (read-only snapshot). Draft only."""
-		from hrms.hr.report.bang_cham_cong_thang.bang_cham_cong_thang import get_sheet_rows
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
 
 		if self.docstatus != 0:
 			frappe.throw(_("Chỉ lấy dữ liệu được khi bảng còn ở trạng thái nháp."))

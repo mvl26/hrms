@@ -1,7 +1,7 @@
 // Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
 // For license information, please see license.txt
 
-frappe.query_reports["Bang Cham Cong Thang"] = {
+frappe.query_reports["Monthly Attendance Report"] = {
 	filters: [
 		{
 			fieldname: "month",
