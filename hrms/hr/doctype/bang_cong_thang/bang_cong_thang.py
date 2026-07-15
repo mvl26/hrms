@@ -62,7 +62,7 @@ class BangCongThang(Document):
 		category_field = {
 			"Công": "cong",
 			"Phép": "phep",
-			"Việc riêng": "viec_rieng",
+			"Việc riêng": "personal_leave",
 			"Ốm": "om",
 			"Thai sản": "thai_san",
 			"Tai nạn LĐ": "tnld",

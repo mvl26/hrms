@@ -40,7 +40,7 @@
   "d31",
   "cong",
   "phep",
-  "viec_rieng",
+  "personal_leave",
   "om",
   "thai_san",
   "tnld",
@@ -271,7 +271,7 @@
    "columns": 1
   },
   {
-   "fieldname": "viec_rieng",
+   "fieldname": "personal_leave",
    "fieldtype": "Float",
    "label": "Việc riêng",
    "read_only": 1,
