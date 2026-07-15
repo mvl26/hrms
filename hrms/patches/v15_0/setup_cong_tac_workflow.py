@@ -43,7 +43,7 @@ def ensure_workflow():
 		{
 			"doctype": "Workflow",
 			"workflow_name": "Cong Tac Approval",
-			"document_type": "Cong Tac",
+			"document_type": "Business Trip",
 			"is_active": 1,
 			"workflow_state_field": "workflow_state",
 			"send_email_alert": 0,

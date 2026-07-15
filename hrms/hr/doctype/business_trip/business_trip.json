@@ -103,7 +103,7 @@
   {
    "fieldname": "travelers",
    "fieldtype": "Table",
-   "options": "Cong Tac Traveler",
+   "options": "Business Trip Traveler",
    "label": "Người đi"
   },
   {
@@ -156,7 +156,7 @@
   {
    "fieldname": "amended_from",
    "fieldtype": "Link",
-   "options": "Cong Tac",
+   "options": "Business Trip",
    "label": "Amended From",
    "read_only": 1,
    "no_copy": 1,
@@ -169,7 +169,7 @@
  "modified": "2026-07-08 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "HR",
- "name": "Cong Tac",
+ "name": "Business Trip",
  "naming_rule": "By \"Naming Series\" field",
  "owner": "Administrator",
  "permissions": [

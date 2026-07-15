@@ -266,7 +266,7 @@
   "name": "Expense Claim-custom_business_trip",
   "no_copy": 0,
   "non_negative": 0,
-  "options": "Cong Tac",
+  "options": "Business Trip",
   "permlevel": 0,
   "placeholder": null,
   "precision": "",

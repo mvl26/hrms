@@ -163,7 +163,7 @@ override_doctype_class = {
 
 doc_events = {
 	"Expense Claim": {
-		"after_insert": "hrms.hr.doctype.cong_tac.cong_tac.link_claim_to_trip",
+		"after_insert": "hrms.hr.doctype.business_trip.business_trip.link_claim_to_trip",
 	},
 	"User": {
 		"validate": [

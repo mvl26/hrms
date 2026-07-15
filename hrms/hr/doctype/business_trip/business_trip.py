@@ -1,6 +1,6 @@
 # Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
 # For license information, please see license.txt
-"""Cong Tac (Business Trip) — a multi-person trip request driven by a Frappe Workflow
+"""Business Trip (Business Trip) — a multi-person trip request driven by a Frappe Workflow
 (Nháp -> Chờ COO duyệt -> COO đã duyệt -> Đã ra QĐ -> Hoàn tất). Desk-only; never touches
 Attendance or payroll. Trip expenses are separate per-traveler Expense Claims linked back here."""
 
@@ -10,7 +10,7 @@ from frappe.model.document import Document
 from frappe.utils import getdate
 
 
-class CongTac(Document):
+class BusinessTrip(Document):
 	def validate(self):
 		self.validate_dates()
 		self.validate_travelers()
@@ -58,13 +58,13 @@ class CongTac(Document):
 			return
 		if frappe.get_all(
 			"ToDo",
-			filters={"reference_type": "Cong Tac", "reference_name": self.name, "allocated_to": user, "status": "Open"},
+			filters={"reference_type": "Business Trip", "reference_name": self.name, "allocated_to": user, "status": "Open"},
 			limit=1,
 		):
 			return  # already assigned — don't duplicate
 		from frappe.desk.form.assign_to import add as assign_add
 
-		assign_add({"assign_to": [user], "doctype": "Cong Tac", "name": self.name, "description": description})
+		assign_add({"assign_to": [user], "doctype": "Business Trip", "name": self.name, "description": description})
 
 	def hr_manager_users(self):
 		users = frappe.get_all("Has Role", filters={"role": "HR Manager", "parenttype": "User"}, pluck="parent")
@@ -148,7 +148,7 @@ def link_claim_to_trip(doc, method=None):
 	if not trip or not doc.get("employee"):
 		return
 	row = frappe.db.get_value(
-		"Cong Tac Traveler", {"parent": trip, "employee": doc.employee}, "name"
+		"Business Trip Traveler", {"parent": trip, "employee": doc.employee}, "name"
 	)
 	if row:
-		frappe.db.set_value("Cong Tac Traveler", row, "expense_claim", doc.name, update_modified=False)
+		frappe.db.set_value("Business Trip Traveler", row, "expense_claim", doc.name, update_modified=False)

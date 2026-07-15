@@ -4,5 +4,5 @@
 from frappe.model.document import Document
 
 
-class CongTacTraveler(Document):
+class BusinessTripTraveler(Document):
 	pass
