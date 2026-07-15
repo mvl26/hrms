@@ -61,14 +61,14 @@ class TestVNHalfDayLogic(FrappeTestCase):
 	def test_full_day(self):
 		d = self._cls("08:00", "17:30")
 		self.assertEqual(d.status, "Present")
-		self.assertEqual(d.custom_cong, 1.0)
+		self.assertEqual(d.custom_work_credit, 1.0)
 		self.assertEqual(d.working_hours, 8.0)  # 4h morning + 4h afternoon, lunch excluded
 
 	def test_morning_only(self):
 		d = self._cls("08:00", "12:00")
 		self.assertEqual(d.status, "Half Day")
 		self.assertEqual(d.half_day_status, "Absent")
-		self.assertEqual(d.custom_cong, 0.5)
+		self.assertEqual(d.custom_work_credit, 0.5)
 		self.assertEqual(d.custom_morning_code, "X")
 		self.assertEqual(d.custom_afternoon_code, "V")
 		self.assertEqual(d.working_hours, 4.0)
@@ -78,7 +78,7 @@ class TestVNHalfDayLogic(FrappeTestCase):
 		self.assertEqual(d.status, "Half Day")
 		self.assertEqual(d.custom_morning_code, "V")
 		self.assertEqual(d.custom_afternoon_code, "X")
-		self.assertEqual(d.custom_cong, 0.5)
+		self.assertEqual(d.custom_work_credit, 0.5)
 
 	def test_early_leave_below_threshold_is_half_day(self):
 		# leaves 15:00: afternoon coverage 13:30–15:15(grace) = 1.75h/4h = 44% < 50% -> morning only

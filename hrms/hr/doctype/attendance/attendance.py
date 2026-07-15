@@ -121,7 +121,7 @@ class Attendance(Document):
 		skip logic and only sets fields native entry would set, so payroll stays invariant.
 
 		Forward (user entered code(s)): morning/afternoon (or a single day code) -> native fields
-		+ custom_cong (Σ work_fraction of Công-category halves).
+		+ custom_work_credit (Σ work_fraction of Công-category halves).
 		Reverse (record has a status but no code, e.g. from auto-attendance / leave): derive
 		custom_attendance_code for display only, without changing native fields.
 		"""
@@ -155,7 +155,7 @@ class Attendance(Document):
 		# công đi làm thực tế = Σ work_fraction (worked-công fraction) of each half × 0.5.
 		# work_fraction already excludes non-working codes (P/Ô/K = 0), so no category filter needed;
 		# this also lets a single half-day code (NN/1/2P/1/2K, work_fraction 0.5) count its worked half.
-		self.custom_cong = sum(flt(c.work_fraction) * 0.5 for c in (m, a))
+		self.custom_work_credit = sum(flt(c.work_fraction) * 0.5 for c in (m, a))
 		# single display code only when the whole day is one code
 		self.custom_attendance_code = morning if morning == afternoon else None
 
@@ -183,7 +183,7 @@ class Attendance(Document):
 			return
 		self.custom_attendance_code = code
 		c = self._get_attendance_code(code)
-		self.custom_cong = flt(c.work_fraction) if c else 0
+		self.custom_work_credit = flt(c.work_fraction) if c else 0
 
 	def validate(self):
 		from erpnext.controllers.status_updater import validate_status

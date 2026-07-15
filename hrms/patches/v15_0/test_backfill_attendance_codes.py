@@ -28,12 +28,12 @@ class TestBackfillAttendanceCodes(FrappeTestCase):
 		doc.insert(ignore_permissions=True)
 		doc.submit()
 		frappe.db.set_value(
-			"Attendance", doc.name, {"custom_attendance_code": None, "custom_cong": 0}, update_modified=False
+			"Attendance", doc.name, {"custom_attendance_code": None, "custom_work_credit": 0}, update_modified=False
 		)
 		return doc.name
 
 	def _code(self, name):
-		return frappe.db.get_value("Attendance", name, ["custom_attendance_code", "custom_cong"], as_dict=True)
+		return frappe.db.get_value("Attendance", name, ["custom_attendance_code", "custom_work_credit"], as_dict=True)
 
 	def test_backfill_populates_codes(self):
 		n_present = self._bare(1, "Present")
@@ -44,12 +44,12 @@ class TestBackfillAttendanceCodes(FrappeTestCase):
 		backfill()
 
 		self.assertEqual(self._code(n_present).custom_attendance_code, "X")
-		self.assertEqual(self._code(n_present).custom_cong, 1.0)
+		self.assertEqual(self._code(n_present).custom_work_credit, 1.0)
 		self.assertEqual(self._code(n_leave).custom_attendance_code, "P")
-		self.assertEqual(self._code(n_leave).custom_cong, 0.0)
+		self.assertEqual(self._code(n_leave).custom_work_credit, 0.0)
 		self.assertEqual(self._code(n_absent).custom_attendance_code, "V")
 		self.assertEqual(self._code(n_halfday).custom_attendance_code, "NN")
-		self.assertEqual(self._code(n_halfday).custom_cong, 0.5)
+		self.assertEqual(self._code(n_halfday).custom_work_credit, 0.5)
 
 	def test_backfill_preserves_existing_codes(self):
 		# a record that already carries a code must NOT be overwritten

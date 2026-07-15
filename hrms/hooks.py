@@ -405,7 +405,7 @@ fixtures = [
 					"Attendance-custom_attendance_code",
 					"Attendance-custom_morning_code",
 					"Attendance-custom_afternoon_code",
-					"Attendance-custom_cong",
+					"Attendance-custom_work_credit",
 					"Expense Claim-custom_business_trip",
 					"Shift Type-custom_split_half_day",
 					"Shift Type-custom_lunch_start",

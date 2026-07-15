@@ -2,7 +2,7 @@
 attendance-code feature (or were created by auto-attendance / leave applications).
 
 Reverse-derives the code from (status, leave_type) exactly like Attendance.before_validate,
-and writes ONLY the two display fields `custom_attendance_code` + `custom_cong` — never
+and writes ONLY the two display fields `custom_attendance_code` + `custom_work_credit` — never
 status / leave_type / half_day_status — so payroll is provably untouched. Idempotent: only
 fills rows whose code is still empty; manually-set codes are preserved. Supports a dry run.
 """
@@ -16,7 +16,7 @@ def execute():
 
 
 def backfill(dry_run: bool = False) -> dict:
-	"""Fill custom_attendance_code / custom_cong on code-less Attendance. Returns {code: rows}."""
+	"""Fill custom_attendance_code / custom_work_credit on code-less Attendance. Returns {code: rows}."""
 	if not frappe.db.has_column("Attendance", "custom_attendance_code"):
 		return {}
 
@@ -46,7 +46,7 @@ def backfill(dry_run: bool = False) -> dict:
 		summary[c.name] = n
 		if not dry_run:
 			frappe.db.sql(
-				f"update `tabAttendance` set custom_attendance_code = %(code)s, custom_cong = %(cong)s where {where}",
+				f"update `tabAttendance` set custom_attendance_code = %(code)s, custom_work_credit = %(cong)s where {where}",
 				params,
 			)
 	return summary

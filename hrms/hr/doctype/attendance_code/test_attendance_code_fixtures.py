@@ -52,7 +52,7 @@ class TestAttendanceCodeFixtures(FrappeTestCase):
 		self.assertFalse(frappe.db.exists("Attendance Code", "KL"), "deprecated code 'KL' should be removed")
 
 	def test_attendance_custom_fields_exist(self):
-		for fn in ("custom_attendance_code", "custom_morning_code", "custom_afternoon_code", "custom_cong"):
+		for fn in ("custom_attendance_code", "custom_morning_code", "custom_afternoon_code", "custom_work_credit"):
 			self.assertTrue(
 				frappe.db.exists("Custom Field", f"Attendance-{fn}"), f"Missing Custom Field: Attendance-{fn}"
 			)
