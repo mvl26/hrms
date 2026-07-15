@@ -181,14 +181,16 @@ GOTCHA `__getattr__`); tái dùng bridge thay vì tự set status.
 
 ## Success Criteria
 
-- [ ] 5 custom field Shift Type cài được (mặc định 12:00/13:30/0.5/15/off), đồng bộ hooks filter.
-- [ ] Ca bật cờ: `in/out` phủ cả 2 buổi → X cả ngày (công 1); chỉ 1 buổi (≥50%) → Half Day (công 0.5);
-      không buổi nào → Absent; `working_hours` = giờ net **loại trưa** — unit test xanh.
-- [ ] **Gate:** classifier+bridge cho status/half_day_status/công **giống hệt** nhập tay đúng bản chất
-      (payroll-invariance mở rộng xanh).
-- [ ] Ca **không** bật cờ: `test_shift_type` threshold **vẫn xanh** (không đổi hành vi upstream).
-- [ ] Dashboard net-hours không trừ trưa 2 lần (dùng `working_hours` net đã lưu) — test xanh.
-- [ ] Reversible `git revert`; verify trên dev `miyano` qua harness; đã đo chênh payroll trên vài kịch bản.
+- [x] 5 custom field Shift Type cài được (mặc định 12:00/13:30/0.5/15/off), đồng bộ hooks filter.
+- [x] Ca bật cờ: `in/out` phủ cả 2 buổi → X cả ngày (công 1); chỉ 1 buổi (≥50%) → Half Day (công 0.5);
+      không buổi nào → Absent; `working_hours` = giờ net **loại trưa** — 8 unit test xanh.
+- [x] **Gate:** classifier+bridge cho status/half_day_status/công **giống hệt** nhập tay đúng bản chất
+      (payroll-invariance salary-slip xanh: morning-only == native Half Day).
+- [x] Ca **không** bật cờ: `test_shift_type` threshold **vẫn xanh** (29 test — không đổi hành vi upstream).
+- [x] Dashboard net-hours không trừ trưa 2 lần (dùng `working_hours` net đã lưu) — 26 test xanh.
+- [x] Reversible `git revert`; verify trên dev `miyano` qua harness (**110 test xanh**).
+- [ ] **CÒN LẠI (ask-first/sign-off):** đo chênh payroll classifier-vs-ngưỡng-cũ trên ca prod thật +
+      **chạy song song 1 tháng** trước khi bật `custom_split_half_day` đại trà.
 
 ## Out of scope
 

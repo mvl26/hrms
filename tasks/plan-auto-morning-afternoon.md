@@ -20,6 +20,14 @@ unaffected.
 **Tech Stack:** Frappe/ERPNext HRMS v15, Python (`datetime`, `frappe.utils`), fixtures JSON. Tests via the
 rollback console harness (never `bench run-tests` on `miyano`).
 
+## Status: ✅ built T1–T5 on dev 2026-07-15 (`/build auto`); prod enablement STOP-gated
+
+TDD, one commit each, **110 tests green** (8 classifier + 15 bridge + 3 invariance + 26 working-hours +
+29 shift_type + 7 report + 9 sheet + 4 fixtures + 4 holiday + 5 defaults). The classifier is a **no-op on
+dev** — no shift has `custom_split_half_day=1`, so no existing attendance/payroll changed. **NOT done
+(hard sign-off gate):** enabling `custom_split_half_day` on any **production** shift + the one-month
+parallel run + the payroll-delta measurement vs the old threshold behavior.
+
 ## Global Constraints
 
 - **Payroll-classification change (intentional):** worked-one-session → Half Day. Task 3 must prove the
