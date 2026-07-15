@@ -1,6 +1,6 @@
 import frappe
 
-# Bang Cong Thang Detail total fields: VN-romanized -> English (labels stay Vietnamese).
+# Monthly Attendance Sheet Detail total fields: VN-romanized -> English (labels stay Vietnamese).
 RENAMES = {
 	"cong": "work_days",
 	"phep": "annual_leave",
@@ -12,7 +12,7 @@ RENAMES = {
 	"vang": "absent",
 }
 
-TABLE = "tabBang Cong Thang Detail"
+TABLE = "tabMonthly Attendance Sheet Detail"
 
 
 def _has_col(col: str) -> bool:
@@ -28,7 +28,7 @@ def _has_col(col: str) -> bool:
 def execute():
 	"""post_model_sync: model sync already created the new columns from the JSON; the old columns
 	+ data still linger -> carry data over, then drop the old columns."""
-	if not frappe.db.exists("DocType", "Bang Cong Thang Detail"):
+	if not frappe.db.exists("DocType", "Monthly Attendance Sheet Detail"):
 		return
 	for old, new in RENAMES.items():
 		if _has_col(old) and _has_col(new):

@@ -1,6 +1,7 @@
 [pre_model_sync]
 hrms.patches.v15_0.check_version_compatibility_with_frappe #2023-06-27
 hrms.patches.v15_0.rename_bang_cham_cong_thang_report #2026-07-15
+hrms.patches.v15_0.rename_bang_cong_thang_doctypes #2026-07-15
 
 [post_model_sync]
 hrms.patches.post_install.set_payroll_entry_status

@@ -5,7 +5,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 
-class TestBangCongThang(FrappeTestCase):
+class TestMonthlyAttendanceSheet(FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
@@ -14,7 +14,7 @@ class TestBangCongThang(FrappeTestCase):
 	def _sheet(self, month="4", year=2097, department=None):
 		return frappe.get_doc(
 			{
-				"doctype": "Bang Cong Thang",
+				"doctype": "Monthly Attendance Sheet",
 				"company": self.company,
 				"department": department,
 				"month": month,
@@ -141,7 +141,7 @@ class TestBangCongThang(FrappeTestCase):
 		sheet.populate_from_attendance()
 		sheet.save()
 
-		html = frappe.get_print("Bang Cong Thang", sheet.name, print_format="Bang Cong Thang")
+		html = frappe.get_print("Monthly Attendance Sheet", sheet.name, print_format="Monthly Attendance Sheet")
 		self.assertIn("BẢNG CHẤM CÔNG THÁNG", html)
 		self.assertIn("NGƯỜI CHẤM CÔNG", html)  # sign box 1
 		self.assertIn("PHÒNG NHÂN SỰ", html)  # sign box 2

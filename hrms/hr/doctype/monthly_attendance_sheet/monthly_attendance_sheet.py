@@ -15,7 +15,7 @@ from frappe.model.document import Document
 from frappe.utils import cint, getdate
 
 
-class BangCongThang(Document):
+class MonthlyAttendanceSheet(Document):
 	def validate(self):
 		self.set_period_dates()
 		self.check_duplicate()
@@ -37,7 +37,7 @@ class BangCongThang(Document):
 			"name": ["!=", self.name or ""],
 		}
 		filters["department"] = self.department if self.department else ["is", "not set"]
-		existing = frappe.db.get_value("Bang Cong Thang", filters, "name")
+		existing = frappe.db.get_value("Monthly Attendance Sheet", filters, "name")
 		if existing:
 			frappe.throw(_("Đã có Bảng công tháng {0} cho đơn vị/tháng này.").format(existing))
 

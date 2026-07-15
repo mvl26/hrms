@@ -1,7 +1,7 @@
 // Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
 // For license information, please see license.txt
 
-frappe.ui.form.on("Bang Cong Thang", {
+frappe.ui.form.on("Monthly Attendance Sheet", {
 	refresh(frm) {
 		if (frm.doc.docstatus === 0) {
 			frm.add_custom_button(__("Lấy dữ liệu chấm công"), () => {

@@ -97,7 +97,7 @@
   {
    "fieldname": "employees",
    "fieldtype": "Table",
-   "options": "Bang Cong Thang Detail",
+   "options": "Monthly Attendance Sheet Detail",
    "label": "Nhân viên"
   },
   {
@@ -112,7 +112,7 @@
   {
    "fieldname": "amended_from",
    "fieldtype": "Link",
-   "options": "Bang Cong Thang",
+   "options": "Monthly Attendance Sheet",
    "label": "Amended From",
    "read_only": 1,
    "no_copy": 1,
@@ -125,7 +125,7 @@
  "modified": "2026-07-08 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "HR",
- "name": "Bang Cong Thang",
+ "name": "Monthly Attendance Sheet",
  "naming_rule": "By \"Naming Series\" field",
  "owner": "Administrator",
  "permissions": [
