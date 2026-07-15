@@ -14,8 +14,11 @@ STANDARD_HOURS_PER_DAY = 8.0
 FULL_DAY_STATUSES = ("Present", "Work From Home")
 
 
-def compute_net_hours(status, in_time, out_time, working_hours):
-	"""Giờ làm net của một ngày: gross (out-in hoặc working_hours) trừ nghỉ trưa theo status."""
+def compute_net_hours(status, in_time, out_time, working_hours, is_split=False):
+	"""Giờ làm net của một ngày: gross (out-in hoặc working_hours) trừ nghỉ trưa theo status.
+	Với ca tách sáng/chiều (is_split) thì working_hours ĐÃ là net (đã loại trưa) -> dùng thẳng."""
+	if is_split:
+		return max(round(flt(working_hours), 2), 0.0)
 	if in_time and out_time:
 		gross = flt(time_diff_in_hours(out_time, in_time))
 	else:
@@ -96,10 +99,15 @@ def get_net_hours_map(filters):
 	if filters.get("employee"):
 		query = query.where(Attendance.employee == filters.get("employee"))
 
+	# ca tách sáng/chiều đã lưu working_hours net (đã loại trưa) -> dashboard không trừ trưa lần nữa
+	split_shifts = set(frappe.get_all("Shift Type", filters={"custom_split_half_day": 1}, pluck="name"))
+
 	hours_map = {}
 	for d in query.run(as_dict=True):
 		shift = d.shift or ""
-		net = compute_net_hours(d.status, d.in_time, d.out_time, d.working_hours)
+		net = compute_net_hours(
+			d.status, d.in_time, d.out_time, d.working_hours, is_split=shift in split_shifts
+		)
 		hours_map.setdefault(d.employee, {}).setdefault(shift, {})[d.day_of_month] = net
 
 	return hours_map

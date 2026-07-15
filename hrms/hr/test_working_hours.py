@@ -57,6 +57,15 @@ class TestComputeNetHours(FrappeTestCase):
 		self.assertEqual(compute_net_hours("Absent", None, None, 0), 0.0)
 		self.assertEqual(compute_net_hours("On Leave", None, None, 0), 0.0)
 
+	def test_split_shift_uses_stored_net(self):
+		# split shift already stored net working_hours (lunch excluded) -> use as-is, no further −1.5
+		net = compute_net_hours("Present", "2026-03-02 08:00:00", "2026-03-02 17:30:00", 8.0, is_split=True)
+		self.assertEqual(net, 8.0)
+
+	def test_split_shift_half_day_uses_stored_net(self):
+		net = compute_net_hours("Half Day", "2026-03-02 08:00:00", "2026-03-02 12:00:00", 4.0, is_split=True)
+		self.assertEqual(net, 4.0)
+
 
 class TestGetWeekBuckets(FrappeTestCase):
 	def test_march_2026_buckets(self):
