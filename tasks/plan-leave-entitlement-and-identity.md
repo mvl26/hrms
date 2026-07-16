@@ -33,7 +33,7 @@
     mới rồi chạy lại → chỉ thêm 1.
   - Files: `hrms/setup_vn_leave.py`, `hrms/tests/test_setup_vn_leave.py`.
 
-- [ ] **T4: Accrual tháng + cap + không carry-forward**
+- [x] **T4: Accrual tháng + cap + không carry-forward**
   - Acceptance: gọi `allocate_earned_leaves()` với `frappe.flags.current_date` = cuối tháng kế →
     allocation +1.0 (bậc 12); tổng không vượt `annual_allocation`; allocation `to_date=31/12`,
     `carry_forward=0`.

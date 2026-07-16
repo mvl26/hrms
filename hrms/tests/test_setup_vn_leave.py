@@ -8,6 +8,7 @@ import os
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from frappe.utils import getdate
 
 ANNUAL_LEAVE = "Nghỉ phép năm"
 FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "..", "fixtures", "leave_type.json")
@@ -172,6 +173,64 @@ class TestAssignAnnualLeave(FrappeTestCase):
 		self.assertEqual(report[emp]["status"], "would_create")
 		self.assertEqual(report[emp]["entitlement"], 12)
 		self.assertEqual(frappe.get_all("Leave Policy Assignment", {"employee": emp}), before)
+
+
+class TestMonthlyAccrualAndCap(FrappeTestCase):
+	"""T4 — scheduler stock cộng dồn 1 ngày/tháng (bậc 12) và cap tại định mức năm."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		import erpnext
+
+		cls.company = erpnext.get_default_company() or frappe.get_all("Company", limit=1)[0].name
+
+	def setUp(self):
+		enable_earned_leave_flags()
+		self._old_current_date = frappe.flags.current_date
+
+	def tearDown(self):
+		frappe.flags.current_date = self._old_current_date
+
+	def test_accrues_monthly_and_caps_at_entitlement(self):
+		from erpnext.setup.doctype.employee.test_employee import make_employee
+
+		from hrms.hr.utils import allocate_earned_leaves
+		from hrms.setup_vn_leave import assign_annual_leave
+
+		frappe.flags.current_date = getdate("2026-06-15")
+		emp = make_employee("vn_accrual@example.com", company=self.company, date_of_joining="2024-01-01")
+		report = assign_annual_leave(2026, self.company, employees=[emp])
+		alloc_name = frappe.db.get_value(
+			"Leave Allocation", {"employee": emp, "leave_type": ANNUAL_LEAVE, "docstatus": 1}, "name"
+		)
+		self.assertEqual(report[emp]["status"], "created")
+		self.assertEqual(
+			frappe.db.get_value("Leave Allocation", alloc_name, "total_leaves_allocated"), 5.0
+		)
+
+		# chạy scheduler tại cuối mỗi tháng còn lại -> +1.0/tháng, chạm đúng 12.0 cuối năm
+		for last_day in (
+			"2026-06-30",
+			"2026-07-31",
+			"2026-08-31",
+			"2026-09-30",
+			"2026-10-31",
+			"2026-11-30",
+			"2026-12-31",
+		):
+			frappe.flags.current_date = getdate(last_day)
+			allocate_earned_leaves()
+
+		self.assertEqual(
+			frappe.db.get_value("Leave Allocation", alloc_name, "total_leaves_allocated"), 12.0
+		)
+
+		# chạy thêm lần nữa -> không vượt định mức năm (cap upstream)
+		allocate_earned_leaves()
+		self.assertEqual(
+			frappe.db.get_value("Leave Allocation", alloc_name, "total_leaves_allocated"), 12.0
+		)
 
 
 def enable_earned_leave_flags():
