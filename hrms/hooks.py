@@ -412,6 +412,8 @@ fixtures = [
 					"Shift Type-custom_lunch_end",
 					"Shift Type-custom_half_day_min_fraction",
 					"Shift Type-custom_half_day_grace_minutes",
+					"Employee-custom_citizen_id",
+					"Employee-custom_social_insurance_no",
 				],
 			]
 		},

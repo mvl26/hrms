@@ -49,7 +49,7 @@
   - Verify: harness — 2 test integration mới + suite invariance cũ.
   - Files: `hrms/tests/test_setup_vn_leave.py`.
 
-- [ ] **T6 (Đợt E): 2 custom field định danh trên Employee**
+- [x] **T6 (Đợt E): 2 custom field định danh trên Employee** *(dev migrate đã ký duyệt + chạy; 126 test toàn suite xanh)*
   - Acceptance: `custom_citizen_id` (Số CCCD) + `custom_social_insurance_no` (Số sổ BHXH), Data,
     trong Personal tab sau `marital_status`; fixtures JSON + hooks filter sync; dịch
     "Tax ID"→"MST cá nhân" trong `vi.csv`; sau migrate field hiện trên form Employee.
