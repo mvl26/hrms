@@ -24,7 +24,7 @@
 
 Frappe HR has everything you need to drive excellence within the company. It's a complete HRMS solution with over 13 different modules right from Employee Management, Onboarding, Leaves, to Payroll, Taxation, and more!
 
-![HRMS](hrms.png)
+![HRMS](docs/hrms.png)
 
 ## Key Features
 
