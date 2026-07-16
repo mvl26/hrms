@@ -58,6 +58,13 @@
   - Acceptance: `bench --site <prod> execute hrms.setup_vn_leave.assign_annual_leave --kwargs
     "{'year': 2026, 'company': 'Miyano'}"` — chạy `dry_run=True` trước, HR duyệt danh sách bậc
     (12/13/14 ngày theo thâm niên), rồi chạy thật; mọi nhân viên active có allocation.
+  - **Lưu ý vận hành (review 2026-07-16):** (a) helper tự chặn nếu chạy TRƯỚC migrate (guard
+    earned-leave); (b) **tránh chạy vào ngày cuối tháng** — LPA cấp bù tháng hiện tại + scheduler
+    cùng ngày có thể cộng trùng 1 ngày (tự cân bằng cuối năm nhờ cap, nhưng số dư tạm sai);
+    (c) allocation/assignment có sẵn trên prod → helper skip có lý do (`skipped_allocation_exists`,
+    `draft_exists`…) — đọc report, KHÔNG phải lỗi; (d) số dư bậc thâm niên sẽ lẻ (1.083/tháng) —
+    đúng Điều 114, không làm tròn; (e) bậc chốt tại 01/01 kỳ cấp (đủ 5 năm giữa năm → năm sau
+    mới lên bậc — đơn giản hóa có chủ đích, spec ghi rõ).
   - Verify: report dict trả về 100% created/skipped, 0 error; vài nhân viên spot-check số dư trên
     Desk; scheduler daily_long sẽ cộng dồn các tháng tiếp theo (không cần cấu hình thêm).
   - Vận hành hằng năm: chạy lại lệnh cho năm mới (idempotent; nhân viên mới vào giữa năm → chạy lại).
