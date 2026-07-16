@@ -27,7 +27,9 @@ class TestAnnualLeaveEarnedFixture(FrappeTestCase):
 		annual = types[ANNUAL_LEAVE]
 		self.assertEqual(annual["is_earned_leave"], 1)
 		self.assertEqual(annual["earned_leave_frequency"], "Monthly")
-		self.assertEqual(annual["rounding"], "0.5")
+		# rounding rỗng = không làm tròn: bậc thâm niên 13/14 ngày (13/12=1.083/tháng) phải
+		# cộng đủ định mức cuối năm — rounding "0.5" từng làm mất ngày thâm niên (Điều 114)
+		self.assertEqual(annual["rounding"], "")
 		self.assertEqual(annual["allocate_on_day"], "Last Day")
 		# payroll-relevant flags stay untouched
 		self.assertEqual(annual["is_lwp"], 0)
@@ -232,6 +234,55 @@ class TestMonthlyAccrualAndCap(FrappeTestCase):
 			frappe.db.get_value("Leave Allocation", alloc_name, "total_leaves_allocated"), 12.0
 		)
 
+	def test_seniority_tier_accrues_full_entitlement_by_year_end(self):
+		"""Điều 114: bậc 13 ngày phải nhận đủ 13 ngày sau 12 tháng cộng dồn.
+		Regression cho bug rounding 0.5: 13/12=1.083 bị tròn xuống 1.0/tháng -> mất ngày thâm niên."""
+		from erpnext.setup.doctype.employee.test_employee import make_employee
+
+		from hrms.hr.utils import allocate_earned_leaves
+		from hrms.setup_vn_leave import assign_annual_leave
+
+		frappe.flags.current_date = getdate("2026-01-15")
+		emp = make_employee(
+			"vn_accrual_t13@example.com", company=self.company, date_of_joining="2019-05-01"
+		)
+		report = assign_annual_leave(2026, self.company, employees=[emp])
+		self.assertEqual(report[emp]["entitlement"], 13)
+		alloc_name = frappe.db.get_value(
+			"Leave Allocation", {"employee": emp, "leave_type": ANNUAL_LEAVE, "docstatus": 1}, "name"
+		)
+
+		for month, day in (
+			(1, 31), (2, 28), (3, 31), (4, 30), (5, 31), (6, 30),
+			(7, 31), (8, 31), (9, 30), (10, 31), (11, 30), (12, 31),
+		):
+			frappe.flags.current_date = getdate(f"2026-{month:02d}-{day:02d}")
+			allocate_earned_leaves()
+
+		total = frappe.db.get_value("Leave Allocation", alloc_name, "total_leaves_allocated")
+		self.assertAlmostEqual(total, 13.0, delta=0.05)
+
+	def test_midyear_joiner_gets_prorated_initial_allocation(self):
+		"""Nhân viên vào giữa năm: assignment không throw, allocation pro-rata từ DOJ."""
+		from erpnext.setup.doctype.employee.test_employee import make_employee
+
+		from hrms.setup_vn_leave import assign_annual_leave
+
+		frappe.flags.current_date = getdate("2026-06-15")
+		emp = make_employee(
+			"vn_midyear@example.com", company=self.company, date_of_joining="2026-03-10"
+		)
+		report = assign_annual_leave(2026, self.company, employees=[emp])
+		self.assertEqual(report[emp]["status"], "created")
+		total = frappe.db.get_value(
+			"Leave Allocation",
+			{"employee": emp, "leave_type": ANNUAL_LEAVE, "docstatus": 1},
+			"total_leaves_allocated",
+		)
+		# T3 (partial, từ 10/03) + T4 + T5 đã qua -> ~2.5 ngày; quan trọng: > 0 và <= 12
+		self.assertGreater(total, 0)
+		self.assertLessEqual(total, 12)
+
 
 class TestUnlockedLeaveFlows(FrappeTestCase):
 	"""T5 — với định mức đã cấp: Leave Application phép năm submit được (Attendance mang mã P);
@@ -347,15 +398,17 @@ class TestUnlockedLeaveFlows(FrappeTestCase):
 
 def enable_earned_leave_flags():
 	"""Apply the fixture's earned-leave flags inside the current (rolled-back) transaction,
-	so tests exercise the post-migrate behaviour without touching the live site."""
+	so tests exercise the post-migrate behaviour without touching the live site.
+	Reads the values FROM the fixture JSON — single source of truth."""
+	annual = load_fixture_types()[ANNUAL_LEAVE]
 	frappe.db.set_value(
 		"Leave Type",
 		ANNUAL_LEAVE,
 		{
-			"is_earned_leave": 1,
-			"earned_leave_frequency": "Monthly",
-			"rounding": "0.5",
-			"allocate_on_day": "Last Day",
+			"is_earned_leave": annual["is_earned_leave"],
+			"earned_leave_frequency": annual["earned_leave_frequency"],
+			"rounding": annual["rounding"],
+			"allocate_on_day": annual["allocate_on_day"],
 		},
 		update_modified=False,
 	)
