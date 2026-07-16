@@ -166,6 +166,101 @@ class TestAssignAnnualLeave(FrappeTestCase):
 		self.assertEqual(r3[emp1]["status"], "skipped")
 		self.assertEqual(r3[emp2]["status"], "created")
 
+	def test_guard_requires_earned_leave_flags_in_db(self):
+		"""Chạy assign khi site CHƯA migrate fixture (is_earned_leave=0) phải throw ngay —
+		nếu không, upstream cấp cả năm một cục và allocation bị khóa không sửa được."""
+		from hrms.setup_vn_leave import assign_annual_leave
+
+		frappe.db.set_value("Leave Type", ANNUAL_LEAVE, "is_earned_leave", 0, update_modified=False)
+		frappe.clear_document_cache("Leave Type", ANNUAL_LEAVE)
+		emp = self._emp("vn_guard@example.com", "2024-01-01")
+		self.assertRaises(frappe.ValidationError, assign_annual_leave, 2026, self.company, [emp])
+
+	def test_draft_assignment_reported_distinctly(self):
+		"""LPA draft (docstatus 0) không được tính là 'đã cấp' — báo 'draft_exists' để HR xử lý,
+		không im lặng bỏ đói nhân viên."""
+		from hrms.setup_vn_leave import assign_annual_leave, create_leave_period, ensure_leave_policy
+
+		emp = self._emp("vn_draft@example.com", "2024-01-01")
+		period = create_leave_period(2026, self.company)
+		frappe.get_doc(
+			{
+				"doctype": "Leave Policy Assignment",
+				"employee": emp,
+				"assignment_based_on": "Leave Period",
+				"leave_policy": ensure_leave_policy(12),
+				"leave_period": period,
+				"carry_forward": 0,
+			}
+		).insert(ignore_permissions=True)  # KHÔNG submit -> draft
+
+		report = assign_annual_leave(2026, self.company, employees=[emp])
+		self.assertEqual(report[emp]["status"], "draft_exists")
+		self.assertEqual(
+			len(frappe.get_all("Leave Policy Assignment", {"employee": emp, "docstatus": ("<", 2)})), 1
+		)
+
+	def test_existing_manual_allocation_skips_cleanly(self):
+		"""Nhân viên đã có Leave Allocation 'Nghỉ phép năm' thủ công cho năm đó (không qua LPA)
+		-> skip có lý do, không error; dry_run dự đoán đúng."""
+		from hrms.setup_vn_leave import assign_annual_leave, create_leave_period
+
+		emp = self._emp("vn_manualalloc@example.com", "2024-01-01")
+		create_leave_period(2026, self.company)
+		frappe.get_doc(
+			{
+				"doctype": "Leave Allocation",
+				"employee": emp,
+				"leave_type": ANNUAL_LEAVE,
+				"from_date": "2026-01-01",
+				"to_date": "2026-12-31",
+				"new_leaves_allocated": 12,
+			}
+		).insert(ignore_permissions=True).submit()
+
+		dry = assign_annual_leave(2026, self.company, employees=[emp], dry_run=True)
+		self.assertEqual(dry[emp]["status"], "skipped_allocation_exists")
+		report = assign_annual_leave(2026, self.company, employees=[emp])
+		self.assertEqual(report[emp]["status"], "skipped_allocation_exists")
+		self.assertEqual(
+			len(frappe.get_all("Leave Policy Assignment", {"employee": emp, "docstatus": ("<", 2)})), 0
+		)
+
+	def test_joining_date_assignment_skips_not_error(self):
+		"""LPA assignment_based_on='Joining Date' (leave_period NULL) chồng lấn năm
+		-> 'skipped_overlapping_assignment', không phải 'error' + Error Log spam."""
+		from hrms.setup_vn_leave import assign_annual_leave, ensure_leave_policy
+
+		emp = self._emp("vn_joindate@example.com", "2025-10-01")
+		lpa = frappe.get_doc(
+			{
+				"doctype": "Leave Policy Assignment",
+				"employee": emp,
+				"assignment_based_on": "Joining Date",
+				"leave_policy": ensure_leave_policy(12),
+				"carry_forward": 0,
+			}
+		).insert(ignore_permissions=True)
+		lpa.submit()  # effective 2025-10-01 -> 2026-09-30, chồng lấn 2026
+
+		report = assign_annual_leave(2026, self.company, employees=[emp])
+		self.assertEqual(report[emp]["status"], "skipped_overlapping_assignment")
+
+	def test_sanity_checks_on_explicit_employee_list(self):
+		"""Company khác -> skipped_other_company; DOJ sau kỳ cấp -> skipped_doj_after_period."""
+		from hrms.tests.test_utils import create_company
+
+		from hrms.setup_vn_leave import assign_annual_leave
+
+		other_co = create_company("_VN Other Co").name
+		emp_other = self._emp("vn_otherco@example.com", "2024-01-01")
+		frappe.db.set_value("Employee", emp_other, "company", other_co)
+		emp_future = self._emp("vn_futuredoj@example.com", "2027-03-01")
+
+		report = assign_annual_leave(2026, self.company, employees=[emp_other, emp_future])
+		self.assertEqual(report[emp_other]["status"], "skipped_other_company")
+		self.assertEqual(report[emp_future]["status"], "skipped_doj_after_period")
+
 	def test_dry_run_writes_nothing(self):
 		from hrms.setup_vn_leave import assign_annual_leave
 

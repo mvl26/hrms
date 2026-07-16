@@ -84,11 +84,25 @@ def assign_annual_leave(year: int, company: str, employees=None, dry_run: bool =
 	"""
 	year = int(year)
 	on_date = f"{year}-01-01"
+	from_date, to_date = f"{year}-01-01", f"{year}-12-31"
+
+	# Guard: the fixture must already be applied to THIS site. Without is_earned_leave the
+	# upstream LPA path grants the whole year upfront and the allocation then becomes
+	# un-editable once the flag flips — unrecoverable without cancelling documents.
+	lt = frappe.db.get_value(
+		"Leave Type", ANNUAL_LEAVE_TYPE, ["is_earned_leave", "earned_leave_frequency"], as_dict=True
+	)
+	if not (lt and lt.is_earned_leave and lt.earned_leave_frequency == "Monthly"):
+		frappe.throw(
+			f"Leave Type '{ANNUAL_LEAVE_TYPE}' is not a Monthly earned leave on this site yet"
+			" — run `bench migrate` (fixture sync) first, otherwise the whole year would be"
+			" granted upfront instead of accruing monthly."
+		)
 
 	if dry_run:
 		period = frappe.db.get_value(
 			"Leave Period",
-			{"company": company, "from_date": f"{year}-01-01", "to_date": f"{year}-12-31"},
+			{"company": company, "from_date": from_date, "to_date": to_date},
 			"name",
 		)
 	else:
@@ -102,14 +116,61 @@ def assign_annual_leave(year: int, company: str, employees=None, dry_run: bool =
 	report = {}
 	for employee in employees:
 		days = entitlement_for(employee, on_date)
-		existing = period and frappe.db.get_value(
+		emp = frappe.db.get_value(
+			"Employee", employee, ["company", "date_of_joining"], as_dict=True
+		)
+
+		# sanity checks for explicitly-passed employee lists
+		if not emp or emp.company != company:
+			report[employee] = {"status": "skipped_other_company", "entitlement": days}
+			continue
+		if emp.date_of_joining and getdate(emp.date_of_joining) > getdate(to_date):
+			report[employee] = {"status": "skipped_doj_after_period", "entitlement": days}
+			continue
+
+		# ANY assignment overlapping the year blocks a new one (upstream overlap validation
+		# would throw) — distinguish drafts and foreign assignments instead of logging errors.
+		overlap = frappe.db.get_value(
 			"Leave Policy Assignment",
-			{"employee": employee, "leave_period": period, "docstatus": ("<", 2)},
+			{
+				"employee": employee,
+				"docstatus": ("<", 2),
+				"effective_from": ("<=", to_date),
+				"effective_to": (">=", from_date),
+			},
+			["name", "docstatus", "leave_period"],
+			as_dict=True,
+		)
+		if overlap:
+			if overlap.docstatus == 0:
+				status = "draft_exists"  # draft never allocates — HR must submit or delete it
+			elif period and overlap.leave_period == period:
+				status = "skipped"  # already provisioned for this period (idempotent path)
+			else:
+				status = "skipped_overlapping_assignment"
+			report[employee] = {"status": status, "assignment": overlap.name, "entitlement": days}
+			continue
+
+		# a pre-existing submitted allocation (e.g. manual) also blocks — skip with reason
+		existing_alloc = frappe.db.get_value(
+			"Leave Allocation",
+			{
+				"employee": employee,
+				"leave_type": ANNUAL_LEAVE_TYPE,
+				"docstatus": 1,
+				"from_date": ("<=", to_date),
+				"to_date": (">=", from_date),
+			},
 			"name",
 		)
-		if existing:
-			report[employee] = {"status": "skipped", "assignment": existing, "entitlement": days}
+		if existing_alloc:
+			report[employee] = {
+				"status": "skipped_allocation_exists",
+				"allocation": existing_alloc,
+				"entitlement": days,
+			}
 			continue
+
 		if dry_run:
 			report[employee] = {"status": "would_create", "entitlement": days}
 			continue
