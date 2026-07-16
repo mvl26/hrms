@@ -40,7 +40,7 @@
   - Verify: harness tests (pin date, gọi scheduler function trực tiếp — pattern upstream).
   - Files: `hrms/tests/test_setup_vn_leave.py`.
 
-- [ ] **T5: Unlock flows — Leave Application + Compensatory Leave Request + payroll gate**
+- [x] **T5: Unlock flows — Leave Application + Compensatory Leave Request + payroll gate** *(122 test toàn suite xanh)*
   - Acceptance: (a) nhân viên có allocation nộp + submit Leave Application "Nghỉ phép năm" 1 ngày
     → OK, Attendance sinh mã P (regression bridge); (b) dựng Holiday List test
     (`create_vn_holiday_list`) + Attendance Present ngày lễ + Leave Period → Compensatory Leave

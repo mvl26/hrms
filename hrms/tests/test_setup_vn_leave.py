@@ -233,6 +233,118 @@ class TestMonthlyAccrualAndCap(FrappeTestCase):
 		)
 
 
+class TestUnlockedLeaveFlows(FrappeTestCase):
+	"""T5 — với định mức đã cấp: Leave Application phép năm submit được (Attendance mang mã P);
+	Compensatory Leave Request submit được (Leave Period + Holiday List + Attendance ngày lễ)."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		import erpnext
+
+		cls.company = erpnext.get_default_company() or frappe.get_all("Company", limit=1)[0].name
+
+	def setUp(self):
+		enable_earned_leave_flags()
+		self._old_current_date = frappe.flags.current_date
+
+	def tearDown(self):
+		frappe.flags.current_date = self._old_current_date
+
+	def _emp(self, email, doj="2024-01-01"):
+		from erpnext.setup.doctype.employee.test_employee import make_employee
+
+		return make_employee(email, company=self.company, date_of_joining=doj)
+
+	def test_leave_application_submits_and_attendance_gets_code_P(self):
+		from hrms.setup_vn_leave import assign_annual_leave
+
+		frappe.flags.current_date = getdate("2026-06-15")
+		emp = self._emp("vn_unlock_la@example.com")
+		assign_annual_leave(2026, self.company, employees=[emp])
+
+		# holiday list rỗng cho nhân viên -> ngày nghỉ chọn chắc chắn là ngày làm việc
+		hl = frappe.get_doc(
+			{
+				"doctype": "Holiday List",
+				"holiday_list_name": "VN empty HL for LA test",
+				"from_date": "2026-01-01",
+				"to_date": "2026-12-31",
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.set_value("Employee", emp, "holiday_list", hl.name)
+
+		leave_date = "2026-07-08"  # thứ Tư, quá khứ so với hôm nay -> Attendance được sinh ngay
+		la = frappe.get_doc(
+			{
+				"doctype": "Leave Application",
+				"employee": emp,
+				"leave_type": ANNUAL_LEAVE,
+				"from_date": leave_date,
+				"to_date": leave_date,
+				"description": "test unlock",
+				"company": self.company,
+				"status": "Approved",
+				"leave_approver": "Administrator",
+			}
+		).insert(ignore_permissions=True)
+		la.submit()
+		self.assertEqual(la.docstatus, 1)
+
+		att = frappe.db.get_value(
+			"Attendance",
+			{"employee": emp, "attendance_date": leave_date, "docstatus": 1},
+			["status", "leave_type", "custom_attendance_code"],
+			as_dict=True,
+		)
+		self.assertIsNotNone(att, "Leave Application phải sinh Attendance cho ngày quá khứ")
+		self.assertEqual(att.status, "On Leave")
+		self.assertEqual(att.leave_type, ANNUAL_LEAVE)
+		self.assertEqual(att.custom_attendance_code, "P")
+
+	def test_compensatory_leave_request_submits_and_credits_nghi_bu(self):
+		from hrms.setup_vn_holiday import create_vn_holiday_list
+		from hrms.setup_vn_leave import create_leave_period
+
+		emp = self._emp("vn_unlock_clr@example.com")
+		create_leave_period(2026, self.company)
+		hl = create_vn_holiday_list(2026, self.company, weekly_off_days=("Sunday",))
+		frappe.db.set_value("Employee", emp, "holiday_list", hl)
+
+		work_date = "2026-07-05"  # Chủ nhật (weekly off), quá khứ
+		frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": emp,
+				"attendance_date": work_date,
+				"status": "Present",
+				"company": self.company,
+			}
+		).insert(ignore_permissions=True).submit()
+
+		clr = frappe.get_doc(
+			{
+				"doctype": "Compensatory Leave Request",
+				"employee": emp,
+				"leave_type": "Nghỉ bù",
+				"work_from_date": work_date,
+				"work_end_date": work_date,
+				"reason": "làm bù Chủ nhật",
+			}
+		).insert(ignore_permissions=True)
+		clr.submit()
+		self.assertEqual(clr.docstatus, 1)
+
+		alloc = frappe.db.get_value(
+			"Leave Allocation",
+			{"employee": emp, "leave_type": "Nghỉ bù", "docstatus": 1},
+			["total_leaves_allocated"],
+			as_dict=True,
+		)
+		self.assertIsNotNone(alloc, "CLR submit phải tạo allocation Nghỉ bù")
+		self.assertEqual(alloc.total_leaves_allocated, 1.0)
+
+
 def enable_earned_leave_flags():
 	"""Apply the fixture's earned-leave flags inside the current (rolled-back) transaction,
 	so tests exercise the post-migrate behaviour without touching the live site."""
