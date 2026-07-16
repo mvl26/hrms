@@ -55,7 +55,9 @@ class TestEmployeeIdentityFixtures(FrappeTestCase):
 		self.assertTrue(frappe.get_meta("Employee").has_field("marital_status"))
 
 	def test_tax_id_translated_to_mst(self):
+		# "Tax ID" là source string dùng chung (Company/Customer/Supplier) -> dịch trung tính
+		# "Mã số thuế", không phải "MST cá nhân" (sẽ lan sang form doanh nghiệp)
 		path = os.path.join(os.path.dirname(__file__), "..", "translations", "vi.csv")
 		with open(path, encoding="utf-8") as f:
 			content = f.read()
-		self.assertIn("Tax ID,MST cá nhân", content)
+		self.assertIn("Tax ID,Mã số thuế", content)
