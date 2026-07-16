@@ -44,6 +44,53 @@ class TestAnnualLeaveEarnedFixture(FrappeTestCase):
 			self.assertTrue(meta.has_field(key), f"Leave Type has no field {key}")
 
 
+class TestEntitlementAndLeavePeriod(FrappeTestCase):
+	"""T2 — entitlement tiers (Điều 113/114) + idempotent Leave Period helper."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		import erpnext
+
+		cls.company = erpnext.get_default_company() or frappe.get_all("Company", limit=1)[0].name
+
+	def _emp(self, doj):
+		from erpnext.setup.doctype.employee.test_employee import make_employee
+
+		return make_employee(
+			f"vn_leave_{doj}@example.com", company=self.company, date_of_joining=doj
+		)
+
+	def test_entitlement_tiers(self):
+		from hrms.setup_vn_leave import entitlement_for
+
+		on_date = "2026-01-01"
+		# < 5 năm thâm niên -> 12 ngày
+		self.assertEqual(entitlement_for(self._emp("2023-03-15"), on_date), 12)
+		# đủ 5 năm -> 13
+		self.assertEqual(entitlement_for(self._emp("2021-01-01"), on_date), 13)
+		# 5 năm chưa đủ (thiếu 1 ngày) -> 12
+		self.assertEqual(entitlement_for(self._emp("2021-01-02"), on_date), 12)
+		# đủ 10 năm -> 14
+		self.assertEqual(entitlement_for(self._emp("2015-12-31"), on_date), 14)
+
+	def test_create_leave_period_idempotent(self):
+		from hrms.setup_vn_leave import create_leave_period
+
+		name1 = create_leave_period(2027, self.company)
+		period = frappe.get_doc("Leave Period", name1)
+		self.assertEqual(str(period.from_date), "2027-01-01")
+		self.assertEqual(str(period.to_date), "2027-12-31")
+		self.assertEqual(period.is_active, 1)
+		self.assertEqual(period.company, self.company)
+		# chạy lại -> cùng bản ghi, không nhân đôi
+		name2 = create_leave_period(2027, self.company)
+		self.assertEqual(name1, name2)
+		self.assertEqual(
+			len(frappe.get_all("Leave Period", {"company": self.company, "from_date": "2027-01-01"})), 1
+		)
+
+
 def enable_earned_leave_flags():
 	"""Apply the fixture's earned-leave flags inside the current (rolled-back) transaction,
 	so tests exercise the post-migrate behaviour without touching the live site."""

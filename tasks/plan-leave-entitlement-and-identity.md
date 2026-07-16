@@ -17,7 +17,7 @@
   - **Lưu ý gate:** sửa Leave Type đang có = ask-first theo CLAUDE.md → được duyệt cho dev tại
     checkpoint plan này; prod ký riêng ở Đợt A/T2.
 
-- [ ] **T2: `hrms/setup_vn_leave.py` — `entitlement_for` + `create_leave_period`**
+- [x] **T2: `hrms/setup_vn_leave.py` — `entitlement_for` + `create_leave_period`**
   - Acceptance: `entitlement_for`: <5 năm→12, đủ 5→13, đủ 10→14 (mốc `date_of_joining`, tính tại
     01/01 của năm); `create_leave_period(year, company)` tạo "VN {company} {year}" 01/01→31/12
     `is_active=1`, idempotent (chạy 2 lần → 1 bản ghi).
