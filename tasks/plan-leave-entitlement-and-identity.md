@@ -7,7 +7,7 @@
 
 ## Tasks (theo thứ tự phụ thuộc)
 
-- [ ] **T1: Bật earned leave cho "Nghỉ phép năm" (fixture)**
+- [x] **T1: Bật earned leave cho "Nghỉ phép năm" (fixture)** *(dev-site migrate = bước deploy user tự chạy — permission gate chặn tự động, đúng ask-first)*
   - Acceptance: `leave_type.json` — Nghỉ phép năm có `is_earned_leave=1`,
     `earned_leave_frequency="Monthly"`, `rounding="0.5"`, `allocate_on_day="Last Day"`;
     7 type còn lại không đổi; sau `bench --site miyano migrate` bản ghi dev phản ánh flags mới.

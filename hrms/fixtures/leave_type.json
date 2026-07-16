@@ -14,7 +14,7 @@
   "include_holiday": 0,
   "is_carry_forward": 0,
   "is_compensatory": 0,
-  "is_earned_leave": 0,
+  "is_earned_leave": 1,
   "is_lwp": 0,
   "is_optional_leave": 0,
   "is_ppl": 0,
@@ -23,10 +23,10 @@
   "max_encashable_leaves": 0,
   "max_leaves_allowed": 0.0,
   "maximum_carry_forwarded_leaves": 0.0,
-  "modified": "2026-07-03 17:37:08.890503",
+  "modified": "2026-07-16 10:00:00.000000",
   "name": "Nghỉ phép năm",
   "non_encashable_leaves": 0,
-  "rounding": ""
+  "rounding": "0.5"
  },
  {
   "allocate_on_day": "Last Day",
