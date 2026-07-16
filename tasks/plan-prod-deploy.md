@@ -32,8 +32,9 @@
 
 - [ ] **T2 [GATE ②]: Merge & migrate prod** — một lần `bench migrate` chạy trọn: patch rename
   English (Monthly Attendance Sheet / Business Trip / custom_work_credit…), sync fixtures
-  (8 Leave Type, 14 Attendance Code, 10 custom field), `backfill_attendance_codes`
-  (display-only), `ensure_defaults` (workflow Business Trip + role COO).
+  (8 Leave Type — gồm "Nghỉ phép năm" earned-leave, 14 Attendance Code, 12 custom field —
+  gồm 2 field định danh Employee), `backfill_attendance_codes` (display-only),
+  `ensure_defaults` (workflow Business Trip + role COO).
   - Prereq (cần approval riêng): merge `feat/skip-attendance-diag` → `version-15`, deploy code
     lên prod.
   - Acceptance: migrate sạch không traceback; doctype cũ đã rename còn nguyên số bản ghi;
@@ -50,6 +51,16 @@
   - Verify: idempotent (chạy lại không nhân đôi); nhân viên không set `holiday_list` resolve về
     Company default; Monthly Attendance Report tô "-" (CN) / "NL" (lễ) đúng tháng hiện tại.
   - Files: không (helper đã có: `hrms/setup_vn_holiday.py`).
+
+- [ ] **T3b [GATE ③b]: Cấp định mức phép năm trên prod** *(mới — Đợt B đã build dev 2026-07-16)*
+  - Prereq: T2 (fixture Leave Type earned-leave + custom fields đã vào prod qua migrate), T3 (Holiday
+    List — cần cho nghỉ bù).
+  - Acceptance: `bench --site <prod> execute hrms.setup_vn_leave.assign_annual_leave --kwargs
+    "{'year': 2026, 'company': 'Miyano'}"` — chạy `dry_run=True` trước, HR duyệt danh sách bậc
+    (12/13/14 ngày theo thâm niên), rồi chạy thật; mọi nhân viên active có allocation.
+  - Verify: report dict trả về 100% created/skipped, 0 error; vài nhân viên spot-check số dư trên
+    Desk; scheduler daily_long sẽ cộng dồn các tháng tiếp theo (không cần cấu hình thêm).
+  - Vận hành hằng năm: chạy lại lệnh cho năm mới (idempotent; nhân viên mới vào giữa năm → chạy lại).
 
 - [ ] **T4 [GATE ④ — cứng]: Bật classifier sáng/chiều trên MỘT ca prod + chạy song song 1 tháng**
   - Acceptance: `custom_split_half_day = 1` + cấu hình trưa/ngưỡng/grace trên đúng 1 Shift Type;

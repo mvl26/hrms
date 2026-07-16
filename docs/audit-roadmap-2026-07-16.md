@@ -130,10 +130,10 @@ Theo thứ tự an toàn đề xuất:
 | Đợt | Nội dung | Giá trị | Rủi ro | Phụ thuộc |
 |---|---|---|---|---|
 | **A. Deploy prod những gì đã xây** | Mục 3, tuần tự 1→6, mỗi bước sign-off | Đưa toàn bộ 3 tuần công việc vào sử dụng thật | Trung (rename + fixtures trên data thật) | — |
-| **B. WS3 — Định mức phép năm** | Leave Period + Leave Policy 12 ngày + accrual tháng (`is_earned_leave`) + thâm niên +1/5năm (custom) + quyết định carry-forward; mở khóa Compensatory Leave Request | Nhân viên tự nộp đơn phép, số dư đúng luật | Trung (đụng Leave Type đang có = ask-first) | A (Holiday List cho nghỉ bù) |
+| **B. WS3 — Định mức phép năm** — ✅ **BUILT dev 2026-07-16** (`spec/leave-entitlement-vn.md`, 126 test xanh; carry-forward = KHÔNG) | Leave Period + Leave Policy theo bậc + accrual tháng (`is_earned_leave`) + thâm niên +1/5năm; Compensatory Leave Request đã mở khóa (test E2E) | Nhân viên tự nộp đơn phép, số dư đúng luật | Còn lại: chạy `assign_annual_leave` trên prod (gộp Đợt A) | A (Holiday List cho nghỉ bù) |
 | **C. Payroll đợt 1 — chẩn đoán + nghỉ lễ có lương** | Chẩn đoán salary slip prod; chốt `payroll_based_on` (rủi ro #1); sửa tối thiểu để lễ = công hưởng lương qua gate invariance | Lương tháng đúng quyết định #3 (lương cố định ÷ ngày làm việc thực) | **Cao** (đụng số lương) — trình tự đã khóa ở quyết định #6 | A (Holiday List prod) |
 | **D. Payroll đợt 2 — lương VN đầy đủ** | Thuế TNCN lũy tiến + giảm trừ (11tr/4.4tr), BHXH/BHYT/BHTN, lương tối thiểu vùng — dạng Salary Component/Income Tax Slab fixtures (ưu tiên config, không fork code) | Tính lương hoàn toàn trong ERP | Cao | C; **cần chốt phạm vi** (hiện BHXH tính ngoài hệ thống) |
-| **E. Nhân sự VN** | Custom fields Employee (CCCD, số sổ BHXH, MST) + quản lý HĐLĐ (doctype mới hoặc dùng contract_end_date + nhắc hạn) | Hồ sơ nhân sự đủ pháp lý VN | Thấp (additive) | — (song song được) |
+| **E. Nhân sự VN (thu hẹp)** — ✅ **BUILT dev 2026-07-16** (`spec/employee-vn-identity-fields.md`) | Custom fields Employee: Số CCCD + Số sổ BHXH; MST = `tax_id` sẵn có (+bản dịch). Không HĐLĐ (đã quyết định loại) | Hồ sơ nhân sự đủ định danh VN | Còn lại: deploy prod (fixtures, gộp Đợt A/T2) | — |
 
 **Thứ tự đã chốt: A → B → C** (+ E thu hẹp chạy song song; D loại bỏ). A là điều kiện của cả B lẫn C
 và không cần code mới; B mở khóa self-service ngay; C phải đi sau khi có Holiday List thật trên prod.

@@ -1,5 +1,10 @@
 # Plan: Định mức phép năm VN (Đợt B) + trường định danh Employee (Đợt E)
 
+> Status: ✅ **DONE trên dev 2026-07-16** (T1–T7, `/build auto`). **126 test toàn suite xanh**
+> (gồm gate payroll invariance). Dev migrate đã ký duyệt + chạy. Prod deploy = Đợt A
+> (`tasks/plan-prod-deploy.md` T2 + T3b). Harness note: 1 lần deadlock MariaDB transient do
+> background job sau migrate — chạy lại sạch; runner đã có fallback full-rollback khi mất savepoint.
+
 > Specs: `spec/leave-entitlement-vn.md` + `spec/employee-vn-identity-fields.md` (scope approved
 > 2026-07-16). Branch: `feat/skip-attendance-diag`. Test qua **rollback harness** console
 > (KHÔNG `bench run-tests` trên `miyano`). Mỗi task: RED → GREEN → regression → commit riêng.
@@ -58,7 +63,7 @@
   - Files: `hrms/fixtures/custom_field.json`, `hrms/hooks.py`, `hrms/translations/vi.csv`,
     `hrms/tests/test_setup_vn_defaults.py` (hoặc test fixture tương ứng).
 
-- [ ] **T7: Docs + tick plan**
+- [x] **T7: Docs + tick plan**
   - Acceptance: tick checkbox plan này; cập nhật `docs/audit-roadmap-2026-07-16.md` (Đợt B/E → BUILT
     on dev, chờ deploy Đợt A); ghi chú lệnh vận hành năm mới vào plan prod-deploy (sau T3 thêm bước
     `assign_annual_leave` prod).
