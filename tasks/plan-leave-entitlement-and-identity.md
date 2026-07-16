@@ -24,7 +24,7 @@
   - Verify: unit tests qua harness (nhân viên test DOJ giả lập các bậc thâm niên).
   - Files: `hrms/setup_vn_leave.py` (mới), `hrms/tests/test_setup_vn_leave.py`.
 
-- [ ] **T3: `assign_annual_leave(year, company, employees=None, dry_run=False)`**
+- [x] **T3: `assign_annual_leave(year, company, employees=None, dry_run=False)`**
   - Acceptance: với nhân viên active — ensure Leave Policy "VN Phép năm {n} ngày" (submit) đúng bậc;
     tạo + submit Leave Policy Assignment (`assignment_based_on="Leave Period"`) + grant → Leave
     Allocation ban đầu = số phép các tháng đã qua (pin `frappe.flags.current_date`); đã có LPA cho

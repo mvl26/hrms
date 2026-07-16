@@ -91,6 +91,89 @@ class TestEntitlementAndLeavePeriod(FrappeTestCase):
 		)
 
 
+class TestAssignAnnualLeave(FrappeTestCase):
+	"""T3 — bulk yearly grant: tiered policies + LPA + initial passed-months allocation; idempotent."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		import erpnext
+
+		cls.company = erpnext.get_default_company() or frappe.get_all("Company", limit=1)[0].name
+
+	def setUp(self):
+		enable_earned_leave_flags()
+		self._old_current_date = frappe.flags.current_date
+		# giữa tháng 6/2026 -> 5 tháng trọn (1-5) đã qua với allocate_on_day="Last Day"
+		frappe.flags.current_date = "2026-06-15"
+
+	def tearDown(self):
+		frappe.flags.current_date = self._old_current_date
+
+	def _emp(self, email, doj):
+		from erpnext.setup.doctype.employee.test_employee import make_employee
+
+		return make_employee(email, company=self.company, date_of_joining=doj)
+
+	def test_creates_tiered_policy_assignment_and_allocation(self):
+		from hrms.setup_vn_leave import assign_annual_leave
+
+		emp12 = self._emp("vn_assign_t12@example.com", "2024-03-01")  # <5 năm -> 12
+		emp13 = self._emp("vn_assign_t13@example.com", "2019-05-01")  # >=5 năm -> 13
+		report = assign_annual_leave(2026, self.company, employees=[emp12, emp13])
+
+		self.assertEqual(report[emp12]["status"], "created")
+		self.assertEqual(report[emp12]["entitlement"], 12)
+		self.assertEqual(report[emp13]["entitlement"], 13)
+
+		for emp, days in ((emp12, 12), (emp13, 13)):
+			assignment = frappe.get_doc("Leave Policy Assignment", report[emp]["assignment"])
+			self.assertEqual(assignment.docstatus, 1)
+			self.assertEqual(assignment.leaves_allocated, 1)
+			policy = frappe.get_doc("Leave Policy", assignment.leave_policy)
+			self.assertEqual(policy.title, f"VN Phép năm {days} ngày")
+			self.assertEqual(policy.leave_policy_details[0].annual_allocation, days)
+
+		# allocation ban đầu = số phép các tháng đã qua (T1-T5 = 5 tháng, bậc 12 -> 1.0/tháng)
+		alloc = frappe.get_value(
+			"Leave Allocation",
+			{"employee": emp12, "leave_type": ANNUAL_LEAVE, "docstatus": 1},
+			["new_leaves_allocated", "to_date", "carry_forward"],
+			as_dict=True,
+		)
+		self.assertEqual(alloc.new_leaves_allocated, 5.0)
+		self.assertEqual(str(alloc.to_date), "2026-12-31")
+		self.assertEqual(alloc.carry_forward, 0)
+
+	def test_idempotent_and_picks_up_new_employee(self):
+		from hrms.setup_vn_leave import assign_annual_leave
+
+		emp1 = self._emp("vn_idem_1@example.com", "2024-01-01")
+		r1 = assign_annual_leave(2026, self.company, employees=[emp1])
+		self.assertEqual(r1[emp1]["status"], "created")
+
+		r2 = assign_annual_leave(2026, self.company, employees=[emp1])
+		self.assertEqual(r2[emp1]["status"], "skipped")
+		self.assertEqual(
+			len(frappe.get_all("Leave Policy Assignment", {"employee": emp1, "docstatus": ("<", 2)})), 1
+		)
+
+		emp2 = self._emp("vn_idem_2@example.com", "2024-01-01")
+		r3 = assign_annual_leave(2026, self.company, employees=[emp1, emp2])
+		self.assertEqual(r3[emp1]["status"], "skipped")
+		self.assertEqual(r3[emp2]["status"], "created")
+
+	def test_dry_run_writes_nothing(self):
+		from hrms.setup_vn_leave import assign_annual_leave
+
+		emp = self._emp("vn_dry@example.com", "2024-01-01")
+		before = frappe.get_all("Leave Policy Assignment", {"employee": emp})
+		report = assign_annual_leave(2026, self.company, employees=[emp], dry_run=True)
+		self.assertEqual(report[emp]["status"], "would_create")
+		self.assertEqual(report[emp]["entitlement"], 12)
+		self.assertEqual(frappe.get_all("Leave Policy Assignment", {"employee": emp}), before)
+
+
 def enable_earned_leave_flags():
 	"""Apply the fixture's earned-leave flags inside the current (rolled-back) transaction,
 	so tests exercise the post-migrate behaviour without touching the live site."""
