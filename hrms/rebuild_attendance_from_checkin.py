@@ -153,6 +153,53 @@ def widen_checkout_window(shift_doc, start, end):
 	return needed if needed > (shift_doc.allow_check_out_after_shift_end_time or 0) else 0
 
 
+def run_auto_attendance_for_period(shift, start, end, keep_enabled=False):
+	"""Cho job sinh Attendance từ checkin trong đúng khoảng ngày, rồi trả cờ về như cũ.
+
+	Khoá `process_attendance_after`/`last_sync_of_checkin` vào đúng kỳ để job không quét lan sang
+	tháng khác. Nới cửa sổ tan ca nếu kỳ đó có lượt chấm ra muộn hơn cửa sổ hiện tại — không nới
+	thì lượt tan ca tăng ca không gắn được vào ca và ngày đó mất giờ ra.
+
+	Trả cờ `enable_auto_attendance` về trạng thái cũ trừ khi `keep_enabled`: để bật thì job hằng
+	giờ sẽ đẩy mốc quét lên hiện tại rồi chấm Vắng cho mọi ngày không có checkin.
+	"""
+	shift_doc = frappe.get_doc("Shift Type", shift)
+	previous = {
+		"enable_auto_attendance": shift_doc.enable_auto_attendance,
+		"process_attendance_after": shift_doc.process_attendance_after,
+		"last_sync_of_checkin": shift_doc.last_sync_of_checkin,
+	}
+	widen_to = widen_checkout_window(shift_doc, start, end)
+
+	if widen_to:
+		shift_doc.allow_check_out_after_shift_end_time = widen_to
+	shift_doc.enable_auto_attendance = 1
+	shift_doc.process_attendance_after = start - datetime.timedelta(days=1)
+	shift_doc.last_sync_of_checkin = get_datetime(f"{end} 23:59:59")
+	shift_doc.save(ignore_permissions=True)
+	frappe.db.commit()
+
+	# gắn lại ca cho lượt chấm từng rơi ngoài cửa sổ (validate -> fetch_shift)
+	for name in frappe.get_all(
+		"Employee Checkin", filters={**checkin_filters(start, end), "shift": ["is", "not set"]}, pluck="name"
+	):
+		frappe.get_doc("Employee Checkin", name).save(ignore_permissions=True)
+	frappe.db.commit()
+
+	frappe.db.set_value(
+		"Employee Checkin", checkin_filters(start, end), "skip_auto_attendance", 0, update_modified=False
+	)
+	frappe.db.commit()
+
+	frappe.get_doc("Shift Type", shift).process_auto_attendance()
+	frappe.db.commit()
+
+	if not keep_enabled:
+		frappe.db.set_value("Shift Type", shift, previous, update_modified=False)
+		frappe.db.commit()
+	return {"widened_checkout_window_to": widen_to or None, "auto_attendance_kept_on": bool(keep_enabled)}
+
+
 def rebuild(year, month, shift="Ca Hành Chính", apply=False, keep_enabled=False):
 	year, month = int(year), int(month)
 	start, end = month_bounds(year, month)
@@ -192,37 +239,6 @@ def rebuild(year, month, shift="Ca Hành Chính", apply=False, keep_enabled=Fals
 		json.dump(before, fh, indent=1, default=str, ensure_ascii=False)
 	plan["backup"] = backup_path
 
-	previous = {
-		"enable_auto_attendance": shift_doc.enable_auto_attendance,
-		"process_attendance_after": shift_doc.process_attendance_after,
-		"last_sync_of_checkin": shift_doc.last_sync_of_checkin,
-	}
-
-	if widen_to:
-		shift_doc.allow_check_out_after_shift_end_time = widen_to
-	shift_doc.enable_auto_attendance = 1
-	shift_doc.process_attendance_after = start - datetime.timedelta(days=1)
-	shift_doc.last_sync_of_checkin = get_datetime(f"{end} 23:59:59")
-	shift_doc.save(ignore_permissions=True)
-	frappe.db.commit()
-
-	# gắn lại ca cho các lượt chấm từng rơi ngoài cửa sổ (validate -> fetch_shift)
-	for name in shiftless:
-		frappe.get_doc("Employee Checkin", name).save(ignore_permissions=True)
-	frappe.db.commit()
-	plan["checkins_still_without_shift"] = frappe.db.count(
-		"Employee Checkin", {**checkin_filters(start, end), "shift": ["is", "not set"]}
-	)
-
-	frappe.db.set_value(
-		"Employee Checkin",
-		checkin_filters(start, end),
-		"skip_auto_attendance",
-		0,
-		update_modified=False,
-	)
-	frappe.db.commit()
-
 	for a in drop:
 		doc = frappe.get_doc("Attendance", a.name)
 		if doc.docstatus == 1:
@@ -230,14 +246,10 @@ def rebuild(year, month, shift="Ca Hành Chính", apply=False, keep_enabled=Fals
 		frappe.delete_doc("Attendance", a.name, force=True, ignore_permissions=True)
 	frappe.db.commit()
 
-	frappe.get_doc("Shift Type", shift).process_auto_attendance()
-	frappe.db.commit()
-
-	if not keep_enabled:
-		# trả cờ về trạng thái cũ: để bật thì job hằng giờ sẽ chấm Vắng cho mọi ngày
-		# không có checkin từ process_attendance_after trở đi
-		frappe.db.set_value("Shift Type", shift, previous, update_modified=False)
-		frappe.db.commit()
+	plan.update(run_auto_attendance_for_period(shift, start, end, keep_enabled=keep_enabled))
+	plan["checkins_still_without_shift"] = frappe.db.count(
+		"Employee Checkin", {**checkin_filters(start, end), "shift": ["is", "not set"]}
+	)
 	plan["auto_attendance_left"] = "BẬT" if keep_enabled else "đã trả về trạng thái cũ"
 	plan["after"] = summarise(start, end, employees)
 	print(frappe.as_json(plan))

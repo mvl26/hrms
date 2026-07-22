@@ -5,6 +5,10 @@ tháng; file này đi từ **đầu vào thật** — cặp Employee Checkin IN/
 tăng ca), Leave Application được duyệt, rồi để hệ thống tự suy ra Attendance. Dùng nó khi cần
 kiểm chứng bộ phân loại nửa ngày / cầu nối mã công trên dữ liệu giống máy chấm công đẩy vào.
 
+**KHÔNG tạo Attendance trực tiếp.** Chỉ dựng hai đầu vào có thật — dấu chấm công và đơn nghỉ —
+rồi gọi `Shift Type.process_auto_attendance()`. Nhờ vậy mỗi bản ghi Attendance đều truy ngược
+được về dấu chấm sinh ra nó (cột `attendance` trên Employee Checkin).
+
 CHẠY (từ thư mục frappe-bench):
 
   # 1) Chạy thử — không ghi gì, trả về đúng những gì sẽ tạo:
@@ -34,6 +38,7 @@ import frappe
 from frappe.utils import getdate
 
 from hrms.demo_data import COMPANY, EMP_DEFS, SHIFT, _ensure_employees
+from hrms.rebuild_attendance_from_checkin import run_auto_attendance_for_period
 
 SHIFT_IN = datetime.time(8, 0)
 SHIFT_OUT = datetime.time(17, 30)
@@ -133,9 +138,18 @@ def guard_payroll(emp_ids, start, end):
 
 
 def clear_old_attendance(log, emp_ids, start, end):
+	"""Xoá Attendance cũ của kỳ, TRỪ bản do Leave Application sinh ra.
+
+	Đơn nghỉ đã tồn tại sẽ bị bỏ qua ở lần chạy sau, nên nếu xoá luôn bản ghi của nó thì không
+	còn gì dựng lại — job auto-attendance cố tình không đụng vào ngày đã có đơn nghỉ.
+	"""
 	rows = frappe.get_all(
 		"Attendance",
-		filters={"employee": ["in", emp_ids], "attendance_date": ["between", [start, end]]},
+		filters={
+			"employee": ["in", emp_ids],
+			"attendance_date": ["between", [start, end]],
+			"leave_application": ["is", "not set"],
+		},
 		fields=["name", "docstatus"],
 	)
 	for row in rows:
@@ -269,8 +283,9 @@ def clock_times(key, day, ordinal, status, rnd):
 
 
 def make_checkins(log, emp, in_dt, out_dt):
-	"""skip_auto_attendance=1: bản ghi Attendance do file này tạo thẳng, không để job
-	process_auto_attendance chạy lại và đẻ ra bản trùng."""
+	"""Chỉ tạo dấu chấm công. Attendance KHÔNG được tạo ở đây — nó phải do
+	`Shift Type.process_auto_attendance()` sinh ra từ chính các dấu chấm này, nếu không thì cột
+	`attendance` trên checkin rỗng và không có gì chứng minh số công đến từ máy chấm công."""
 	for log_type, stamp in (("IN", in_dt), ("OUT", out_dt)):
 		if frappe.db.exists("Employee Checkin", {"employee": emp, "time": stamp}):
 			log.note("skipped", "checkin")
@@ -284,7 +299,7 @@ def make_checkins(log, emp, in_dt, out_dt):
 					"time": stamp,
 					"shift": SHIFT,
 					"device_id": DEVICE_ID,
-					"skip_auto_attendance": 1,
+					"skip_auto_attendance": 0,
 				}
 			)
 			doc.flags.ignore_permissions = True
@@ -294,36 +309,13 @@ def make_checkins(log, emp, in_dt, out_dt):
 			log.fail(f"Checkin {emp} {stamp}", exc)
 
 
-def make_attendance(log, emp, day, status, leave_type, in_dt, out_dt):
-	# Ngày nghỉ đã có Attendance 'On Leave' do Leave Application sinh ra — giữ nguyên bản đó,
-	# ghi đè sẽ bị chặn trùng ngày và làm mất leave_type mà payroll đọc.
-	if frappe.db.exists("Attendance", {"employee": emp, "attendance_date": day, "docstatus": ["<", 2]}):
-		log.note("skipped", f"attendance_exists_{status.replace(' ', '_')}")
-		return
-	try:
-		# working_hours ở đây là giờ thô; ca bật custom_split_half_day sẽ được bộ phân loại VN
-		# tính lại thành giờ thực trong khung ca đã trừ nghỉ trưa.
-		submit_doc(
-			{
-				"doctype": "Attendance",
-				"employee": emp,
-				"company": COMPANY,
-				"attendance_date": day,
-				"status": status,
-				"leave_type": leave_type,
-				"shift": SHIFT,
-				"in_time": in_dt,
-				"out_time": out_dt,
-				"working_hours": round((out_dt - in_dt).total_seconds() / 3600, 2) if in_dt else 0,
-			}
-		)
-		log.note("created", f"attendance_{status.replace(' ', '_')}")
-	except Exception as exc:
-		log.fail(f"Attendance {emp} {day}", exc)
-
-
 def generate(year=2026, month=6, apply=False):
-	"""Sinh checkin + attendance + đơn nghỉ cho `month/year`. Dry-run trừ khi apply=True."""
+	"""Sinh checkin + đơn nghỉ cho `month/year`, rồi để job sinh Attendance. Dry-run trừ khi apply.
+
+	KHÔNG tạo Attendance trực tiếp: chỉ dựng dấu chấm công và đơn nghỉ — hai đầu vào có thật —
+	rồi gọi `process_auto_attendance()` để hệ thống tự suy ra ngày công. Nhờ vậy mỗi bản ghi
+	Attendance đều truy ngược được về dấu chấm sinh ra nó.
+	"""
 	start, end = month_bounds(int(year), int(month))
 	holidays = get_holidays(start, end)
 	workdays = [d for d in daterange(start, end) if d.weekday() != 6 and d not in holidays]
@@ -341,13 +333,18 @@ def generate(year=2026, month=6, apply=False):
 	for key, emp in emps.items():
 		rnd = random.Random(emp)  # tái lập được: cùng mã nhân viên -> cùng giờ giấc
 		for ordinal, day in enumerate(workdays, start=1):
-			status, leave_type = day_plan(key, day, ordinal, workdays)
+			status, _leave_type = day_plan(key, day, ordinal, workdays)
 			in_dt, out_dt = clock_times(key, day, ordinal, status, rnd)
 			if in_dt:
 				make_checkins(log, emp, in_dt, out_dt)
-			make_attendance(log, emp, day, status, leave_type, in_dt, out_dt)
+
+	if apply:
+		# Attendance chỉ được sinh ở đây, từ chính các dấu chấm vừa tạo. Job commit bên trong
+		# nên bước này không chạy được ở chế độ dry-run.
+		log.auto = run_auto_attendance_for_period(SHIFT, start, end)
 
 	result = log.as_dict(
+		auto_attendance=getattr(log, "auto", "bỏ qua ở chế độ chạy thử"),
 		applied=bool(apply),
 		period=f"{start}..{end}",
 		workdays=len(workdays),
