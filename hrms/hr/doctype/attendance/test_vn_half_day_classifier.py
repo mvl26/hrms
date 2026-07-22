@@ -102,3 +102,27 @@ class TestVNHalfDayLogic(FrappeTestCase):
 		d = self._cls("08:00", "12:00", custom_attendance_code="P")
 		self.assertEqual(d.status, "On Leave")
 		self.assertEqual(d.leave_type, "Nghỉ phép năm")
+
+	def test_half_day_leave_keeps_its_leave_type_when_the_other_half_is_worked(self):
+		"""Nửa ngày phép + nửa ngày đi làm: bộ phân loại KHÔNG được xoá `leave_type`.
+
+		A half-day Leave Application marks Attendance as Half Day + leave_type. If check-in times are
+		then present on that record, the classifier would re-derive both halves from the clock alone
+		and the bridge would rewrite leave_type from the (leave-less) 'V' code — silently dropping the
+		employee's annual leave, which payroll reads."""
+		d = self._cls(
+			"13:30",
+			"17:30",
+			status="Half Day",
+			leave_type="Nghỉ phép năm",
+			half_day_status="Present",
+		)
+
+		self.assertEqual(d.status, "Half Day")
+		self.assertEqual(d.leave_type, "Nghỉ phép năm")
+
+	def test_a_full_day_of_leave_is_never_reclassified_from_the_clock(self):
+		d = self._cls("13:30", "17:30", status="On Leave", leave_type="Nghỉ ốm")
+
+		self.assertEqual(d.status, "On Leave")
+		self.assertEqual(d.leave_type, "Nghỉ ốm")

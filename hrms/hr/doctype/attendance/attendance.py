@@ -63,8 +63,11 @@ class Attendance(Document):
 			"custom_afternoon_code"
 		):
 			return  # respect a manually entered code
-		if self.get("status") == "On Leave":
-			return  # a leave day is not a worked day
+		if self.get("status") == "On Leave" or self.get("leave_type"):
+			# A day already attributed to a leave — full day, or a half-day leave whose other half
+			# was worked — must keep that attribution. Re-deriving both halves from the clock would
+			# rewrite leave_type from the leave-less "V" code and silently drop the employee's leave.
+			return
 
 		cfg = frappe.db.get_value(
 			"Shift Type",
