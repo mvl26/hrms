@@ -89,6 +89,23 @@ class TestBangChamCongThang(FrappeTestCase):
 		# Phép leave-half of 1/2P = 0.5 ; Không lương leave-half of 1/2K = 0.5
 		self.assertEqual(row[labels["Phép"]], 0.5)
 		self.assertEqual(row[labels["Không lương"]], 0.5)
+		# NN chỉ nói "làm nửa ngày", không nói nửa kia nghỉ vì gì -> nửa kia là nghỉ không lý do
+		self.assertEqual(row[labels["Vắng"]], 0.5)
+
+	def test_a_half_day_code_still_accounts_for_the_whole_day(self):
+		"""Mỗi ngày có chấm công phải quy ra đủ 1 công trên bảng — không được bốc hơi nửa nào.
+
+		`NN` (làm nửa ngày) có work_fraction 0.5 nhưng category vẫn là "Công", nên nhánh cộng phần
+		nghỉ (chỉ chạy khi category != "Công") bỏ sót nửa không làm: ngày đó chỉ vào sổ 0.5 công và
+		dòng bảng công không cân về số ngày công của tháng.
+		"""
+		labels = self._cat_labels()
+		for day, code in ((10, "NN"), (11, "1/2P"), (12, "1/2K")):
+			self._mk(day, custom_attendance_code=code)
+
+		row = self._row(self.emp)
+		total = sum(row.get(field) or 0 for field in labels.values())
+		self.assertEqual(total, 3.0, "3 ngày nửa công phải quy ra đúng 3 công")
 
 	def test_calendar_markers_weekly_off_and_holiday(self):
 		# HR convention: weekly-off (rest day) renders "-"; a paid public holiday stays "NL"

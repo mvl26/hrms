@@ -7,9 +7,10 @@ Pivots by employee × day-of-month. Each cell is the mã công for that day:
 - otherwise a calendar marker derived (NOT stored) from the employee's data:
   `-` on a weekly-off (rest day) or after the relieving date, `NL` on a public holiday.
 
-Totals columns sum per category: Công = actual worked công (Σ work_fraction), and each leave
-column = Σ (1 − work_fraction) of that category's halves. Read-only: never writes, so it is
-safe against payroll and existing data.
+Totals columns sum per category: Công = actual worked công (Σ work_fraction), and the unworked
+remainder of each half goes to that code's own category — or to Vắng when the code is itself a
+"Công" code that only covers half a day (NN), so every attended day still adds up to a full công.
+Read-only: never writes, so it is safe against payroll and existing data.
 """
 
 from calendar import monthrange
@@ -27,6 +28,9 @@ Filters = frappe._dict
 MARKER_TERMINATED = "-"  # after relieving_date — HR convention: rest-day dash
 MARKER_WEEKLY_OFF = "-"  # nghỉ hàng tuần (CN/T7) — HR convention: rest-day dash
 MARKER_HOLIDAY = "NL"  # ngày nghỉ lễ có lương — kept distinct so paid holidays stay visible
+
+# Loại nhận phần không đi làm của một mã thuộc loại "Công" (mã V cũng thuộc loại này)
+CATEGORY_UNEXCUSED = "Vắng"
 
 
 def execute(filters: Filters | None = None) -> tuple:
@@ -179,7 +183,8 @@ def _reverse_code(status, leave_type, code_map: dict):
 def get_sheet_rows(filters: Filters) -> list[dict]:
 	"""Semantic per-employee rows shared by this report AND the Bảng Công Tháng DocType:
 	``{employee, employee_name, days: {day-of-month: symbol}, totals: {category: float}}``.
-	Công total = Σ work_fraction × 0.5 (worked-công); each other category = Σ (1 − work_fraction) × 0.5.
+	Công total = Σ work_fraction × 0.5 (worked-công); the unworked remainder (1 − work_fraction) × 0.5
+	of each half lands in that code's category, falling back to Vắng for a half-covering "Công" code.
 	This is the single source of timekeeping derivation — consumers must not re-implement it."""
 	filters = frappe._dict(filters or {})
 	year, month = cint(filters.year), cint(filters.month)
@@ -217,8 +222,14 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 						continue
 					wf = flt(c.work_fraction)
 					totals["Công"] = totals.get("Công", 0.0) + wf * 0.5  # công thực đi làm
-					if c.category != "Công":
-						totals[c.category] = totals.get(c.category, 0.0) + (1 - wf) * 0.5  # phần nghỉ
+					rest = (1 - wf) * 0.5  # phần không đi làm của nửa buổi này
+					if rest:
+						# Mã nghỉ (P, Ô, 1/2P…) ghi vào đúng loại của nó. Mã thuộc loại "Công" mà
+						# không làm đủ buổi (NN = làm nửa ngày) không nói nửa kia nghỉ vì gì, nên
+						# nửa đó là nghỉ không lý do -> Vắng. Thiếu nhánh này thì ngày NN chỉ quy ra
+						# 0.5 công và dòng bảng công không cân về số ngày công của tháng.
+						bucket = c.category if c.category != "Công" else CATEGORY_UNEXCUSED
+						totals[bucket] = totals.get(bucket, 0.0) + rest
 			elif joining and d < joining:
 				continue  # chưa vào làm → để trống
 			elif day in emp_hol:
