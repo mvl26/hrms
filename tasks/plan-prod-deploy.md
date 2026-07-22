@@ -18,10 +18,28 @@
 ## Tasks
 
 - [ ] **T0 (dev, không gate): Verify JS geofence trên browser** — mục treo cuối của
-  `tasks/plan-geofence-and-defaults.md`.
+  `tasks/plan-geofence-and-defaults.md`. **Chỉ còn phần nhìn/tương tác — anh phải tự làm trên Chrome
+  của anh** (Chrome của trợ lý nằm ở máy khác, không nối được tới site này).
   - Acceptance: (a) Shift Location: click bản đồ set lat/long + vòng tròn bán kính vẽ lại theo
     `checkin_radius`; (b) Employee Checkin: overlay vòng tròn geofence + điểm check-in, read-only.
-  - Verify: thao tác trực tiếp trên Desk dev (`bench start` + Chrome), theo steps trong plan geofence.
+  - **Đã kiểm tĩnh (2026-07-22), loại trừ hết các lỗi kiểm được ngoài browser:**
+    `ShiftLocation.set_geolocation` có `@frappe.whitelist()` (JS `frm.call` gọi được);
+    `hrms.fetch_geolocation` + `hrms.add_shift_tools_button_to_form` có thật và nằm trong bundle đã
+    build hiện hành (`dist/js/hrms.bundle.*.js`, không cần `bench build` lại);
+    hợp đồng server mà map JS dựa vào (vẽ lại vòng tròn khi đổi `checkin_radius`/toạ độ, xoá vòng
+    tròn khi radius = 0) nay đã có test — 2 test mới trong `test_employee_checkin.py`, đã mutation-test.
+  - **Điều kiện tiên quyết:** `allow_geolocation_tracking` đang = **0** → các field bản đồ bị
+    `hide_field` nên KHÔNG thấy map. Bật tạm rồi trả về sau khi verify:
+    ```bash
+    bench --site miyano set-config -g allow_geolocation_tracking 1   # hoặc sửa trong HR Settings
+    # ... verify trên Desk ...
+    bench --site miyano execute frappe.client.set_value --kwargs \
+      "{'doctype':'HR Settings','name':'HR Settings','fieldname':'allow_geolocation_tracking','value':0}"
+    ```
+    Lưu ý: bật cờ này cũng bật chặn check-in ngoài geofence phía server (chính là quyết định T5).
+  - Các bước bấm: mở `/app/shift-location/new`, đặt `checkin_radius` = 300 → click 1 điểm trên bản đồ
+    → `latitude`/`longitude` phải tự điền và vòng tròn vẽ ra; sửa `checkin_radius` = 500 → vòng tròn
+    phải to lên. Rồi mở 1 `Employee Checkin` có toạ độ → thấy vòng tròn + điểm, không sửa được.
   - Files: không đổi code (chỉ verify); nếu lỗi → fix riêng.
 
 - [ ] **T1 [GATE ①]: Chụp baseline payroll trên prod**

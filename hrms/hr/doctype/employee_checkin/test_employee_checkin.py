@@ -89,6 +89,37 @@ class TestEmployeeCheckin(FrappeTestCase):
 		self.assertEqual(checkin_feature["geometry"]["type"], "Point")
 
 	@change_settings("HR Settings", {"allow_geolocation_tracking": 1})
+	def test_shift_location_circle_is_redrawn_when_radius_or_coordinates_change(self):
+		# The Shift Location map JS reacts to checkin_radius/latitude/longitude by re-calling
+		# set_geolocation, so the server must rebuild the circle from the *current* values.
+		location = make_shift_location("Geofence Redraw Loc", 24.5, 72.5, checkin_radius=300)
+
+		location.checkin_radius = 500
+		location.save()
+		feature = frappe.json.loads(location.geolocation)["features"][0]
+		self.assertEqual(feature["properties"]["radius"], 500)
+
+		location.latitude, location.longitude = 21.02776, 105.83416
+		location.save()
+		feature = frappe.json.loads(location.geolocation)["features"][0]
+		self.assertEqual(feature["geometry"]["coordinates"], [105.83416, 21.02776])
+		self.assertEqual(feature["properties"]["radius"], 500)
+
+	@change_settings("HR Settings", {"allow_geolocation_tracking": 1})
+	def test_clearing_the_radius_drops_the_circle_back_to_a_plain_point(self):
+		# Guards the `if checkin_radius and checkin_radius > 0` branch: a location whose radius is
+		# cleared must stop advertising a geofence area rather than keep a stale circle.
+		location = make_shift_location("Geofence Cleared Loc", 24.5, 72.5, checkin_radius=300)
+		self.assertEqual(frappe.json.loads(location.geolocation)["features"][0]["properties"]["radius"], 300)
+
+		location.checkin_radius = 0
+		location.save()
+
+		feature = frappe.json.loads(location.geolocation)["features"][0]
+		self.assertEqual(feature["properties"], {})
+		self.assertEqual(feature["geometry"]["coordinates"], [72.5, 24.5])
+
+	@change_settings("HR Settings", {"allow_geolocation_tracking": 1})
 	def test_get_checkin_geofence(self):
 		employee = make_employee("test_geofence_helper@example.com", company="_Test Company")
 		date = getdate()
