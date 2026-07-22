@@ -57,14 +57,14 @@ keep labels); `hrms/hr/doctype/bang_cong_thang/bang_cong_thang.py` (`category_fi
 `hrms/hr/doctype/bang_cong_thang/test_bang_cong_thang.py` (`row.cong`/`row.phep`→new);
 `hrms/patches/v15_0/rename_sheet_detail_fields.py` (new) + `hrms/patches.txt`.
 
-- [ ] **Step 1:** Update `test_bang_cong_thang.py` assertions to the new field names (`row.work_days`,
+- [x] **Step 1:** Update `test_bang_cong_thang.py` assertions to the new field names (`row.work_days`,
   `row.annual_leave`). Run → FAIL (fields still old). `bash scratch/run_test.sh "hrms.hr.doctype.bang_cong_thang.test_bang_cong_thang"`
-- [ ] **Step 2:** In `bang_cong_thang_detail.json` rename the 8 `fieldname`s in both `field_order` and the
+- [x] **Step 2:** In `bang_cong_thang_detail.json` rename the 8 `fieldname`s in both `field_order` and the
   field defs (labels unchanged). In `bang_cong_thang.py` update `category_field` values. In the print
   format replace `row.cong`→`row.work_days`, `row.phep`→`row.annual_leave`, `row.om`→`row.sick_leave`,
   `row.thai_san`→`row.maternity_leave`, `row.tnld`→`row.work_accident_leave`, `row.nghi_bu`→`row.comp_off`,
   `row.khong_luong`→`row.unpaid_leave`, `row.vang`→`row.absent`.
-- [ ] **Step 3:** Create `hrms/patches/v15_0/rename_sheet_detail_fields.py`:
+- [x] **Step 3:** Create `hrms/patches/v15_0/rename_sheet_detail_fields.py`:
 
 ```python
 import frappe
@@ -91,8 +91,8 @@ def execute():
 ```
 
 Add to `hrms/patches.txt` under `[pre_model_sync]`: `hrms.patches.v15_0.rename_sheet_detail_fields #2026-07-15`
-- [ ] **Step 4:** `bench --site miyano migrate` → then `bash scratch/run_test.sh "hrms.hr.doctype.bang_cong_thang.test_bang_cong_thang"` and the report test → GREEN.
-- [ ] **Step 5:** Commit (staging the 5 files above).
+- [x] **Step 4:** `bench --site miyano migrate` → then `bash scratch/run_test.sh "hrms.hr.doctype.bang_cong_thang.test_bang_cong_thang"` and the report test → GREEN.
+- [x] **Step 5:** Commit (staging the 5 files above).
 
 ---
 
@@ -104,11 +104,11 @@ Add to `hrms/patches.txt` under `[pre_model_sync]`: `hrms.patches.v15_0.rename_s
 test files referencing `custom_cong` (`test_attendance_code_bridge.py`, `test_bang_cong_thang.py`,
 `test_vn_half_day_classifier.py`); `hrms/patches/v15_0/rename_custom_cong.py` + `patches.txt`.
 
-- [ ] **Step 1:** `grep -rn "custom_cong" hrms/ --include=*.py --include=*.json | grep -v __pycache__` — enumerate every ref.
-- [ ] **Step 2:** Update all test assertions `.custom_cong`→`.custom_work_credit`. Run bridge + classifier + sheet tests → FAIL.
-- [ ] **Step 3:** Rename in `attendance.py` (bridge sets `self.custom_work_credit`), the report, the fixture
+- [x] **Step 1:** `grep -rn "custom_cong" hrms/ --include=*.py --include=*.json | grep -v __pycache__` — enumerate every ref.
+- [x] **Step 2:** Update all test assertions `.custom_cong`→`.custom_work_credit`. Run bridge + classifier + sheet tests → FAIL.
+- [x] **Step 3:** Rename in `attendance.py` (bridge sets `self.custom_work_credit`), the report, the fixture
   JSON (`fieldname` + `name`), and `hooks.py` filter name.
-- [ ] **Step 4:** Patch `hrms/patches/v15_0/rename_custom_cong.py`:
+- [x] **Step 4:** Patch `hrms/patches/v15_0/rename_custom_cong.py`:
 
 ```python
 import frappe
@@ -121,9 +121,9 @@ def execute():
 ```
 
 Add under `[pre_model_sync]`: `hrms.patches.v15_0.rename_custom_cong #2026-07-15`
-- [ ] **Step 5:** `bench migrate` → confirm Custom Field `Attendance-custom_work_credit` exists and
+- [x] **Step 5:** `bench migrate` → confirm Custom Field `Attendance-custom_work_credit` exists and
   `Attendance-custom_cong` is gone (`frappe.db.exists`); run bridge + classifier + sheet + fixtures + payroll-invariance tests → GREEN.
-- [ ] **Step 6:** Commit.
+- [x] **Step 6:** Commit.
 
 ---
 
@@ -134,11 +134,11 @@ the `.py/.js/.json/test_*` basenames; update the report JSON `name`+`report_name
 import in `hrms/hr/doctype/bang_cong_thang/bang_cong_thang.py` (`from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows`)
 and the report's own test import; patch + `patches.txt`.
 
-- [ ] **Step 1:** `git mv` the folder + files (`bang_cham_cong_thang.*`→`monthly_attendance_report.*`, incl. `test_*`).
-- [ ] **Step 2:** In the report `.json` set `"name"` and `"report_name"` to `Monthly Attendance Report`;
+- [x] **Step 1:** `git mv` the folder + files (`bang_cham_cong_thang.*`→`monthly_attendance_report.*`, incl. `test_*`).
+- [x] **Step 2:** In the report `.json` set `"name"` and `"report_name"` to `Monthly Attendance Report`;
   keep `ref_doctype`. Update `module` if scrubbed. Update the `.js` `frappe.query_reports["Monthly Attendance Report"]` key.
-- [ ] **Step 3:** Update imports: the `get_sheet_rows` import in `bang_cong_thang.py` + the test file's own import path.
-- [ ] **Step 4:** Patch `hrms/patches/v15_0/rename_bang_cham_cong_thang_report.py`:
+- [x] **Step 3:** Update imports: the `get_sheet_rows` import in `bang_cong_thang.py` + the test file's own import path.
+- [x] **Step 4:** Patch `hrms/patches/v15_0/rename_bang_cham_cong_thang_report.py`:
 
 ```python
 import frappe
@@ -152,8 +152,8 @@ def execute():
 ```
 
 Add under `[pre_model_sync]`: `hrms.patches.v15_0.rename_bang_cham_cong_thang_report #2026-07-15`
-- [ ] **Step 5:** `bench migrate` → app loads; run the renamed report test + `test_bang_cong_thang` (uses get_sheet_rows) → GREEN.
-- [ ] **Step 6:** Commit.
+- [x] **Step 5:** `bench migrate` → app loads; run the renamed report test + `test_bang_cong_thang` (uses get_sheet_rows) → GREEN.
+- [x] **Step 6:** Commit.
 
 ---
 
@@ -164,9 +164,9 @@ Add under `[pre_model_sync]`: `hrms.patches.v15_0.rename_bang_cham_cong_thang_re
 `BangCongThangDetail`→`MonthlyAttendanceSheetDetail`); JSON `name`+child-table field `options`+`amended_from`
 options; print format folder `hrms/hr/print_format/bang_cong_thang` + its `doc_type`; test imports; patch + `patches.txt`.
 
-- [ ] **Step 1:** `git mv` both doctype folders + files; rename the print-format folder + set its `doc_type` to `Monthly Attendance Sheet`.
-- [ ] **Step 2:** Update JSON `name` for both; in the parent, the `employees` Table field `options`→`Monthly Attendance Sheet Detail` and `amended_from` options→`Monthly Attendance Sheet`; rename controller classes + `test_*` imports/paths.
-- [ ] **Step 3:** Patch `hrms/patches/v15_0/rename_bang_cong_thang_doctypes.py` (child first, then parent):
+- [x] **Step 1:** `git mv` both doctype folders + files; rename the print-format folder + set its `doc_type` to `Monthly Attendance Sheet`.
+- [x] **Step 2:** Update JSON `name` for both; in the parent, the `employees` Table field `options`→`Monthly Attendance Sheet Detail` and `amended_from` options→`Monthly Attendance Sheet`; rename controller classes + `test_*` imports/paths.
+- [x] **Step 3:** Patch `hrms/patches/v15_0/rename_bang_cong_thang_doctypes.py` (child first, then parent):
 
 ```python
 import frappe
@@ -186,8 +186,8 @@ def execute():
 ```
 
 Add under `[pre_model_sync]`: `hrms.patches.v15_0.rename_bang_cong_thang_doctypes #2026-07-15`
-- [ ] **Step 4:** `bench migrate` → app loads; run `test_bang_cong_thang` (path now `monthly_attendance_sheet`) + report test → GREEN.
-- [ ] **Step 5:** Commit.
+- [x] **Step 4:** `bench migrate` → app loads; run `test_bang_cong_thang` (path now `monthly_attendance_sheet`) + report test → GREEN.
+- [x] **Step 5:** Commit.
 
 ---
 
@@ -200,12 +200,12 @@ basenames + classes (`CongTac`→`BusinessTrip`, `CongTacTraveler`→`BusinessTr
 Expense Claim `custom_business_trip` options in `hrms/fixtures/custom_field.json`→`Business Trip`; any
 Notification/print/controller refs (`grep -rn "Cong Tac"`); test files; patch + `patches.txt`.
 
-- [ ] **Step 1:** `grep -rn "Cong Tac" hrms/ --include=*.py --include=*.json --include=*.js | grep -v __pycache__` — enumerate all 34 refs.
-- [ ] **Step 2:** `git mv` both folders + files; rename classes + `test_*`; update every code ref from Step 1
+- [x] **Step 1:** `grep -rn "Cong Tac" hrms/ --include=*.py --include=*.json --include=*.js | grep -v __pycache__` — enumerate all 34 refs.
+- [x] **Step 2:** `git mv` both folders + files; rename classes + `test_*`; update every code ref from Step 1
   EXCEPT the workflow *record name* `Cong Tac Approval` (a record name, out of scope) — but DO set its
   `document_type` to `Business Trip` (workflow JSON + `ensure_workflow`). Update `custom_business_trip`
   fixture `options`→`Business Trip`.
-- [ ] **Step 3:** Patch `hrms/patches/v15_0/rename_cong_tac_doctypes.py`:
+- [x] **Step 3:** Patch `hrms/patches/v15_0/rename_cong_tac_doctypes.py`:
 
 ```python
 import frappe
@@ -229,9 +229,9 @@ def execute():
 ```
 
 Add under `[pre_model_sync]`: `hrms.patches.v15_0.rename_cong_tac_doctypes #2026-07-15`
-- [ ] **Step 4:** `bench migrate` → app loads; run `test_cong_tac` (path now `business_trip`) + a workflow smoke
+- [x] **Step 4:** `bench migrate` → app loads; run `test_cong_tac` (path now `business_trip`) + a workflow smoke
   (`frappe.db.get_value("Workflow","Cong Tac Approval","document_type") == "Business Trip"`) → GREEN.
-- [ ] **Step 5:** Commit.
+- [x] **Step 5:** Commit.
 
 ---
 
@@ -239,12 +239,12 @@ Add under `[pre_model_sync]`: `hrms.patches.v15_0.rename_cong_tac_doctypes #2026
 
 **Files:** `hrms/translations/vi.csv` (append DocType/report title translations); `tasks/plan-english-naming-standardization.md` (tick).
 
-- [ ] **Step 1:** Append to `hrms/translations/vi.csv` (create if absent) so HR sees VN titles:
+- [x] **Step 1:** Append to `hrms/translations/vi.csv` (create if absent) so HR sees VN titles:
   `Monthly Attendance Sheet,Bảng Công Tháng` · `Monthly Attendance Sheet Detail,Chi tiết Bảng Công Tháng` ·
   `Business Trip,Công Tác` · `Business Trip Traveler,Người đi công tác` · `Monthly Attendance Report,Bảng chấm công tháng`.
   (Verify the file's column format from any existing `apps/*/*/translations/vi.csv`; match it.)
-- [ ] **Step 2:** `bench migrate` + clear cache; full regression sweep (all modules touched across A/B + the renamed ones) → all GREEN.
-- [ ] **Step 3:** Tick boxes; commit docs.
+- [x] **Step 2:** `bench migrate` + clear cache; full regression sweep (all modules touched across A/B + the renamed ones) → all GREEN.
+- [x] **Step 3:** Tick boxes; commit docs.
 
 ---
 
