@@ -86,12 +86,12 @@ PY
   (`category="Việc riêng"`, `work_fraction=0.0`, `is_paid=1`, `maps_to_status="On Leave"`,
   `leave_type="Nghỉ việc riêng"`). Consumed by Tasks 2, 3, 4.
 
-- [ ] **Step 0: Create the test runner**
+- [x] **Step 0: Create the test runner**
 
 Write `scratch/run_test.sh` with the content from "Running tests" above, then `chmod +x` is optional (call
 with `bash`).
 
-- [ ] **Step 1: Extend the fixtures test (failing)**
+- [x] **Step 1: Extend the fixtures test (failing)**
 
 In `test_attendance_code_fixtures.py`, add to `VN_LEAVE_TYPES` (after the `"Nghỉ không lương"` line):
 
@@ -105,12 +105,12 @@ Add to `VN_ATTENDANCE_CODES` (after the `"CT"` line):
 	"N": ("Việc riêng", 0.0, 1, "On Leave", "Nghỉ việc riêng"),  # nghỉ việc riêng có lương (cưới/tang)
 ```
 
-- [ ] **Step 2: Run — verify it fails**
+- [x] **Step 2: Run — verify it fails**
 
 Run: `bash scratch/run_test.sh "hrms.hr.doctype.attendance_code.test_attendance_code_fixtures"`
 Expected: FAIL — `Missing Leave Type: Nghỉ việc riêng` / `Missing Attendance Code: N`.
 
-- [ ] **Step 3: Add the Leave Type fixture**
+- [x] **Step 3: Add the Leave Type fixture**
 
 Append to the array in `hrms/fixtures/leave_type.json` (mirror the existing anchor shape):
 
@@ -148,7 +148,7 @@ Append to the array in `hrms/fixtures/leave_type.json` (mirror the existing anch
 
 (Add a comma after the previous last object's closing brace.)
 
-- [ ] **Step 4: Add the Attendance Code fixture**
+- [x] **Step 4: Add the Attendance Code fixture**
 
 Append to the array in `hrms/fixtures/attendance_code.json`:
 
@@ -171,7 +171,7 @@ Append to the array in `hrms/fixtures/attendance_code.json`:
 
 (Add a comma after the previous last object's closing brace.)
 
-- [ ] **Step 5: Sync the hooks export filter**
+- [x] **Step 5: Sync the hooks export filter**
 
 In `hrms/hooks.py`, inside the `"Leave Type"` filter `"in"` list (after `"Nghỉ không lương",`) add:
 
@@ -179,18 +179,18 @@ In `hrms/hooks.py`, inside the `"Leave Type"` filter `"in"` list (after `"Nghỉ
 					"Nghỉ việc riêng",
 ```
 
-- [ ] **Step 6: Load fixtures onto dev `miyano`**
+- [x] **Step 6: Load fixtures onto dev `miyano`**
 
 Run: `cd /home/miyano/frappe-bench && bench --site miyano migrate`
 Expected: clean migrate; fixtures sync creates Leave Type `Nghỉ việc riêng` + Attendance Code `N`.
 
-- [ ] **Step 7: Run — verify fixtures test passes + hooks/JSON consistency test passes**
+- [x] **Step 7: Run — verify fixtures test passes + hooks/JSON consistency test passes**
 
 Run: `bash scratch/run_test.sh "hrms.hr.doctype.attendance_code.test_attendance_code_fixtures"`
 Run: `bash scratch/run_test.sh "hrms.tests.test_setup_vn_defaults"`
 Expected: both `RESULT: OK`.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add hrms/fixtures/leave_type.json hrms/fixtures/attendance_code.json hrms/hooks.py \
@@ -210,7 +210,7 @@ git commit -m "feat(hr): add code N (nghi viec rieng co luong) + its leave type 
 - Consumes: Attendance Code `"N"` + Leave Type `"Nghỉ việc riêng"` from Task 1. No controller change is
   expected — the generic bridge in `attendance.py:77-114` already maps any full-day On-Leave code.
 
-- [ ] **Step 1: Add bridge tests (forward + reverse) for N**
+- [x] **Step 1: Add bridge tests (forward + reverse) for N**
 
 Append to `class TestAttendanceCodeBridge` in `test_attendance_code_bridge.py`:
 
@@ -229,13 +229,13 @@ Append to `class TestAttendanceCodeBridge` in `test_attendance_code_bridge.py`:
 		self.assertEqual(d.custom_cong, 0)
 ```
 
-- [ ] **Step 2: Run — expected PASS (bridge is generic; no code change)**
+- [x] **Step 2: Run — expected PASS (bridge is generic; no code change)**
 
 Run: `bash scratch/run_test.sh "hrms.hr.doctype.attendance.test_attendance_code_bridge"`
 Expected: `RESULT: OK`. (If it FAILS, the bridge is not resolving the new fixture — stop and inspect
 `_derive_attendance_code_reverse`; do not weaken the test.)
 
-- [ ] **Step 3: Extend the payroll-invariance gate with an N scenario**
+- [x] **Step 3: Extend the payroll-invariance gate with an N scenario**
 
 In `test_attendance_code_payroll_invariance.py`, add to the `SCENARIOS` list (after the `CT` line):
 
@@ -243,13 +243,13 @@ In `test_attendance_code_payroll_invariance.py`, add to the `SCENARIOS` list (af
 	(6, "On Leave", "Nghỉ việc riêng", "N"),  # paid personal leave — no deduction
 ```
 
-- [ ] **Step 4: Run — verify payroll figures identical (native vs code) incl. N**
+- [x] **Step 4: Run — verify payroll figures identical (native vs code) incl. N**
 
 Run: `bash scratch/run_test.sh "hrms.payroll.doctype.salary_slip.test_attendance_code_payroll_invariance"`
 Expected: `RESULT: OK` — `payment_days` / `absent_days` / `leave_without_pay` identical; N (is_lwp=0) adds
 no LWP.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hrms/hr/doctype/attendance/test_attendance_code_bridge.py \
@@ -270,7 +270,7 @@ git commit -m "test(hr): prove code N bridges + stays payroll-neutral (invarianc
 - Produces: display markers — `weekly_off` day → `"-"`, post-`relieving_date` → `"-"`, public holiday →
   `"NL"`; totals include a `"Việc riêng"` category.
 
-- [ ] **Step 1: Write the failing report test**
+- [x] **Step 1: Write the failing report test**
 
 Create/append `test_bang_cham_cong_thang.py` next to the report:
 
@@ -296,12 +296,12 @@ def test_holiday_marker_is_nl():
 	assert MARKER_HOLIDAY == "NL"
 ```
 
-- [ ] **Step 2: Run — verify it fails**
+- [x] **Step 2: Run — verify it fails**
 
 Run: `bash scratch/run_test.sh "hrms.hr.report.bang_cham_cong_thang.test_bang_cham_cong_thang"`
 Expected: FAIL — `MARKER_WEEKLY_OFF == "CN"`, `MARKER_TERMINATED == "N"`.
 
-- [ ] **Step 3: Change the markers**
+- [x] **Step 3: Change the markers**
 
 In `bang_cham_cong_thang.py`, replace lines 27-29:
 
@@ -312,7 +312,7 @@ MARKER_WEEKLY_OFF = "-"  # nghỉ hàng tuần (CN/T7) — HR convention: rest d
 MARKER_HOLIDAY = "NL"  # ngày nghỉ lễ có lương — kept distinct so paid holidays are visible
 ```
 
-- [ ] **Step 4: Add "Việc riêng" to the preferred category order**
+- [x] **Step 4: Add "Việc riêng" to the preferred category order**
 
 In `get_categories`, replace the `preferred` list (line 59):
 
@@ -320,14 +320,14 @@ In `get_categories`, replace the `preferred` list (line 59):
 	preferred = ["Công", "Phép", "Việc riêng", "Ốm", "Thai sản", "Tai nạn LĐ", "Nghỉ bù", "Không lương", "Vắng"]
 ```
 
-- [ ] **Step 5: Run — markers test passes + existing report test still green**
+- [x] **Step 5: Run — markers test passes + existing report test still green**
 
 Run: `bash scratch/run_test.sh "hrms.hr.report.bang_cham_cong_thang.test_bang_cham_cong_thang"`
 Expected: `RESULT: OK`. (If a pre-existing report test asserts a `"CN"` cell or an 8-category count,
 update that expectation to `"-"` / 9 categories in the same commit — the derivation is unchanged, only the
 symbol/category list.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add hrms/hr/report/bang_cham_cong_thang/bang_cham_cong_thang.py \
@@ -350,7 +350,7 @@ git commit -m "feat(hr): bang cham cong — rest day '-', keep 'NL', add 'Viec r
 - Produces: `Bang Cong Thang Detail.viec_rieng` (Float, read-only, precision 2), populated from the
   `"Việc riêng"` category.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `test_bang_cong_thang.py` a test that seeds one `N` Attendance day for an employee, creates the
 sheet, calls `populate_from_attendance()`, and asserts the child row's `viec_rieng == 1.0`. Mirror the
@@ -360,12 +360,12 @@ existing populate test in that file (same setup/company/month); the only new ass
 		self.assertEqual(row.viec_rieng, 1.0)
 ```
 
-- [ ] **Step 2: Run — verify it fails**
+- [x] **Step 2: Run — verify it fails**
 
 Run: `bash scratch/run_test.sh "hrms.hr.doctype.bang_cong_thang.test_bang_cong_thang"`
 Expected: FAIL — `AttributeError: viec_rieng` (field/mapping absent).
 
-- [ ] **Step 3: Add the detail field**
+- [x] **Step 3: Add the detail field**
 
 In `bang_cong_thang_detail.json`, add a field object mirroring the existing `phep` float
 (same properties: `"fieldtype": "Float"`, `"read_only": 1`, `"precision": "2"`), placed after `phep`:
@@ -383,7 +383,7 @@ In `bang_cong_thang_detail.json`, add a field object mirroring the existing `phe
 
 Also add `"viec_rieng"` to the doctype's `field_order` array right after `"phep"`.
 
-- [ ] **Step 4: Add the category→field mapping**
+- [x] **Step 4: Add the category→field mapping**
 
 In `bang_cong_thang.py`, insert into the `category_field` dict (after `"Phép": "phep",`):
 
@@ -391,18 +391,18 @@ In `bang_cong_thang.py`, insert into the `category_field` dict (after `"Phép": 
 			"Việc riêng": "viec_rieng",
 ```
 
-- [ ] **Step 5: Add the print-format column**
+- [x] **Step 5: Add the print-format column**
 
 In `bang_cong_thang.json` print format HTML, add a `Việc riêng` header cell next to `Phép` and a body cell
 `{{ row.viec_rieng or "" }}` in the same position. (Match the surrounding `<th>`/`<td>` markup exactly.)
 
-- [ ] **Step 6: Migrate + run — test passes**
+- [x] **Step 6: Migrate + run — test passes**
 
 Run: `cd /home/miyano/frappe-bench && bench --site miyano migrate` (loads the new field)
 Run: `bash scratch/run_test.sh "hrms.hr.doctype.bang_cong_thang.test_bang_cong_thang"`
 Expected: `RESULT: OK` (incl. the pre-existing parity/payroll-neutral tests in this module).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add hrms/hr/doctype/bang_cong_thang_detail/bang_cong_thang_detail.json \
@@ -424,7 +424,7 @@ git commit -m "feat(hr): bang cong thang — add 'Viec rieng' totals column + pr
 - Produces: `create_vn_holiday_list(year, company, weekly_off_days=("Sunday",), name=None) -> str`
   (returns the Holiday List name). Idempotent; on-demand (never auto-run on migrate).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `hrms/tests/test_setup_vn_holiday.py`:
 
@@ -483,12 +483,12 @@ class TestSetupVNHoliday(FrappeTestCase):
 		self.assertTrue(any(d.weekday() == 6 for d in wo))  # Sunday present
 ```
 
-- [ ] **Step 2: Run — verify it fails**
+- [x] **Step 2: Run — verify it fails**
 
 Run: `bash scratch/run_test.sh "hrms.tests.test_setup_vn_holiday"`
 Expected: FAIL — `ModuleNotFoundError: hrms.setup_vn_holiday`.
 
-- [ ] **Step 3: Implement the generator**
+- [x] **Step 3: Implement the generator**
 
 Create `hrms/setup_vn_holiday.py`:
 
@@ -569,12 +569,12 @@ def create_vn_holiday_list(year, company, weekly_off_days=("Sunday",), name=None
 	return doc.name
 ```
 
-- [ ] **Step 4: Run — generator tests pass**
+- [x] **Step 4: Run — generator tests pass**
 
 Run: `bash scratch/run_test.sh "hrms.tests.test_setup_vn_holiday"`
 Expected: `RESULT: OK` (weekly-off count, solar holidays, idempotency, two-weekly-off-days).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add hrms/setup_vn_holiday.py hrms/tests/test_setup_vn_holiday.py
@@ -592,7 +592,7 @@ git commit -m "feat(hr): on-demand VN Holiday List generator (weekly-off + solar
 
 **Interfaces:** Consumes everything above; no new production code.
 
-- [ ] **Step 1: Add a Company-default resolution test**
+- [x] **Step 1: Add a Company-default resolution test**
 
 Append to `test_setup_vn_holiday.py`:
 
@@ -611,7 +611,7 @@ Append to `test_setup_vn_holiday.py`:
 		self.assertEqual(get_holiday_list_for_employee(emp[0].name, raise_exception=False), name)
 ```
 
-- [ ] **Step 2: Run the full standardization test set via the harness**
+- [x] **Step 2: Run the full standardization test set via the harness**
 
 Run each and confirm `RESULT: OK`:
 ```
@@ -624,7 +624,7 @@ bash scratch/run_test.sh "hrms.tests.test_setup_vn_holiday"
 bash scratch/run_test.sh "hrms.tests.test_setup_vn_defaults"
 ```
 
-- [ ] **Step 3: End-to-end smoke on dev `miyano`**
+- [x] **Step 3: End-to-end smoke on dev `miyano`**
 
 Run the generator + render the report for a month, confirming `-` / `NL` / `N` render:
 ```bash
@@ -635,7 +635,7 @@ bench --site miyano execute hrms.setup_vn_holiday.create_vn_holiday_list \
 Then open the "Bang Cham Cong Thang" report for a month in Desk and visually confirm rest days show `-`,
 holidays show `NL`, and any `N` day shows `N`.
 
-- [ ] **Step 4: Tick the plan + spec success criteria, commit docs**
+- [x] **Step 4: Tick the plan + spec success criteria, commit docs**
 
 Mark the checkboxes in this plan and the `## Success Criteria` in the spec.
 

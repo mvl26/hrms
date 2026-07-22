@@ -67,7 +67,7 @@ Reuse `scratch/run_test.sh` from plan A (writes a `.py` harness, feeds the conso
   `custom_lunch_end` (Time, 13:30:00), `custom_half_day_min_fraction` (Float, 0.5),
   `custom_half_day_grace_minutes` (Int, 15). Consumed by Task 2.
 
-- [ ] **Step 1: Write the failing presence test**
+- [x] **Step 1: Write the failing presence test**
 
 Create `hrms/hr/doctype/attendance/test_vn_half_day_classifier.py`:
 
@@ -94,12 +94,12 @@ class TestVNHalfDayClassifier(FrappeTestCase):
 			)
 ```
 
-- [ ] **Step 2: Run — verify it fails**
+- [x] **Step 2: Run — verify it fails**
 
 Run: `bash scratch/run_test.sh "hrms.hr.doctype.attendance.test_vn_half_day_classifier"`
 Expected: FAIL — `missing Custom Field Shift Type-custom_split_half_day`.
 
-- [ ] **Step 3: Append the 5 Custom Field fixtures**
+- [x] **Step 3: Append the 5 Custom Field fixtures**
 
 Append these 5 objects to the array in `hrms/fixtures/custom_field.json` (before the closing `]`; add a
 comma after the current last object). Full boilerplate for the first; the other four are identical except
@@ -133,7 +133,7 @@ The other four (same boilerplate, only these keys differ):
 | `Shift Type-custom_half_day_min_fraction` | `custom_half_day_min_fraction` | `Float` | `"0.5"` | `custom_lunch_end` | `"eval:doc.custom_split_half_day"` | `Ngưỡng công một buổi` |
 | `Shift Type-custom_half_day_grace_minutes` | `custom_half_day_grace_minutes` | `Int` | `"15"` | `custom_half_day_min_fraction` | `"eval:doc.custom_split_half_day"` | `Ân hạn vào/ra (phút)` |
 
-- [ ] **Step 4: Add the 5 names to the hooks Custom Field filter**
+- [x] **Step 4: Add the 5 names to the hooks Custom Field filter**
 
 In `hrms/hooks.py`, inside the `"Custom Field"` filter `in` list (after `"Expense Claim-custom_business_trip",`):
 
@@ -145,7 +145,7 @@ In `hrms/hooks.py`, inside the `"Custom Field"` filter `in` list (after `"Expens
 					"Shift Type-custom_half_day_grace_minutes",
 ```
 
-- [ ] **Step 5: Migrate + normalize + run**
+- [x] **Step 5: Migrate + normalize + run**
 
 Run: `cd /home/miyano/frappe-bench && bench --site miyano migrate` (imports the fields)
 Run (normalize JSON to canonical form): `bench --site miyano export-fixtures --app hrms`
@@ -156,7 +156,7 @@ Expected: `HARNESS_RESULT: OK`.
 > If `export-fixtures` rewrites unrelated Leave Type / Attendance Code fixtures, `git checkout` those files
 > — stage only `custom_field.json`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add hrms/fixtures/custom_field.json hrms/hooks.py \
@@ -177,7 +177,7 @@ git commit -m "feat(hr): Shift Type split-half-day config fields (lunch window, 
 - Produces: `Attendance.apply_vn_half_day_classifier()` — sets `custom_morning_code`/`custom_afternoon_code`
   (or `custom_attendance_code="V"`) + `working_hours` (net), then the existing bridge derives status/công.
 
-- [ ] **Step 1: Write the failing classifier unit tests**
+- [x] **Step 1: Write the failing classifier unit tests**
 
 Append to `hrms/hr/doctype/attendance/test_vn_half_day_classifier.py`:
 
@@ -274,12 +274,12 @@ class TestVNHalfDayLogic(FrappeTestCase):
 		self.assertEqual(d.leave_type, "Nghỉ phép năm")
 ```
 
-- [ ] **Step 2: Run — verify it fails**
+- [x] **Step 2: Run — verify it fails**
 
 Run: `bash scratch/run_test.sh "hrms.hr.doctype.attendance.test_vn_half_day_classifier"`
 Expected: FAIL — full-day gives no split codes yet (`custom_cong`/`status` not derived from in/out).
 
-- [ ] **Step 3: Add imports to `attendance.py`**
+- [x] **Step 3: Add imports to `attendance.py`**
 
 At the top of `hrms/hr/doctype/attendance/attendance.py`, ensure these imports exist (add what's missing):
 
@@ -289,7 +289,7 @@ from datetime import datetime, timedelta
 from frappe.utils import cint, flt, get_datetime, getdate
 ```
 
-- [ ] **Step 4: Wire the classifier into `before_validate`**
+- [x] **Step 4: Wire the classifier into `before_validate`**
 
 In `attendance.py`, change `before_validate` so the classifier runs BEFORE the bridge:
 
@@ -304,7 +304,7 @@ In `attendance.py`, change `before_validate` so the classifier runs BEFORE the b
 
 (Keep the existing body after the bridge call exactly as it was.)
 
-- [ ] **Step 5: Implement the classifier method**
+- [x] **Step 5: Implement the classifier method**
 
 Add this method to the `Attendance` class in `attendance.py` (place it just above `apply_attendance_code_bridge`):
 
@@ -379,17 +379,17 @@ Add this method to the `Attendance` class in `attendance.py` (place it just abov
 			self.custom_attendance_code = "V"
 ```
 
-- [ ] **Step 6: Run — verify all classifier tests pass**
+- [x] **Step 6: Run — verify all classifier tests pass**
 
 Run: `bash scratch/run_test.sh "hrms.hr.doctype.attendance.test_vn_half_day_classifier"`
 Expected: `HARNESS_RESULT: OK` (full day, morning/afternoon only, early-leave, absent, gated-off, manual-wins).
 
-- [ ] **Step 7: Regression — bridge + shift_type untouched**
+- [x] **Step 7: Regression — bridge + shift_type untouched**
 
 Run: `bash scratch/run_test.sh "hrms.hr.doctype.attendance.test_attendance_code_bridge"` → OK (15).
 Run: `bash scratch/run_test.sh "hrms.hr.doctype.shift_type.test_shift_type"` → OK (29, gated off → unchanged).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add hrms/hr/doctype/attendance/attendance.py \
@@ -407,7 +407,7 @@ git commit -m "feat(hr): auto morning/afternoon classifier (lunch-excluded net h
 **Interfaces:** Consumes the classifier (Task 2). Proves it introduces no payroll delta vs a correct manual
 Half Day for the same worked session.
 
-- [ ] **Step 1: Write the salary-slip-level gate test**
+- [x] **Step 1: Write the salary-slip-level gate test**
 
 Append to `TestAttendanceCodePayrollInvariance` in
 `hrms/payroll/doctype/salary_slip/test_attendance_code_payroll_invariance.py`:
@@ -462,13 +462,13 @@ Append to `TestAttendanceCodePayrollInvariance` in
 		self.assertEqual(ss_class.leave_without_pay, ss_native.leave_without_pay)
 ```
 
-- [ ] **Step 2: Run — verify the gate passes**
+- [x] **Step 2: Run — verify the gate passes**
 
 Run: `bash scratch/run_test.sh "hrms.payroll.doctype.salary_slip.test_attendance_code_payroll_invariance"`
 Expected: `HARNESS_RESULT: OK` (native vs classified Half Day identical). If it FAILS, the classifier's
 native fields diverge from a manual Half Day — fix the classifier, never the assertion.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add hrms/payroll/doctype/salary_slip/test_attendance_code_payroll_invariance.py
@@ -488,7 +488,7 @@ git commit -m "test(hr): gate — classified morning-only Half Day == native Hal
 - Produces: `compute_net_hours(status, in_time, out_time, working_hours, is_split=False)` — when `is_split`,
   returns the stored (already-net) `working_hours` with no lunch subtraction.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create/append `hrms/hr/test_working_hours.py`:
 
@@ -512,12 +512,12 @@ class TestWorkingHoursNet(FrappeTestCase):
 		self.assertEqual(compute_net_hours("Present", i, o, 8.0, is_split=True), 8.0)
 ```
 
-- [ ] **Step 2: Run — verify it fails**
+- [x] **Step 2: Run — verify it fails**
 
 Run: `bash scratch/run_test.sh "hrms.hr.test_working_hours"`
 Expected: FAIL — `compute_net_hours() got an unexpected keyword argument 'is_split'`.
 
-- [ ] **Step 3: Add the `is_split` branch to `compute_net_hours`**
+- [x] **Step 3: Add the `is_split` branch to `compute_net_hours`**
 
 In `hrms/hr/working_hours.py`, replace the `compute_net_hours` signature + body top:
 
@@ -535,7 +535,7 @@ def compute_net_hours(status, in_time, out_time, working_hours, is_split=False):
 
 (Leave the rest of the function — the `gross <= 0` / FULL_DAY / Half Day branches — unchanged.)
 
-- [ ] **Step 4: Pass `is_split` from `get_net_hours_map`**
+- [x] **Step 4: Pass `is_split` from `get_net_hours_map`**
 
 In `get_net_hours_map`, before the row loop add a lookup of split-enabled shifts, and pass the flag:
 
@@ -552,13 +552,13 @@ In `get_net_hours_map`, before the row loop add a lookup of split-enabled shifts
 
 (Replace the existing 3-line body of that loop with the `net = ...` call above; keep the `.setdefault(...)`.)
 
-- [ ] **Step 5: Run — verify pass + working-hours regression**
+- [x] **Step 5: Run — verify pass + working-hours regression**
 
 Run: `bash scratch/run_test.sh "hrms.hr.test_working_hours"` → OK.
 Run any existing working-hours test module if present:
 `bash scratch/run_test.sh "hrms.hr.report.working_hours"` (skip if no test module) — otherwise rely on Step 5's unit test.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add hrms/hr/working_hours.py hrms/hr/test_working_hours.py
@@ -572,7 +572,7 @@ git commit -m "feat(hr): net-hours dashboard uses stored net for split shifts (n
 **Files:**
 - Modify: `tasks/plan-auto-morning-afternoon.md`, `spec/auto-morning-afternoon-attendance.md` (tick criteria)
 
-- [ ] **Step 1: Full regression sweep**
+- [x] **Step 1: Full regression sweep**
 
 Run each → confirm `HARNESS_RESULT: OK`:
 ```
@@ -584,13 +584,13 @@ bash scratch/run_test.sh "hrms.hr.doctype.shift_type.test_shift_type"
 bash scratch/run_test.sh "hrms.hr.report.bang_cham_cong_thang.test_bang_cham_cong_thang"
 ```
 
-- [ ] **Step 2: E2E smoke on a throwaway split shift (rolled back)**
+- [x] **Step 2: E2E smoke on a throwaway split shift (rolled back)**
 
 Via the harness or a manual console session, create a split Shift Type + one Attendance with in 08:00 /
 out 12:00, insert, and confirm `status == "Half Day"`, `custom_morning_code == "X"`,
 `custom_afternoon_code == "V"`, `working_hours == 4.0`. (Do NOT enable the flag on a real prod shift.)
 
-- [ ] **Step 3: Tick criteria + commit docs**
+- [x] **Step 3: Tick criteria + commit docs**
 
 Mark the plan boxes + `## Success Criteria` in the spec. Add a one-line note that **enabling
 `custom_split_half_day` on any real shift + the one-month parallel run is an ask-first, sign-off step**.

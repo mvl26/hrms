@@ -4,6 +4,23 @@ Dữ liệu tạo trên site **`miyano`** (dev). Mở Desk: **http://miyano** (c
 **Tạo lại/reset dữ liệu:** `bench --site miyano execute hrms.demo_data.create_demo_data` (idempotent).
 Tháng demo: **9/2026** (có 01–02/09 Quốc khánh → `NL`; Chủ nhật → `-`).
 
+## Trạng thái kiểm tra (2026-07-22)
+
+Đã đối chiếu dữ liệu thực trên site với từng kịch bản dưới đây — **KB1–KB8 khớp**. Bộ test VN:
+**133/133 xanh** (rollback harness, gồm gate bất biến payroll). Đã chạy E2E `Employee Checkin →
+process_auto_attendance → bộ phân loại sáng/chiều` trên ca "Ca Hành Chính" (savepoint, đã rollback):
+cả ngày → `Present X/X`, chỉ sáng → `Half Day X/V` 4.0h, chỉ chiều → `Half Day V/X` 4.0h, check-in
+được link đúng vào Attendance.
+
+Hai điểm cần biết khi test:
+
+1. **`Ca Hành Chính` đang có `enable_auto_attendance = 0`.** Vì vậy check-in của Hoàng Văn Em (KB8)
+   **chưa** tự sinh Attendance — các bản ghi Attendance trong demo là do script tạo trực tiếp. Muốn test
+   luồng tự động thật, xem KB8 bên dưới. Cờ tách buổi `custom_split_half_day` **đã bật** sẵn trên ca này.
+2. **Bộ test upstream `test_shift_type` báo lỗi trên site này** (27/29) — nguyên nhân là bản ghi `Contact`
+   rác `test_employee_checkin@example.com` còn sót từ lần chạy test cũ, lỗi xảy ra ngay ở bước
+   `make_employee`, **không liên quan code chấm công**. Suite upstream thuộc về CI (`test_site`).
+
 ## Nhân sự demo (công ty Miyano)
 
 | Mã NV | Tên | Vai trò trong demo |
@@ -70,9 +87,24 @@ Bình: work_days 14.5 · maternity_leave 3.0 · absent 2.5. In: Print → **Mont
 **Mong đợi:** giờ net = tổng phủ sáng+chiều (đã loại nghỉ trưa) cho các bản ghi ca tách-buổi; không trừ
 trưa 2 lần.
 
-## Kịch bản 8 — Employee Checkin
+## Kịch bản 8 — Employee Checkin → chấm công tự động
 **Data:** Em có các cặp checkin IN 08:00 / OUT 17:30 ngày 3,4,5,9,10,11. **Xem:** `/app/employee-checkin`
-→ lọc Hoàng Văn Em. (Kèm Attendance tương ứng do classifier tính.)
+→ lọc Hoàng Văn Em. Ở trạng thái mặc định các check-in này **chưa** link sang Attendance
+(`enable_auto_attendance = 0` trên ca) — cột "Attendance" trống.
+
+**Muốn test luồng tự động (tuỳ chọn, chỉ trên dev):** mở `/app/shift-type/Ca Hành Chính` → bật
+**Enable Auto Attendance**, đặt `Process Attendance After = 2026-09-01` và
+`Last Sync of Checkin = 2026-09-30 23:59:59` → Save. Sau đó chạy:
+
+```bash
+bench --site miyano execute hrms.hr.doctype.shift_type.shift_type.process_auto_attendance_for_all_shifts
+```
+
+**Mong đợi:** mỗi ngày có cặp IN/OUT sinh 1 Attendance; ca này bật tách buổi nên bản ghi mang
+`Mã sáng`/`Mã chiều` (`X/X` cả ngày, `X/V` chỉ sáng, `V/X` chỉ chiều), `Giờ làm` đã **loại giờ nghỉ trưa**
+(08:00–17:30 → 8.0h chứ không phải 9.5h), và check-in được gán ngược vào Attendance.
+**Lưu ý:** bật cờ này sẽ khiến job `hourly_long` chấm công tự động định kỳ — trên **prod** đây là bước
+cần ký duyệt (xem `tasks/plan-prod-deploy.md` T4), đừng bật khi chưa chạy song song 1 tháng.
 
 ## Kịch bản 9 — Đặt tên tiếng Anh + hiển thị tiếng Việt
 DocType/field nội bộ **tiếng Anh** (Monthly Attendance Sheet, Business Trip, `work_days`…), **label + tiêu
