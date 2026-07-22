@@ -27,8 +27,10 @@
 - [ ] **T1 [GATE ①]: Chụp baseline payroll trên prod**
   - Acceptance: file CSV/JSON lưu `name, employee, start_date, payment_days, absent_days,
     leave_without_pay, gross_pay, net_pay` của mọi Salary Slip docstatus=1; đếm khớp tổng số slip.
-  - Verify: `bench --site <prod> execute` query đếm + checksum file; lưu kèm backup DB.
-  - Files: script one-off (scratch, không commit vào app).
+  - Chạy: `bench --site <prod> execute hrms.payroll_gate.capture_payroll_baseline --kwargs
+    "{'path': '/tmp/payroll-baseline.json'}"` → in ra số slip + checksum SHA-256; lưu file kèm backup DB.
+  - Verify: sau T2 chạy `hrms.payroll_gate.compare_payroll_baseline` với đúng file đó → `identical=True`.
+  - Files: `hrms/payroll_gate.py` (đã build + test 2026-07-22).
 
 - [ ] **T2 [GATE ②]: Merge & migrate prod** — một lần `bench migrate` chạy trọn: patch rename
   English (Monthly Attendance Sheet / Business Trip / custom_work_credit…), sync fixtures
@@ -73,8 +75,13 @@
   - Acceptance: `custom_split_half_day = 1` + cấu hình trưa/ngưỡng/grace trên đúng 1 Shift Type;
     sau 1 tháng: báo cáo delta payroll (payment_days/absent_days/LWP per slip) so với baseline
     hành vi threshold cũ = **0 khác biệt** do classifier gây ra.
-  - Verify: script so sánh tháng song song; chỉ mở rộng sang các ca khác sau sign-off tiếp.
-  - Files: không.
+  - Verify: `bench --site <prod> execute hrms.payroll_gate.classifier_delta --kwargs
+    "{'year': 2026, 'month': <tháng chạy song song>, 'shift': '<tên ca>'}"` — replay check-in thật của
+    từng ngày qua đúng hàm ngưỡng upstream (`ShiftType.get_attendance`) rồi so `status`/`half_day_status`/
+    `leave_type` với Attendance đang lưu. Chỉ chấp nhận `verdict = "no-delta"`; `"inconclusive"` nghĩa là
+    KHÔNG ngày nào replay được (chấm tay, không có check-in) → chưa kiểm chứng được gì, không phải đạt.
+    Chỉ mở rộng sang các ca khác sau sign-off tiếp.
+  - Files: `hrms/payroll_gate.py` (đã build + test 2026-07-22).
 
 - [ ] **T5 (quyết định vận hành): bật `allow_geolocation_tracking`?** — nếu muốn chặn check-in
   ngoài geofence (server-side hard block). Cân nhắc giới hạn: chỉ check location của Shift
