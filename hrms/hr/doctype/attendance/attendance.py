@@ -46,6 +46,23 @@ class Attendance(Document):
 		if self.half_day_status == "":
 			self.half_day_status = None
 
+	def restore_code_driven_half_day_status(self):
+		"""A half-day *leave* entered via mã công (1/2P, 1/2K, or a worked+leave split like X|P)
+		has no backing Leave Application, so check_leave_record forces half_day_status="Absent".
+		That is wrong here: the worked half IS present and the leave half's pay effect is already
+		carried by leave_type (paid leaves aren't in payroll's LWP map; unpaid ones dock via it).
+		Forcing Absent makes get_half_absent_days dock an extra 0.5 — over-deducting a paid half
+		(1/2P) and double-deducting an unpaid half (1/2K). When a code drove this Half Day and set
+		a leave_type, restore the worked half to Present. NN (no leave_type) is left Absent so it
+		still docks 0.5 exactly like a native Half Day."""
+		code_driven = (
+			self.get("custom_attendance_code")
+			or self.get("custom_morning_code")
+			or self.get("custom_afternoon_code")
+		)
+		if code_driven and self.status == "Half Day" and self.leave_type and not self.leave_application:
+			self.half_day_status = "Present"
+
 	# module-level fallbacks for shifts that enable the split but leave a config field blank
 	VN_DEFAULT_LUNCH_START = timedelta(hours=12)
 	VN_DEFAULT_LUNCH_END = timedelta(hours=13, minutes=30)
@@ -198,6 +215,9 @@ class Attendance(Document):
 		self.validate_overlapping_shift_attendance()
 		self.validate_employee_status()
 		self.check_leave_record()
+		# check_leave_record forces half_day_status="Absent" when no Leave Application backs the day;
+		# undo that for mã-công half-day leaves (the worked half is present). Runs on every save path.
+		self.restore_code_driven_half_day_status()
 
 	def on_cancel(self):
 		self.unlink_attendance_from_checkins()

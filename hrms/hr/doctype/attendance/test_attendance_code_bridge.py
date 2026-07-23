@@ -120,3 +120,58 @@ class TestAttendanceCodeBridge(FrappeTestCase):
 		d = self._bridge(status="On Leave", leave_type="Nghỉ việc riêng")
 		self.assertEqual(d.custom_attendance_code, "N")
 		self.assertEqual(d.custom_work_credit, 0)
+
+
+class TestHalfDayLeaveCodeFullValidation(FrappeTestCase):
+	"""Half-day *leave* codes (1/2P, 1/2K, worked+leave splits) must survive FULL validation.
+
+	The bridge sets half_day_status="Present" (worked half present, other half = leave_type).
+	But check_leave_record runs later in validate() and, finding no matching Leave Application
+	(mã công entry never creates one), used to force half_day_status="Absent" — which under
+	payroll_based_on="Attendance" over-deducts the paid half (1/2P) and double-deducts the
+	unpaid half (1/2K). These tests insert the record so check_leave_record actually runs."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.emp = frappe.get_all("Employee", filters={"status": "Active"}, pluck="name", limit=1)[0]
+		# a far-future date guarantees no duplicate attendance and no approved Leave Application,
+		# so check_leave_record takes its "no leave record found" branch — the F-A path.
+		cls.date = getdate("2099-06-15")
+
+	def _insert(self, **codes):
+		doc = frappe.get_doc(
+			{"doctype": "Attendance", "employee": self.emp, "attendance_date": self.date, **codes}
+		)
+		doc.insert()
+		doc.submit()  # the real mã-công flow submits; check_leave_record runs on submit too
+		return doc
+
+	def test_half_day_annual_leave_code_stays_present(self):
+		# 1/2P: paid half-day leave. Worked half is present -> must NOT be marked Absent.
+		d = self._insert(custom_attendance_code="1/2P")
+		self.assertEqual(d.status, "Half Day")
+		self.assertEqual(d.leave_type, "Nghỉ phép năm")
+		self.assertEqual(d.half_day_status, "Present")
+
+	def test_half_day_unpaid_leave_code_stays_present(self):
+		# 1/2K: unpaid half-day leave. half_day_status Absent would double-count with the LWP leave_type.
+		d = self._insert(custom_attendance_code="1/2K")
+		self.assertEqual(d.status, "Half Day")
+		self.assertEqual(d.leave_type, "Nghỉ không lương")
+		self.assertEqual(d.half_day_status, "Present")
+
+	def test_worked_plus_leave_split_stays_present(self):
+		# sáng X + chiều P: worked morning + annual-leave afternoon.
+		d = self._insert(custom_morning_code="X", custom_afternoon_code="P")
+		self.assertEqual(d.status, "Half Day")
+		self.assertEqual(d.leave_type, "Nghỉ phép năm")
+		self.assertEqual(d.half_day_status, "Present")
+
+	def test_plain_half_day_code_without_leave_still_absent(self):
+		# NN: worked half + unexcused (no leave_type) half -> must stay Absent (docks 0.5, matches native).
+		# Guards that the fix keys on leave_type and does not overpay NN.
+		d = self._insert(custom_attendance_code="NN")
+		self.assertEqual(d.status, "Half Day")
+		self.assertIn(d.leave_type, (None, ""))
+		self.assertEqual(d.half_day_status, "Absent")
