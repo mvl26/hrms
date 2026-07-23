@@ -36,6 +36,113 @@ CATEGORY_UNEXCUSED = "Vắng"
 CATEGORY_HOLIDAY = "Nghỉ lễ"
 
 
+# ── Mã màu bảng công (THUẦN HIỂN THỊ) ────────────────────────────────────────────────────────
+# Một nguồn màu duy nhất: report on-screen (formatter JS) và print format (Jinja) đều suy màu từ đây.
+# Không đụng dữ liệu/status/payroll — chỉ tô nền để trạng thái mỗi ngày đọc được bằng mắt.
+
+# category của Attendance Code → state màu. Mã có work_fraction ∈ (0,1) (1/2P, 1/2K, NN) được
+# xử lý riêng thành "half" TRƯỚC khi tra bảng này, nên ở đây chỉ cần map theo category.
+CATEGORY_STATE = {
+	"Công": "work",
+	"Phép": "leave",
+	"Việc riêng": "leave",  # nghỉ hiếu hỉ có lương — mặc định gộp cùng phép (vàng)
+	"Ốm": "sick",
+	"Thai sản": "sick",
+	"Tai nạn LĐ": "sick",
+	"Nghỉ bù": "comp",
+	"Không lương": "unpaid",
+	"Vắng": "absent",
+	CATEGORY_HOLIDAY: "holiday",  # "Nghỉ lễ" — marker lịch, không phải Attendance Code
+}
+
+# state → nhãn chú giải + màu nền/chữ (cặp cho nền sáng & nền tối của Desk). Thứ tự = thứ tự chú giải.
+STATE_STYLE = {
+	"work": {
+		"label": "Đi làm đủ / công tác",
+		"bg": "#d9efdc",
+		"fg": "#1d6b34",
+		"bg_dark": "#1f3a2a",
+		"fg_dark": "#83dc9d",
+	},
+	"half": {
+		"label": "Làm nửa ngày",
+		"bg": "#e8dcf7",
+		"fg": "#6b3fb0",
+		"bg_dark": "#312145",
+		"fg_dark": "#c6aaf2",
+	},
+	"leave": {
+		"label": "Nghỉ phép / việc riêng",
+		"bg": "#fbedc4",
+		"fg": "#8a6410",
+		"bg_dark": "#3d3416",
+		"fg_dark": "#e8ca6b",
+	},
+	"sick": {
+		"label": "Ốm / thai sản / TNLĐ",
+		"bg": "#fbe0cc",
+		"fg": "#a54e18",
+		"bg_dark": "#3f2a19",
+		"fg_dark": "#f2ac7c",
+	},
+	"absent": {"label": "Vắng", "bg": "#f7d3d3", "fg": "#b32626", "bg_dark": "#3f2020", "fg_dark": "#f28d8d"},
+	"unpaid": {
+		"label": "Nghỉ không lương",
+		"bg": "#ecd7dd",
+		"fg": "#8f3a52",
+		"bg_dark": "#3a2028",
+		"fg_dark": "#e592a6",
+	},
+	"comp": {
+		"label": "Nghỉ bù",
+		"bg": "#cfeae5",
+		"fg": "#187a6d",
+		"bg_dark": "#173430",
+		"fg_dark": "#74d3c5",
+	},
+	"holiday": {
+		"label": "Nghỉ lễ (có lương)",
+		"bg": "#d3e3f7",
+		"fg": "#245fa0",
+		"bg_dark": "#1c2c40",
+		"fg_dark": "#8fbcee",
+	},
+	"off": {
+		"label": "Nghỉ tuần / nghỉ việc",
+		"bg": "#eae8e2",
+		"fg": "#918d84",
+		"bg_dark": "#2a2924",
+		"fg_dark": "#9c988e",
+	},
+}
+
+
+def day_state(symbol: str, code_map: dict) -> str | None:
+	"""State màu của một ô bảng công (thuần hiển thị; màu tra ở STATE_STYLE).
+
+	Ưu tiên: **có phần đi làm nửa buổi → 'half'** (bắt 1/2P, 1/2K, NN và ô ghép có nửa đi làm),
+	rồi tới marker lịch ('-'/'NL'), rồi category của mã. Trả None cho ô trống (không tô)."""
+	if not symbol:
+		return None
+	if symbol == MARKER_WEEKLY_OFF:  # "-" (nghỉ tuần / sau nghỉ việc)
+		return "off"
+	if symbol == MARKER_HOLIDAY:  # "NL"
+		return "holiday"
+	# Mã đơn trước — vài mã (1/2P, 1/2K) tự chứa dấu "/" nên không được coi là ô ghép.
+	c = code_map.get(symbol)
+	if c:
+		if 0 < flt(c.work_fraction) < 1:  # nửa ngày đi làm
+			return "half"
+		return CATEGORY_STATE.get(c.category)
+	if "/" in symbol:  # ô ghép sáng/chiều, vd "X/P"
+		halves = [code_map.get(h) for h in symbol.split("/", 1)]
+		if any(h and 0 < flt(h.work_fraction) for h in halves):
+			return "half"  # có ít nhất một nửa đi làm
+		morning = halves[0]
+		return CATEGORY_STATE.get(morning.category) if morning else None
+	return None
+
+
 def execute(filters: Filters | None = None) -> tuple:
 	filters = frappe._dict(filters or {})
 	if not (filters.month and filters.year):
@@ -64,7 +171,17 @@ def get_code_map() -> dict:
 def get_categories(code_map: dict) -> list[str]:
 	# stable, human order first; then any extra categories present in the data (incl. Nghỉ lễ,
 	# a calendar-derived category not backed by an Attendance Code — always shown, appended last)
-	preferred = ["Công", "Phép", "Việc riêng", "Ốm", "Thai sản", "Tai nạn LĐ", "Nghỉ bù", "Không lương", "Vắng"]
+	preferred = [
+		"Công",
+		"Phép",
+		"Việc riêng",
+		"Ốm",
+		"Thai sản",
+		"Tai nạn LĐ",
+		"Nghỉ bù",
+		"Không lương",
+		"Vắng",
+	]
 	present = {r.category for r in code_map.values() if r.category}
 	present.add(CATEGORY_HOLIDAY)
 	ordered = [c for c in preferred if c in present]
@@ -142,7 +259,11 @@ def get_holidays(employees: list, start, end) -> dict:
 		if hl not in cache:
 			rows = frappe.get_all(
 				"Holiday",
-				filters={"parent": hl, "parenttype": "Holiday List", "holiday_date": ["between", [start, end]]},
+				filters={
+					"parent": hl,
+					"parenttype": "Holiday List",
+					"holiday_date": ["between", [start, end]],
+				},
 				fields=["holiday_date", "weekly_off"],
 			)
 			cache[hl] = {getdate(r.holiday_date).day: cint(r.weekly_off) for r in rows}
@@ -152,13 +273,21 @@ def get_holidays(employees: list, start, end) -> dict:
 
 def get_columns(days: int, categories: list[str]) -> list:
 	columns = [
-		{"fieldname": "employee", "label": _("Mã NV"), "fieldtype": "Link", "options": "Employee", "width": 110},
+		{
+			"fieldname": "employee",
+			"label": _("Mã NV"),
+			"fieldtype": "Link",
+			"options": "Employee",
+			"width": 110,
+		},
 		{"fieldname": "employee_name", "label": _("Nhân viên"), "fieldtype": "Data", "width": 180},
 	]
 	for day in range(1, days + 1):
 		columns.append({"fieldname": f"day_{day}", "label": str(day), "fieldtype": "Data", "width": 45})
 	for idx, cat in enumerate(categories):
-		columns.append({"fieldname": f"cat_{idx}", "label": cat, "fieldtype": "Float", "width": 80, "precision": 2})
+		columns.append(
+			{"fieldname": f"cat_{idx}", "label": cat, "fieldtype": "Float", "width": 80, "precision": 2}
+		)
 	return columns
 
 

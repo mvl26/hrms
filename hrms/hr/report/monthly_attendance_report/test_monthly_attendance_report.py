@@ -129,13 +129,23 @@ class TestBangChamCongThang(FrappeTestCase):
 				"from_date": f"{self.year}-{self.month:02d}-01",
 				"to_date": f"{self.year}-{self.month:02d}-28",
 				"holidays": [
-					{"holiday_date": f"{self.year}-{self.month:02d}-01", "description": "CN", "weekly_off": 1},
-					{"holiday_date": f"{self.year}-{self.month:02d}-02", "description": "Lễ", "weekly_off": 0},
+					{
+						"holiday_date": f"{self.year}-{self.month:02d}-01",
+						"description": "CN",
+						"weekly_off": 1,
+					},
+					{
+						"holiday_date": f"{self.year}-{self.month:02d}-02",
+						"description": "Lễ",
+						"weekly_off": 0,
+					},
 				],
 			}
 		).insert()
 		emp = make_employee("bcct_holidays@codes.com")
-		frappe.db.set_value("Employee", emp, {"holiday_list": hl.name, "relieving_date": None, "status": "Active"})
+		frappe.db.set_value(
+			"Employee", emp, {"holiday_list": hl.name, "relieving_date": None, "status": "Active"}
+		)
 
 		row = self._row(emp)
 		self.assertEqual(row["day_1"], "-")  # weekly off → rest-day dash
@@ -164,9 +174,21 @@ class TestBangChamCongThang(FrappeTestCase):
 				"from_date": f"{self.year}-{self.month:02d}-01",
 				"to_date": f"{self.year}-{self.month:02d}-28",
 				"holidays": [
-					{"holiday_date": f"{self.year}-{self.month:02d}-05", "description": "Lễ", "weekly_off": 0},
-					{"holiday_date": f"{self.year}-{self.month:02d}-06", "description": "Lễ", "weekly_off": 0},
-					{"holiday_date": f"{self.year}-{self.month:02d}-08", "description": "CN", "weekly_off": 1},
+					{
+						"holiday_date": f"{self.year}-{self.month:02d}-05",
+						"description": "Lễ",
+						"weekly_off": 0,
+					},
+					{
+						"holiday_date": f"{self.year}-{self.month:02d}-06",
+						"description": "Lễ",
+						"weekly_off": 0,
+					},
+					{
+						"holiday_date": f"{self.year}-{self.month:02d}-08",
+						"description": "CN",
+						"weekly_off": 1,
+					},
 				],
 			}
 		).insert()
@@ -196,3 +218,99 @@ class TestBangChamCongThang(FrappeTestCase):
 		self.assertEqual(row["day_16"], "-")  # day after relieving → rest-day dash
 		self.assertEqual(row["day_31"], "-")
 		self.assertNotEqual(row.get("day_10"), "-")  # still employed on day 10
+
+
+class TestAttendanceColorState(FrappeTestCase):
+	"""Mã màu hiển thị (thuần trình bày): day_state() phân loại mỗi ô bảng công về một state màu."""
+
+	def _fake_code_map(self):
+		# tách khỏi DB — chỉ cần category + work_fraction để phân loại
+		def c(category, wf):
+			return frappe._dict(category=category, work_fraction=wf)
+
+		return {
+			"X": c("Công", 1.0),
+			"CT": c("Công", 1.0),
+			"NN": c("Công", 0.5),
+			"1/2P": c("Phép", 0.5),
+			"1/2K": c("Không lương", 0.5),
+			"P": c("Phép", 0.0),
+			"Ô": c("Ốm", 0.0),
+			"Cô": c("Ốm", 0.0),
+			"TS": c("Thai sản", 0.0),
+			"T": c("Tai nạn LĐ", 0.0),
+			"NB": c("Nghỉ bù", 0.0),
+			"K": c("Không lương", 0.0),
+			"V": c("Vắng", 0.0),
+			"N": c("Việc riêng", 0.0),
+		}
+
+	def test_day_state_maps_every_code_and_marker(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import day_state
+
+		cm = self._fake_code_map()
+		cases = {
+			# đi làm đủ / công tác → work
+			"X": "work",
+			"CT": "work",
+			# có nửa đi làm → half (bất kể category của mã)
+			"NN": "half",
+			"1/2P": "half",
+			"1/2K": "half",
+			# nghỉ cả ngày → theo category
+			"P": "leave",
+			"N": "leave",  # việc riêng (mặc định gộp phép/vàng)
+			"Ô": "sick",
+			"Cô": "sick",
+			"TS": "sick",
+			"T": "sick",
+			"V": "absent",
+			"K": "unpaid",
+			"NB": "comp",
+			# marker lịch (không phải Attendance Code)
+			"-": "off",
+			"NL": "holiday",
+		}
+		for symbol, expected in cases.items():
+			self.assertEqual(day_state(symbol, cm), expected, f"{symbol} → {expected}")
+
+		# ô trống → không tô
+		self.assertIsNone(day_state("", cm))
+		self.assertIsNone(day_state(None, cm))
+
+	def test_day_state_split_cells(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import day_state
+
+		cm = self._fake_code_map()
+		# ô ghép sáng/chiều: có nửa đi làm → half (dù ở nửa nào)
+		self.assertEqual(day_state("X/P", cm), "half")
+		self.assertEqual(day_state("P/X", cm), "half")
+		self.assertEqual(day_state("X/Ô", cm), "half")
+		# không nửa nào đi làm → theo category nửa sáng
+		self.assertEqual(day_state("Ô/P", cm), "sick")
+		self.assertEqual(day_state("P/Ô", cm), "leave")
+
+	def test_style_map_covers_every_state(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
+			CATEGORY_STATE,
+			STATE_STYLE,
+		)
+
+		# mọi state suy ra được đều có định nghĩa màu (nhãn + nền/chữ, cả sáng & tối)
+		states = set(CATEGORY_STATE.values()) | {"work", "half", "off", "holiday"}
+		for st in states:
+			self.assertIn(st, STATE_STYLE, f"thiếu màu cho state {st}")
+			style = STATE_STYLE[st]
+			for key in ("label", "bg", "fg", "bg_dark", "fg_dark"):
+				self.assertIn(key, style, f"state {st} thiếu {key}")
+
+	def test_every_attendance_code_category_has_a_color(self):
+		# HR thêm Attendance Code category mới mà quên gán màu → test này fail để nhắc bổ sung
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
+			CATEGORY_STATE,
+			get_code_map,
+		)
+
+		cats = {c.category for c in get_code_map().values() if c.category}
+		missing = cats - set(CATEGORY_STATE)
+		self.assertEqual(missing, set(), f"category chưa gán màu: {missing}")
