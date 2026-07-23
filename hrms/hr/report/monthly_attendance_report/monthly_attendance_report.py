@@ -96,8 +96,12 @@ def get_employees(filters: Filters, start, end) -> list:
 
 
 def get_attendances(filters: Filters, start, end) -> dict:
-	"""{employee: {day-of-month: attendance}} for the month."""
-	q = {"attendance_date": ["between", [start, end]], "docstatus": ["<", 2]}
+	"""{employee: {day-of-month: attendance}} for the month.
+
+	Only submitted Attendance (docstatus==1) is counted — the same rows payroll reads. A draft
+	may never be submitted (or gets cancelled), so counting it would let a frozen sheet diverge
+	from the Salary Slip; the upstream Monthly Attendance Sheet report filters the same way."""
+	q = {"attendance_date": ["between", [start, end]], "docstatus": 1}
 	companies = _company_filter(filters)
 	if companies:
 		q["company"] = ["in", companies]

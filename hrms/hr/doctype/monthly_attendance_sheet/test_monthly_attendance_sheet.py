@@ -38,7 +38,7 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 		self._sheet(month="7", year=2097).insert()  # different month -> no duplicate
 
 	def _seed_attendance(self, emp, year, month, day, **codes):
-		frappe.get_doc(
+		att = frappe.get_doc(
 			{
 				"doctype": "Attendance",
 				"employee": emp,
@@ -46,7 +46,9 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 				"attendance_date": f"{year}-{month:02d}-{day:02d}",
 				**codes,
 			}
-		).insert()
+		)
+		att.insert()
+		att.submit()  # snapshot counts only submitted Attendance (matches payroll's docstatus==1)
 
 	def test_populate_snapshots_attendance(self):
 		emp = frappe.db.get_value("Employee", {"company": self.company}, "name")
@@ -87,6 +89,51 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 		self.assertIsNotNone(row, "seeded employee missing from the sheet")
 		self.assertEqual(row.d07, "N")
 		self.assertEqual(row.personal_leave, 1.0)  # full-day personal leave = 1.0
+
+	def test_populate_all_leave_category_columns(self):
+		# every leave/absence category maps to its own totals column — backfills the 5 buckets
+		# (sick/maternity/work-accident/comp-off/unpaid) + absent that no other test exercised.
+		emp = frappe.db.get_value("Employee", {"company": self.company, "status": "Active"}, "name")
+		if not emp:
+			self.skipTest("no active employee in company")
+		Y, M = 2096, 3
+		for day, code in ((3, "Ô"), (4, "TS"), (5, "T"), (6, "NB"), (7, "K"), (8, "V")):
+			self._seed_attendance(emp, Y, M, day, custom_attendance_code=code)
+
+		sheet = self._sheet(month=str(M), year=Y)
+		sheet.insert()
+		sheet.populate_from_attendance()
+
+		row = next((r for r in sheet.employees if r.employee == emp), None)
+		self.assertIsNotNone(row, "seeded employee missing from the sheet")
+		self.assertEqual(row.sick_leave, 1.0)  # Ô
+		self.assertEqual(row.maternity_leave, 1.0)  # TS
+		self.assertEqual(row.work_accident_leave, 1.0)  # T
+		self.assertEqual(row.comp_off, 1.0)  # NB
+		self.assertEqual(row.unpaid_leave, 1.0)  # K
+		self.assertEqual(row.absent, 1.0)  # V
+
+	def test_row_totals_foot_to_attended_days(self):
+		# a fully-resolved attended day contributes exactly 1.0 across the 9 buckets, so the row
+		# sums to the number of attended days — nothing evaporates or is double counted.
+		emp = frappe.db.get_value("Employee", {"company": self.company, "status": "Active"}, "name")
+		if not emp:
+			self.skipTest("no active employee in company")
+		Y, M = 2096, 5
+		for day, code in ((1, "X"), (2, "P"), (3, "NN"), (4, "1/2P")):
+			self._seed_attendance(emp, Y, M, day, custom_attendance_code=code)
+
+		sheet = self._sheet(month=str(M), year=Y)
+		sheet.insert()
+		sheet.populate_from_attendance()
+
+		row = next((r for r in sheet.employees if r.employee == emp), None)
+		self.assertIsNotNone(row, "seeded employee missing from the sheet")
+		fields = (
+			"work_days", "annual_leave", "personal_leave", "sick_leave", "maternity_leave",
+			"work_accident_leave", "comp_off", "unpaid_leave", "absent",
+		)
+		self.assertEqual(sum((row.get(f) or 0) for f in fields), 4.0)  # 4 attended days
 
 	def test_populate_blocked_after_submit(self):
 		sheet = self._sheet(month="9", year=2097)

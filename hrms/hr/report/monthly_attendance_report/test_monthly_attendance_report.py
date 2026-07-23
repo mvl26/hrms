@@ -26,7 +26,20 @@ class TestBangChamCongThang(FrappeTestCase):
 				**codes,
 			}
 		)
-		att.insert()  # draft; bridge fills native fields + display code
+		att.insert()
+		att.submit()  # only submitted Attendance is real timekeeping (matches payroll's docstatus==1)
+		return att
+
+	def _mk_draft(self, day, **codes):
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": getdate(f"{self.year}-{self.month:02d}-{day:02d}"),
+				**codes,
+			}
+		)
+		att.insert()  # left as a draft (docstatus 0)
 		return att
 
 	def _row(self, employee):
@@ -127,6 +140,17 @@ class TestBangChamCongThang(FrappeTestCase):
 		row = self._row(emp)
 		self.assertEqual(row["day_1"], "-")  # weekly off → rest-day dash
 		self.assertEqual(row["day_2"], "NL")  # public holiday → kept distinct (paid)
+
+	def test_draft_attendance_excluded_from_snapshot(self):
+		# a frozen sheet must count only submitted Attendance, like payroll (docstatus==1);
+		# a still-draft day never becomes payroll reality, so it must not appear or count.
+		labels = self._cat_labels()
+		self._mk(20, custom_attendance_code="X")  # submitted
+		self._mk_draft(21, custom_attendance_code="X")  # draft — must be excluded
+		row = self._row(self.emp)
+		self.assertEqual(row["day_20"], "X")
+		self.assertNotEqual(row.get("day_21"), "X")
+		self.assertEqual(row[labels["Công"]], 1.0)  # only the submitted day counts
 
 	def test_absent_day_renders_v(self):
 		labels = self._cat_labels()
