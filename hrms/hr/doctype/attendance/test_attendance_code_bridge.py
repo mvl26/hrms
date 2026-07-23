@@ -106,6 +106,17 @@ class TestAttendanceCodeBridge(FrappeTestCase):
 		self.assertIn(d.leave_type, (None, ""))
 		self.assertEqual(d.custom_work_credit, 0)
 
+	def test_forward_non_half_day_clears_stale_half_day_status(self):
+		# auto-attendance may pre-set half_day_status="Absent" (threshold=Half Day) before the
+		# classifier/bridge reclassify the day; a code resolving to a non-Half-Day status must clear
+		# it, otherwise a Present record carries a stale, contradictory half_day_status.
+		present = self._bridge(custom_attendance_code="X", half_day_status="Absent")
+		self.assertEqual(present.status, "Present")
+		self.assertIsNone(present.half_day_status)
+		on_leave = self._bridge(custom_attendance_code="P", half_day_status="Absent")
+		self.assertEqual(on_leave.status, "On Leave")
+		self.assertIsNone(on_leave.half_day_status)
+
 	def test_reverse_derives_absent_code(self):
 		# an auto-attendance Absent record (checkin thiếu giờ / vắng) -> display code V
 		d = self._bridge(status="Absent")

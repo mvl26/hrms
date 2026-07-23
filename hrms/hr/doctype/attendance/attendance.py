@@ -186,6 +186,10 @@ class Attendance(Document):
 				# a single Half-Day code (NN/1/2P/1/2K): worked half is present, the other half is
 				# leave (if leave_type set) or unpaid absence (NN). Mirrors native Half-Day entry.
 				self.half_day_status = "Present"
+			else:
+				# non-Half-Day status: half_day_status is meaningless -> clear any stale value the
+				# threshold path (auto-attendance) may have pre-set before the code reclassified it.
+				self.half_day_status = None
 		else:
 			# one working half + one non-working half -> Half Day; the non-working half sets leave_type
 			self.status = "Half Day"
