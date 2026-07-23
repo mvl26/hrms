@@ -53,6 +53,20 @@ class TestSetupVNHoliday(FrappeTestCase):
 		self.assertTrue(any(d.weekday() == 5 for d in wo))  # Saturday present
 		self.assertTrue(any(d.weekday() == 6 for d in wo))  # Sunday present
 
+	def test_compensatory_day_when_holiday_falls_on_weekly_off(self):
+		# Điều 112 khoản 3: lễ trùng ngày nghỉ hàng tuần -> nghỉ bù ngày làm việc kế tiếp.
+		# 2022: 01/05 (Quốc tế Lao động) rơi đúng Chủ nhật.
+		name = create_vn_holiday_list(2022, self.company, weekly_off_days=("Sunday",))
+		dates = self._dates(name)
+		self.assertEqual(dates.get(getdate("2022-05-01")), 1)  # 1/5 vẫn là ngày nghỉ hàng tuần (CN)
+		self.assertEqual(dates.get(getdate("2022-05-02")), 0)  # nghỉ bù (ngày lễ) rơi vào thứ Hai kế tiếp
+
+	def test_compensatory_day_is_idempotent(self):
+		name = create_vn_holiday_list(2022, self.company, weekly_off_days=("Sunday",))
+		n1 = len(self._dates(name))
+		create_vn_holiday_list(2022, self.company, weekly_off_days=("Sunday",))
+		self.assertEqual(len(self._dates(name)), n1)  # chạy lại không nhân đôi ngày nghỉ bù
+
 	def test_report_resolves_company_default_list(self):
 		# an employee WITHOUT an explicit holiday_list must resolve the company default,
 		# so the bảng công report can mark '-' on that employee's rest days.

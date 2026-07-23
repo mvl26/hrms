@@ -2,7 +2,9 @@
 
 Creates ONE Holiday List per (company, year) using the stock Holiday List doctype:
   - weekly-off rows (Chủ nhật, optionally + Thứ 7) via the doctype's own get_weekly_off_dates;
-  - the fixed SOLAR public holidays of Điều 112 BLLĐ 2019 (Tết dương, 30/4, 1/5, Quốc khánh ×2).
+  - the fixed SOLAR public holidays of Điều 112 BLLĐ 2019 (Tết dương, 30/4, 1/5, Quốc khánh ×2);
+  - a compensatory day off (nghỉ bù, Điều 112 khoản 3) on the next working day whenever a solar
+    holiday coincides with a weekly-off day.
 
 Tết Âm lịch (5 ngày) + Giỗ Tổ (10/3 âm) shift every year (lunar) → HR enters those by hand.
 Idempotent (re-running never duplicates dates). On-demand only — NOT wired to migrate/install,
@@ -12,6 +14,8 @@ Usage:
   bench --site <s> execute hrms.setup_vn_holiday.create_vn_holiday_list \
         --kwargs "{'year': 2026, 'company': 'Miyano', 'weekly_off_days': ['Sunday']}"
 """
+
+from datetime import timedelta
 
 import frappe
 from frappe import _
@@ -57,15 +61,26 @@ def create_vn_holiday_list(year, company, weekly_off_days=("Sunday",), name=None
 		doc.weekly_off = day
 		doc.get_weekly_off_dates()
 
-	existing = {getdate(h.holiday_date) for h in doc.holidays}
+	weekly_off_dates = {getdate(h.holiday_date) for h in doc.holidays if h.weekly_off}
+	holiday_dates = {getdate(h.holiday_date) for h in doc.holidays if not h.weekly_off}
+	bu_descriptions = {h.description for h in doc.holidays if not h.weekly_off}
 	for mm, dd in SOLAR_HOLIDAYS:
 		d = getdate(f"{year}-{mm:02d}-{dd:02d}")
-		if d not in existing:
-			doc.append(
-				"holidays",
-				{"holiday_date": d, "description": SOLAR_LABELS[(mm, dd)], "weekly_off": 0},
-			)
-			existing.add(d)
+		label = SOLAR_LABELS[(mm, dd)]
+		if d in weekly_off_dates:
+			# lễ trùng ngày nghỉ hàng tuần -> nghỉ bù vào ngày làm việc kế tiếp (Điều 112 khoản 3)
+			bu_label = f"Nghỉ bù {label}"
+			if bu_label in bu_descriptions:
+				continue  # đã có ngày bù cho lễ này -> chạy lại không nhân đôi
+			bu = d + timedelta(days=1)
+			while bu in weekly_off_dates or bu in holiday_dates:
+				bu = bu + timedelta(days=1)  # bỏ qua CN + ngày lễ liền kề
+			doc.append("holidays", {"holiday_date": bu, "description": bu_label, "weekly_off": 0})
+			holiday_dates.add(bu)
+			bu_descriptions.add(bu_label)
+		elif d not in holiday_dates:
+			doc.append("holidays", {"holiday_date": d, "description": label, "weekly_off": 0})
+			holiday_dates.add(d)
 
 	doc.save()  # validate() sorts, counts, and rejects duplicate dates
 	frappe.msgprint(
