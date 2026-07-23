@@ -32,6 +32,9 @@ MARKER_HOLIDAY = "NL"  # ngày nghỉ lễ có lương — kept distinct so paid
 # Loại nhận phần không đi làm của một mã thuộc loại "Công" (mã V cũng thuộc loại này)
 CATEGORY_UNEXCUSED = "Vắng"
 
+# Nghỉ lễ hưởng lương — suy từ Holiday List (không phải Attendance Code), đếm riêng một cột
+CATEGORY_HOLIDAY = "Nghỉ lễ"
+
 
 def execute(filters: Filters | None = None) -> tuple:
 	filters = frappe._dict(filters or {})
@@ -59,9 +62,11 @@ def get_code_map() -> dict:
 
 
 def get_categories(code_map: dict) -> list[str]:
-	# stable, human order first; then any extra categories present in the data
+	# stable, human order first; then any extra categories present in the data (incl. Nghỉ lễ,
+	# a calendar-derived category not backed by an Attendance Code — always shown, appended last)
 	preferred = ["Công", "Phép", "Việc riêng", "Ốm", "Thai sản", "Tai nạn LĐ", "Nghỉ bù", "Không lương", "Vắng"]
 	present = {r.category for r in code_map.values() if r.category}
+	present.add(CATEGORY_HOLIDAY)
 	ordered = [c for c in preferred if c in present]
 	ordered += sorted(present - set(preferred))
 	return ordered
@@ -237,7 +242,12 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 			elif joining and d < joining:
 				continue  # chưa vào làm → để trống
 			elif day in emp_hol:
-				day_syms[day] = MARKER_WEEKLY_OFF if emp_hol[day] else MARKER_HOLIDAY
+				if emp_hol[day]:
+					day_syms[day] = MARKER_WEEKLY_OFF  # nghỉ hàng tuần (CN) — không tính công
+				else:
+					# nghỉ lễ hưởng lương → đếm vào cột "Nghỉ lễ" (nghỉ nhưng vẫn hưởng lương)
+					day_syms[day] = MARKER_HOLIDAY
+					totals[CATEGORY_HOLIDAY] = totals.get(CATEGORY_HOLIDAY, 0.0) + 1.0
 
 		rows.append(
 			{"employee": e.name, "employee_name": e.employee_name, "days": day_syms, "totals": totals}

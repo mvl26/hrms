@@ -152,6 +152,34 @@ class TestBangChamCongThang(FrappeTestCase):
 		self.assertNotEqual(row.get("day_21"), "X")
 		self.assertEqual(row[labels["Công"]], 1.0)  # only the submitted day counts
 
+	def test_public_holiday_counted_in_nghi_le_total(self):
+		# a paid public holiday (NL) must count toward a "Nghỉ lễ" total (nghỉ lễ hưởng lương);
+		# a weekly-off rest day (CN, "-") must NOT count.
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
+
+		hl = frappe.get_doc(
+			{
+				"doctype": "Holiday List",
+				"holiday_list_name": "BCCT NL Test 2099-03",
+				"from_date": f"{self.year}-{self.month:02d}-01",
+				"to_date": f"{self.year}-{self.month:02d}-28",
+				"holidays": [
+					{"holiday_date": f"{self.year}-{self.month:02d}-05", "description": "Lễ", "weekly_off": 0},
+					{"holiday_date": f"{self.year}-{self.month:02d}-06", "description": "Lễ", "weekly_off": 0},
+					{"holiday_date": f"{self.year}-{self.month:02d}-08", "description": "CN", "weekly_off": 1},
+				],
+			}
+		).insert()
+		emp = make_employee("bcct_nghi_le@codes.com")
+		frappe.db.set_value(
+			"Employee", emp, {"holiday_list": hl.name, "relieving_date": None, "status": "Active"}
+		)
+		rows = get_sheet_rows({"month": self.month, "year": self.year})
+		row = next(r for r in rows if r["employee"] == emp)
+		self.assertEqual(row["days"][5], "NL")
+		self.assertEqual(row["days"][8], "-")
+		self.assertEqual(row["totals"].get("Nghỉ lễ"), 2.0)  # 2 paid holidays, weekly-off excluded
+
 	def test_absent_day_renders_v(self):
 		labels = self._cat_labels()
 		self._mk(15, status="Absent")  # ngày vắng (auto-attendance / checkin thiếu giờ), no code

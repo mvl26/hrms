@@ -4,6 +4,8 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from erpnext.setup.doctype.employee.test_employee import make_employee
+
 
 class TestMonthlyAttendanceSheet(FrappeTestCase):
 	@classmethod
@@ -134,6 +136,29 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 			"work_accident_leave", "comp_off", "unpaid_leave", "absent",
 		)
 		self.assertEqual(sum((row.get(f) or 0) for f in fields), 4.0)  # 4 attended days
+
+	def test_public_holiday_populates_nghi_le_column(self):
+		# a paid public holiday must land in the Detail's public_holiday (Nghỉ lễ) column
+		Y, M = 2096, 9
+		hl = frappe.get_doc(
+			{
+				"doctype": "Holiday List",
+				"holiday_list_name": "MAS NL Test 2096-09",
+				"from_date": f"{Y}-{M:02d}-01",
+				"to_date": f"{Y}-{M:02d}-30",
+				"holidays": [{"holiday_date": f"{Y}-{M:02d}-05", "description": "Lễ", "weekly_off": 0}],
+			}
+		).insert()
+		emp = make_employee("mas_nghi_le@codes.com", company=self.company)
+		frappe.db.set_value("Employee", emp, {"holiday_list": hl.name, "relieving_date": None})
+
+		sheet = self._sheet(month=str(M), year=Y)
+		sheet.insert()
+		sheet.populate_from_attendance()
+
+		row = next((r for r in sheet.employees if r.employee == emp), None)
+		self.assertIsNotNone(row, "seeded employee missing from the sheet")
+		self.assertEqual(row.public_holiday, 1.0)
 
 	def test_populate_blocked_after_submit(self):
 		sheet = self._sheet(month="9", year=2097)

@@ -69,6 +69,7 @@ class MonthlyAttendanceSheet(Document):
 			"Nghỉ bù": "comp_off",
 			"Không lương": "unpaid_leave",
 			"Vắng": "absent",
+			"Nghỉ lễ": "public_holiday",
 		}
 
 		self.set("employees", [])
