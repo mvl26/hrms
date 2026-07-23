@@ -150,6 +150,29 @@ def get_color_map() -> dict:
 	return STATE_STYLE
 
 
+def _cell_code_map() -> dict:
+	"""code_map cache trong 1 request — print format gọi cho từng ô nên tránh query lặp lại."""
+	cached = getattr(frappe.local, "_bcct_code_map", None)
+	if cached is None:
+		cached = frappe.local._bcct_code_map = get_code_map()
+	return cached
+
+
+def attendance_cell_style(symbol: str) -> str:
+	"""CSS inline (màu nền bản sáng) cho một ô mã công trên print format. Rỗng nếu không tô.
+	Phơi làm Jinja method qua hooks.py để bản in dùng chung nguồn màu với report."""
+	state = day_state(symbol, _cell_code_map())
+	if not state or state not in STATE_STYLE:
+		return ""
+	s = STATE_STYLE[state]
+	return f"background:{s['bg']};color:{s['fg']};"
+
+
+def attendance_state_styles() -> dict:
+	"""STATE_STYLE cho khối chú giải màu trên print format (Jinja method)."""
+	return STATE_STYLE
+
+
 def execute(filters: Filters | None = None) -> tuple:
 	filters = frappe._dict(filters or {})
 	if not (filters.month and filters.year):

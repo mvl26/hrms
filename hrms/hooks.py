@@ -88,6 +88,9 @@ website_route_rules = [
 jinja = {
 	"methods": [
 		"hrms.utils.get_country",
+		# màu ô + chú giải cho print format bảng chấm công (thuần hiển thị)
+		"hrms.hr.report.monthly_attendance_report.monthly_attendance_report.attendance_cell_style",
+		"hrms.hr.report.monthly_attendance_report.monthly_attendance_report.attendance_state_styles",
 	],
 }
 

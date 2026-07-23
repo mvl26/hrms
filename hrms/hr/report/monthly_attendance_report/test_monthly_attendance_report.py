@@ -342,3 +342,26 @@ class TestAttendanceColorState(FrappeTestCase):
 			self.assertIn(st, cmap)
 			for key in ("label", "bg", "fg", "bg_dark", "fg_dark"):
 				self.assertIn(key, cmap[st])
+
+	def test_attendance_cell_style_for_print(self):
+		# Jinja method cho bản in: trả style nền (bản sáng) theo mã; ô trống/không rõ → rỗng
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
+			STATE_STYLE,
+			attendance_cell_style,
+		)
+
+		self.assertIn(STATE_STYLE["half"]["bg"], attendance_cell_style("1/2P"))
+		self.assertIn(STATE_STYLE["work"]["bg"], attendance_cell_style("X"))
+		self.assertIn(STATE_STYLE["off"]["bg"], attendance_cell_style("-"))
+		self.assertIn(STATE_STYLE["holiday"]["bg"], attendance_cell_style("NL"))
+		self.assertEqual(attendance_cell_style(""), "")
+		self.assertEqual(attendance_cell_style("khong-phai-ma"), "")
+
+	def test_attendance_state_styles_for_legend(self):
+		# Jinja method cho chú giải màu trên bản in
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
+			STATE_STYLE,
+			attendance_state_styles,
+		)
+
+		self.assertEqual(attendance_state_styles(), STATE_STYLE)
