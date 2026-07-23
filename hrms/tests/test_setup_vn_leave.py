@@ -39,6 +39,27 @@ class TestAnnualLeaveEarnedFixture(FrappeTestCase):
 			if name != ANNUAL_LEAVE:
 				self.assertEqual(row["is_earned_leave"], 0, f"{name} must not become earned leave")
 
+	def test_fixture_is_lwp_truth_table(self):
+		# is_lwp / is_ppl are the ONLY Leave Type levers payroll reads (they build the LWP map that
+		# docks payment_days). Lock every type's value so an accidental flip — e.g. making Nghỉ ốm
+		# unpaid, or clearing Nghỉ không lương — is caught here instead of on a Salary Slip.
+		expected = {
+			# leave type: (is_lwp, is_ppl)
+			"Nghỉ phép năm": (0, 0),
+			"Nghỉ ốm": (0, 0),
+			"Nghỉ chăm con ốm": (0, 0),
+			"Nghỉ thai sản": (0, 0),
+			"Nghỉ tai nạn lao động": (0, 0),
+			"Nghỉ bù": (0, 0),
+			"Nghỉ việc riêng": (0, 0),
+			"Nghỉ không lương": (1, 0),
+		}
+		types = load_fixture_types()
+		self.assertEqual(set(types), set(expected), "the set of VN leave types changed — update the table")
+		for name, (lwp, ppl) in expected.items():
+			self.assertEqual(types[name].get("is_lwp", 0), lwp, f"{name}: is_lwp must be {lwp}")
+			self.assertEqual(types[name].get("is_ppl", 0), ppl, f"{name}: is_ppl must be {ppl}")
+
 	def test_fixture_matches_leave_type_meta(self):
 		# the fixture keys must be real Leave Type fields so `bench migrate` can apply them
 		# (applying to the live site is the deploy step — sign-off gated, run manually)

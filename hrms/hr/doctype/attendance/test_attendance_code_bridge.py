@@ -78,6 +78,27 @@ class TestAttendanceCodeBridge(FrappeTestCase):
 		self.assertEqual(d.leave_type, "Nghỉ tai nạn lao động")
 		self.assertEqual(d.custom_work_credit, 0)
 
+	def test_forward_child_sick_leave(self):
+		# Cô = nghỉ chăm con ốm -> On Leave, leave_type Nghỉ chăm con ốm, no worked công
+		d = self._bridge(custom_attendance_code="Cô")
+		self.assertEqual(d.status, "On Leave")
+		self.assertEqual(d.leave_type, "Nghỉ chăm con ốm")
+		self.assertEqual(d.custom_work_credit, 0)
+
+	def test_forward_maternity_leave(self):
+		# TS = nghỉ thai sản -> On Leave, leave_type Nghỉ thai sản, no worked công
+		d = self._bridge(custom_attendance_code="TS")
+		self.assertEqual(d.status, "On Leave")
+		self.assertEqual(d.leave_type, "Nghỉ thai sản")
+		self.assertEqual(d.custom_work_credit, 0)
+
+	def test_forward_comp_off_leave(self):
+		# NB = nghỉ bù -> On Leave, leave_type Nghỉ bù, no worked công
+		d = self._bridge(custom_attendance_code="NB")
+		self.assertEqual(d.status, "On Leave")
+		self.assertEqual(d.leave_type, "Nghỉ bù")
+		self.assertEqual(d.custom_work_credit, 0)
+
 	def test_forward_unexplained_absence(self):
 		# V = vắng không lý do -> native Absent, no leave, không công
 		d = self._bridge(custom_attendance_code="V")
