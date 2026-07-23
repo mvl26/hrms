@@ -2,6 +2,11 @@
 
 Spec: `spec/attendance-sheet-color-coding.md` (APPROVED 2026-07-23). Nhánh: `feat/skip-attendance-diag`.
 
+> **STATUS: BUILT (2026-07-24).** 3 task xong theo TDD — commits `3b1e388` (Task 1), `f24fd9e`
+> (Task 2), `be34546` (Task 3). 19 test xanh qua harness rollback; E2E đọc thật xanh (report:
+> 1 NV tháng 9/2026 phủ đủ 9 state; bản in doc BCT-2026-00002: 138 ô có nền màu + chú giải).
+> **Chưa deploy lên site đang chạy** (cần restart/clear-cache + reload print format → cổng ask-first).
+
 ## Overview
 
 Thêm mã màu nền cho từng ô mã công ở **hai chỗ hiển thị**: report "Monthly Attendance Report" (xem
