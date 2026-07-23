@@ -143,6 +143,13 @@ def day_state(symbol: str, code_map: dict) -> str | None:
 	return None
 
 
+@frappe.whitelist()
+def get_color_map() -> dict:
+	"""Bảng màu {state → {label, bg, fg, bg_dark, fg_dark}} cho formatter JS của report.
+	Thuần hiển thị; JS chỉ tra màu theo state đã tính sẵn ở server (`_state_<day>`)."""
+	return STATE_STYLE
+
+
 def execute(filters: Filters | None = None) -> tuple:
 	filters = frappe._dict(filters or {})
 	if not (filters.month and filters.year):
@@ -151,11 +158,12 @@ def execute(filters: Filters | None = None) -> tuple:
 	year, month = cint(filters.year), cint(filters.month)
 	days = monthrange(year, month)[1]
 
-	categories = get_categories(get_code_map())
+	code_map = get_code_map()
+	categories = get_categories(code_map)
 	rows = get_sheet_rows(filters)
 
 	columns = get_columns(days, categories)
-	data = _rows_to_report_data(rows, days, categories)
+	data = _rows_to_report_data(rows, days, categories, code_map)
 	return columns, data
 
 
@@ -384,8 +392,11 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 	return rows
 
 
-def _rows_to_report_data(rows: list[dict], days: int, categories: list[str]) -> list:
-	"""Map the shared semantic rows onto this report's flat column layout (day_N / cat_i)."""
+def _rows_to_report_data(rows: list[dict], days: int, categories: list[str], code_map: dict) -> list:
+	"""Map the shared semantic rows onto this report's flat column layout (day_N / cat_i).
+
+	Also stashes a hidden ``_state_<day>`` (màu state, thuần hiển thị) per day for the JS formatter —
+	not a rendered column, just metadata carried on the row so classification stays in Python."""
 	cat_index = {cat: idx for idx, cat in enumerate(categories)}
 	data = []
 	for r in rows:
@@ -396,6 +407,9 @@ def _rows_to_report_data(rows: list[dict], days: int, categories: list[str]) -> 
 		}
 		for day, sym in r["days"].items():
 			row[f"day_{day}"] = sym
+			state = day_state(sym, code_map)
+			if state:
+				row[f"_state_{day}"] = state
 		for cat, val in r["totals"].items():
 			if cat in cat_index:
 				row[f"cat_{cat_index[cat]}"] = flt(val)

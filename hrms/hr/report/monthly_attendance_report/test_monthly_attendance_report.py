@@ -219,6 +219,24 @@ class TestBangChamCongThang(FrappeTestCase):
 		self.assertEqual(row["day_31"], "-")
 		self.assertNotEqual(row.get("day_10"), "-")  # still employed on day 10
 
+	def test_execute_rows_carry_color_state(self):
+		# report row mang sẵn "_state_<day>" cho formatter JS tô nền (logic phân loại ở Python)
+		self._mk(5, custom_attendance_code="X")
+		self._mk(6, custom_attendance_code="1/2P")
+		self._mk(7, status="Absent")  # → V
+		row = self._row(self.emp)
+		self.assertEqual(row["_state_5"], "work")
+		self.assertEqual(row["_state_6"], "half")
+		self.assertEqual(row["_state_7"], "absent")
+
+	def test_color_state_columns_not_rendered(self):
+		# "_state_*" chỉ là metadata cho formatter — KHÔNG được thành cột hiển thị
+		columns, _ = execute({"month": self.month, "year": self.year})
+		fieldnames = {c["fieldname"] for c in columns}
+		self.assertFalse(
+			any(fn.startswith("_state_") for fn in fieldnames), "state màu không được lộ thành cột"
+		)
+
 
 class TestAttendanceColorState(FrappeTestCase):
 	"""Mã màu hiển thị (thuần trình bày): day_state() phân loại mỗi ô bảng công về một state màu."""
@@ -314,3 +332,13 @@ class TestAttendanceColorState(FrappeTestCase):
 		cats = {c.category for c in get_code_map().values() if c.category}
 		missing = cats - set(CATEGORY_STATE)
 		self.assertEqual(missing, set(), f"category chưa gán màu: {missing}")
+
+	def test_get_color_map_returns_full_palette(self):
+		# endpoint cho formatter JS: mọi state có đủ nhãn + cặp màu sáng/tối
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_color_map
+
+		cmap = get_color_map()
+		for st in ("work", "half", "leave", "sick", "absent", "unpaid", "comp", "holiday", "off"):
+			self.assertIn(st, cmap)
+			for key in ("label", "bg", "fg", "bg_dark", "fg_dark"):
+				self.assertIn(key, cmap[st])

@@ -46,6 +46,13 @@ frappe.query_reports["Monthly Attendance Report"] = {
 	],
 
 	onload: function (report) {
+		// bảng màu do server định nghĩa (một nguồn duy nhất) — formatter chỉ tra, không tự phân loại
+		frappe.call({
+			method: "hrms.hr.report.monthly_attendance_report.monthly_attendance_report.get_color_map",
+			callback: function (r) {
+				frappe.query_reports["Monthly Attendance Report"]._state_styles = r.message || {};
+			},
+		});
 		return frappe.call({
 			method: "hrms.hr.report.monthly_attendance_sheet.monthly_attendance_sheet.get_attendance_years",
 			callback: function (r) {
@@ -57,4 +64,32 @@ frappe.query_reports["Monthly Attendance Report"] = {
 			},
 		});
 	},
+
+	// Tô nền mỗi ô mã công theo state màu server đã tính sẵn (`_state_<day>`). Thuần hiển thị.
+	formatter: function (value, row, column, data, default_formatter) {
+		const html = default_formatter(value, row, column, data);
+		const fieldname = (column && column.fieldname) || "";
+		if (!fieldname.startsWith("day_")) return html;
+
+		const day = fieldname.slice(4);
+		const state = data && data["_state_" + day];
+		const styles = frappe.query_reports["Monthly Attendance Report"]._state_styles;
+		if (!state || !styles || !styles[state]) return html;
+
+		const s = styles[state];
+		const dark = is_dark_theme();
+		const bg = dark ? s.bg_dark : s.bg;
+		const fg = dark ? s.fg_dark : s.fg;
+		const text = value == null ? "" : frappe.utils.escape_html(String(value));
+		// negative margin để nền phủ kín ô (bù padding mặc định của datatable)
+		return `<div style="background:${bg};color:${fg};font-weight:600;margin:-5px -8px;padding:5px 8px;text-align:center;">${text}</div>`;
+	},
 };
+
+function is_dark_theme() {
+	const t = document.documentElement.getAttribute("data-theme");
+	if (t === "dark") return true;
+	if (t === "light") return false;
+	// "automatic" hoặc không đặt → theo thiết lập hệ điều hành
+	return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+}
