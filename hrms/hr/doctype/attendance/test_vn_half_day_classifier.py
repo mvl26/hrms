@@ -25,7 +25,7 @@ class TestVNHalfDayLogic(FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.emp = frappe.db.get_value("Employee", {}, "name")
+		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
 		cls.shift = "VN Split 08-1730 (test)"
 		if not frappe.db.exists("Shift Type", cls.shift):
 			frappe.get_doc(

@@ -13,7 +13,7 @@ class TestBusinessTrip(FrappeTestCase):
 	def setUpClass(cls):
 		super().setUpClass()
 		ensure_workflow()  # idempotent — role COO + workflow
-		cls.emp = frappe.db.get_value("Employee", {}, "name")
+		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
 		cls.user = frappe.session.user
 
 	def setUp(self):

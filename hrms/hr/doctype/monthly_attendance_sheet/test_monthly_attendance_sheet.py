@@ -53,7 +53,7 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 		att.submit()  # snapshot counts only submitted Attendance (matches payroll's docstatus==1)
 
 	def test_populate_snapshots_attendance(self):
-		emp = frappe.db.get_value("Employee", {"company": self.company}, "name")
+		emp = frappe.db.get_value("Employee", {"company": self.company, "status": "Active"}, "name")
 		if not emp:
 			self.skipTest("no employee in company")
 		Y, M = 2097, 8
@@ -77,7 +77,7 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 
 	def test_populate_personal_leave_total(self):
 		# code N (nghỉ việc riêng có lương) must land in the personal_leave totals column
-		emp = frappe.db.get_value("Employee", {"company": self.company}, "name")
+		emp = frappe.db.get_value("Employee", {"company": self.company, "status": "Active"}, "name")
 		if not emp:
 			self.skipTest("no employee in company")
 		Y, M = 2097, 2
@@ -168,7 +168,7 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 
 	def test_sheet_is_payroll_neutral_never_writes_attendance(self):
 		# creating + populating + submitting the sheet must not create or modify ANY Attendance
-		emp = frappe.db.get_value("Employee", {"company": self.company}, "name")
+		emp = frappe.db.get_value("Employee", {"company": self.company, "status": "Active"}, "name")
 		if not emp:
 			self.skipTest("no employee in company")
 		Y, M = 2097, 10
@@ -203,7 +203,7 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 		self.assertEqual(sheet.docstatus, 2)
 
 	def test_print_format_renders(self):
-		emp = frappe.db.get_value("Employee", {"company": self.company}, "name")
+		emp = frappe.db.get_value("Employee", {"company": self.company, "status": "Active"}, "name")
 		if not emp:
 			self.skipTest("no employee in company")
 		Y, M = 2097, 12

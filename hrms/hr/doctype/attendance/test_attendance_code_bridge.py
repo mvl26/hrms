@@ -13,7 +13,7 @@ class TestAttendanceCodeBridge(FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.emp = frappe.db.get_value("Employee", {}, "name")
+		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
 
 	def _bridge(self, **codes):
 		doc = frappe.get_doc(

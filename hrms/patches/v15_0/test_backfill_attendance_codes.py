@@ -14,7 +14,7 @@ class TestBackfillAttendanceCodes(FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.emp = frappe.db.get_value("Employee", {}, "name")
+		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
 
 	def _bare(self, day, status, leave_type=None, half_day_status=None):
 		"""Insert an attendance then strip its code fields, simulating a pre-feature record."""

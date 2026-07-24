@@ -14,7 +14,7 @@ class TestBangChamCongThang(FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.emp = frappe.db.get_value("Employee", {}, "name")
+		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
 		cls.year, cls.month = 2099, 3  # far future to avoid colliding with any real/test data
 
 	def _mk(self, day, **codes):
