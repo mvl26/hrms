@@ -198,6 +198,11 @@ doc_events = {
 	"Timesheet": {"validate": "hrms.hr.utils.validate_active_employee"},
 	# Miyano: lương NET gross-up theo công thức MVL — chạy sau calculate_net_pay của controller.
 	"Salary Slip": {"validate": "hrms.vn_payroll.salary_slip_hook.apply_mvl"},
+	# Miyano: gộp một quỹ phép năm — validate mã lý do; sau duyệt ghi mã lên Attendance (thuần hiển thị).
+	"Leave Application": {
+		"validate": "hrms.hr.doctype.leave_application.leave_single_pool.validate_pool_code",
+		"on_submit": "hrms.hr.doctype.leave_application.leave_single_pool.set_leave_attendance_code",
+	},
 	"Payment Entry": {
 		"on_submit": "hrms.hr.doctype.expense_claim.expense_claim.update_payment_for_expense_claim",
 		"on_cancel": "hrms.hr.doctype.expense_claim.expense_claim.update_payment_for_expense_claim",
@@ -419,6 +424,7 @@ fixtures = [
 					"Attendance-custom_morning_code",
 					"Attendance-custom_afternoon_code",
 					"Attendance-custom_work_credit",
+					"Leave Application-custom_attendance_code",
 					"Expense Claim-custom_business_trip",
 					"Shift Type-custom_split_half_day",
 					"Shift Type-custom_lunch_start",

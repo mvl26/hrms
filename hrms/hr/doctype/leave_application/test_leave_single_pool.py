@@ -50,16 +50,44 @@ class TestLeaveSinglePool(FrappeTestCase):
 		la.submit()
 		return la
 
-	def test_annual_leave_app_creates_P_attendance(self):
-		self._alloc("Nghỉ phép năm", 12)
-		la = self._leave_app("Nghỉ phép năm", f"{self.year}-03-05", f"{self.year}-03-05")
-		att = frappe.db.get_value(
+	def _att(self, la):
+		return frappe.db.get_value(
 			"Attendance",
 			{"leave_application": la.name},
 			["status", "leave_type", "custom_attendance_code"],
 			as_dict=True,
 		)
+
+	def test_annual_leave_app_creates_P_attendance(self):
+		self._alloc("Nghỉ phép năm", 12)
+		la = self._leave_app("Nghỉ phép năm", f"{self.year}-03-05", f"{self.year}-03-05", code="P")
+		att = self._att(la)
 		self.assertIsNotNone(att, "đơn duyệt phải sinh Attendance")
 		self.assertEqual(att.status, "On Leave")
 		self.assertEqual(att.leave_type, "Nghỉ phép năm")
-		self.assertEqual(att.custom_attendance_code, "P")  # bridge reverse-derive
+		self.assertEqual(att.custom_attendance_code, "P")
+
+	def test_sick_leave_from_annual_pool_shows_O_but_deducts_pool(self):
+		# Ốm nộp qua quỹ phép năm: Attendance hiện "Ô" (bảng công), nhưng leave_type là quỹ chung
+		# và status không đổi (payroll-neutral).
+		self._alloc("Nghỉ phép năm", 12)
+		la = self._leave_app("Nghỉ phép năm", f"{self.year}-03-06", f"{self.year}-03-06", code="Ô")
+		att = self._att(la)
+		self.assertEqual(att.custom_attendance_code, "Ô")  # hiện riêng trên bảng công
+		self.assertEqual(att.leave_type, "Nghỉ phép năm")  # rút một quỹ
+		self.assertEqual(att.status, "On Leave")  # lương không đổi
+
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
+
+		row = next(r for r in get_sheet_rows({"month": 3, "year": self.year}) if r["employee"] == self.emp)
+		self.assertEqual(row["days"][6], "Ô")
+		self.assertGreaterEqual(row["totals"].get("Ốm", 0), 1.0)
+
+	def test_annual_pool_requires_valid_reason_code(self):
+		self._alloc("Nghỉ phép năm", 12)
+		with self.assertRaises(frappe.ValidationError):
+			self._leave_app("Nghỉ phép năm", f"{self.year}-03-07", f"{self.year}-03-07")  # thiếu mã
+		with self.assertRaises(frappe.ValidationError):
+			self._leave_app(
+				"Nghỉ phép năm", f"{self.year}-03-08", f"{self.year}-03-08", code="TS"
+			)  # sai nhóm
