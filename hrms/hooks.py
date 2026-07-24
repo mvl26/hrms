@@ -103,6 +103,9 @@ after_migrate = [
 	"hrms.setup.update_select_perm_after_install",
 	# Fork defaults: self-heal Công Tác workflow + COO role and verify fixture master data every migrate.
 	"hrms.setup_vn_defaults.ensure_defaults",
+	# MVL payroll: đóng gói cấu hình lương (component + structure + custom fields + tham số) vào app,
+	# self-heal mỗi migrate, không ghi đè giá trị HR đã sửa.
+	"hrms.vn_payroll.setup_mvl.ensure_mvl_defaults",
 ]
 
 setup_wizard_complete = "hrms.subscription_utils.update_erpnext_access"
