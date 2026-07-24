@@ -70,6 +70,12 @@ def create_vn_holiday_list(year, company, weekly_off_days=("Sunday",), name=None
 	holiday_dates = {getdate(h.holiday_date) for h in doc.holidays if not h.weekly_off}
 	bu_descriptions = {h.description for h in doc.holidays if not h.weekly_off}
 
+	# Mọi ngày lễ của năm, biết TRƯỚC khi đi tìm ngày bù. Nếu chỉ tránh `holiday_dates` (các ngày
+	# đã thêm) thì ngày bù của một lễ xử lý sớm sẽ rơi trúng một lễ chưa tới lượt và nuốt mất nó:
+	# vd 30/4/2028 rơi Chủ nhật -> ngày bù nhảy vào đúng 1/5, và Quốc tế Lao động biến mất.
+	scheduled_holidays = {getdate(f"{year}-{mm:02d}-{dd:02d}") for mm, dd in SOLAR_HOLIDAYS}
+	scheduled_holidays |= {getdate(ds) for ds in (extra_holidays or {})}
+
 	def add_public_holiday(d, label):
 		"""Một ngày nghỉ lễ; nếu trùng ngày nghỉ hàng tuần thì sinh nghỉ bù (Điều 112 khoản 3)."""
 		if d in weekly_off_dates:
@@ -77,8 +83,9 @@ def create_vn_holiday_list(year, company, weekly_off_days=("Sunday",), name=None
 			if bu_label in bu_descriptions:
 				return  # đã có ngày bù cho lễ này -> chạy lại không nhân đôi
 			bu = d + timedelta(days=1)
-			while bu in weekly_off_dates or bu in holiday_dates:
-				bu = bu + timedelta(days=1)  # bỏ qua ngày nghỉ tuần + ngày lễ liền kề
+			# bỏ qua ngày nghỉ tuần + mọi ngày lễ khác (kể cả lễ chưa được thêm vào doc)
+			while bu in weekly_off_dates or bu in holiday_dates or bu in scheduled_holidays:
+				bu = bu + timedelta(days=1)
 			doc.append("holidays", {"holiday_date": bu, "description": bu_label, "weekly_off": 0})
 			holiday_dates.add(bu)
 			bu_descriptions.add(bu_label)

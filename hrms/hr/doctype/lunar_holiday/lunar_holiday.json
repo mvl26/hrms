@@ -1,0 +1,50 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-24 10:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "year",
+  "holiday_date",
+  "description"
+ ],
+ "fields": [
+  {
+   "columns": 1,
+   "fieldname": "year",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Năm",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "holiday_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Ngày (dương lịch)",
+   "reqd": 1
+  },
+  {
+   "columns": 5,
+   "fieldname": "description",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tên ngày lễ",
+   "reqd": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-24 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "HR",
+ "name": "Lunar Holiday",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
