@@ -168,6 +168,11 @@ doc_events = {
 	"Expense Claim": {
 		"after_insert": "hrms.hr.doctype.business_trip.business_trip.link_claim_to_trip",
 	},
+	# Miyano: xin đi công tác phải qua Công Tác (có duyệt COO); Attendance Request submit thẳng
+	# ra Attendance nên bị khoá — xem block_attendance_request().
+	"Attendance Request": {
+		"before_insert": "hrms.hr.doctype.business_trip.business_trip.block_attendance_request",
+	},
 	"User": {
 		"validate": [
 			"erpnext.setup.doctype.employee.employee.validate_employee_role",

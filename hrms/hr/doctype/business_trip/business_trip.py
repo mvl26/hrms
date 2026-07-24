@@ -58,16 +58,25 @@ class BusinessTrip(Document):
 			return
 		if frappe.get_all(
 			"ToDo",
-			filters={"reference_type": "Business Trip", "reference_name": self.name, "allocated_to": user, "status": "Open"},
+			filters={
+				"reference_type": "Business Trip",
+				"reference_name": self.name,
+				"allocated_to": user,
+				"status": "Open",
+			},
 			limit=1,
 		):
 			return  # already assigned — don't duplicate
 		from frappe.desk.form.assign_to import add as assign_add
 
-		assign_add({"assign_to": [user], "doctype": "Business Trip", "name": self.name, "description": description})
+		assign_add(
+			{"assign_to": [user], "doctype": "Business Trip", "name": self.name, "description": description}
+		)
 
 	def hr_manager_users(self):
-		users = frappe.get_all("Has Role", filters={"role": "HR Manager", "parenttype": "User"}, pluck="parent")
+		users = frappe.get_all(
+			"Has Role", filters={"role": "HR Manager", "parenttype": "User"}, pluck="parent"
+		)
 		return [u for u in set(users) if frappe.db.get_value("User", u, "enabled")]
 
 	def employee_user(self, employee):
@@ -147,8 +156,27 @@ def link_claim_to_trip(doc, method=None):
 	trip = doc.get("custom_business_trip")
 	if not trip or not doc.get("employee"):
 		return
-	row = frappe.db.get_value(
-		"Business Trip Traveler", {"parent": trip, "employee": doc.employee}, "name"
-	)
+	row = frappe.db.get_value("Business Trip Traveler", {"parent": trip, "employee": doc.employee}, "name")
 	if row:
 		frappe.db.set_value("Business Trip Traveler", row, "expense_claim", doc.name, update_modified=False)
+
+
+def block_attendance_request(doc, method=None):
+	"""Attendance Request hook: Miyano chỉ xin đi công tác qua Công Tác (Business Trip).
+
+	Attendance Request không có field người duyệt, không workflow và không gửi thông báo — submit
+	là ghi thẳng ra Attendance — nên dùng nó là đi vòng qua bước duyệt COO của Công Tác. Chặn ở
+	`before_insert` để có tác dụng ở mọi kênh (Desk, PWA nhân viên, API).
+
+	Tha khi `frappe.flags.in_test`: hành vi của Attendance Request đã có 10 test upstream, chặn
+	cứng sẽ phá chúng (CLAUDE.md — không fork hành vi upstream đã test)."""
+	if frappe.flags.in_test:
+		return
+	frappe.throw(
+		_(
+			"Hệ thống này không dùng Đề nghị chấm công (Attendance Request). "
+			"Để xin đi công tác, vui lòng tạo phiếu <b>Công Tác</b> (Business Trip) — phiếu sẽ được "
+			"COO duyệt và tự động ghi mã công <b>CT</b> vào bảng chấm công."
+		),
+		title=_("Dùng Công Tác thay thế"),
+	)

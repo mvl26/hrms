@@ -95,7 +95,11 @@ class TestBusinessTrip(FrappeTestCase):
 		apply_workflow(doc, "Gửi duyệt")
 		todos = frappe.get_all(
 			"ToDo",
-			filters={"reference_type": "Business Trip", "reference_name": doc.name, "allocated_to": self.user},
+			filters={
+				"reference_type": "Business Trip",
+				"reference_name": doc.name,
+				"allocated_to": self.user,
+			},
 		)
 		self.assertTrue(todos, "COO phải nhận ToDo khi chuyến được gửi duyệt")
 
@@ -154,7 +158,9 @@ class TestBusinessTrip(FrappeTestCase):
 		from hrms.hr.doctype.business_trip.business_trip import link_claim_to_trip
 
 		doc = self._approved_trip()
-		link_claim_to_trip(frappe._dict(custom_business_trip=doc.name, employee=self.emp, name="TEST-EC-0002"))
+		link_claim_to_trip(
+			frappe._dict(custom_business_trip=doc.name, employee=self.emp, name="TEST-EC-0002")
+		)
 		doc.reload()  # pick up the write-back on the traveler row
 		self.assertRaises(frappe.ValidationError, doc.make_expense_claim, self.emp)
 
@@ -191,3 +197,57 @@ class TestBusinessTrip(FrappeTestCase):
 		emp_name = frappe.db.get_value("Employee", self.emp, "employee_name")
 		if emp_name:
 			self.assertIn(emp_name, gdd)  # giấy đi đường lists each traveler by name
+
+
+class TestAttendanceRequestBlocked(FrappeTestCase):
+	"""Miyano khoá Attendance Request: xin đi công tác phải qua Công Tác (Business Trip).
+
+	Attendance Request submit thẳng ra Attendance — không có field người duyệt, không workflow,
+	không thông báo — nên dùng nó là đi vòng qua workflow duyệt COO. Class riêng (không dùng
+	setUp cấp role của TestBusinessTrip) vì guard không cần role nào.
+	"""
+
+	def test_guard_skips_during_tests(self):
+		"""Guard phải tha khi chạy test, nếu không sẽ phá 10 test upstream của Attendance Request
+		(CLAUDE.md: không fork hành vi upstream đã test)."""
+		from hrms.hr.doctype.business_trip.business_trip import block_attendance_request
+
+		self.assertIsNone(block_attendance_request(frappe._dict()))
+
+	def test_blocked_outside_tests(self):
+		from hrms.hr.doctype.business_trip.business_trip import block_attendance_request
+
+		frappe.flags.in_test = False
+		try:
+			with self.assertRaises(frappe.ValidationError) as ctx:
+				block_attendance_request(frappe._dict())
+			self.assertIn("Công Tác", str(ctx.exception))
+		finally:
+			frappe.flags.in_test = True
+
+	def test_blocked_end_to_end(self):
+		# chứng minh cả chuỗi: hook doc_events -> guard -> chặn insert thật
+		emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		frappe.flags.in_test = False
+		try:
+			with self.assertRaises(frappe.ValidationError):
+				frappe.get_doc(
+					{
+						"doctype": "Attendance Request",
+						"employee": emp,
+						"company": frappe.db.get_value("Employee", emp, "company"),
+						"from_date": "2097-06-01",
+						"to_date": "2097-06-02",
+						"reason": "On Duty",
+					}
+				).insert()
+		finally:
+			frappe.flags.in_test = True
+
+	def test_guard_is_wired_in_hooks(self):
+		# guard không được đăng ký thì vô dụng
+		events = frappe.get_hooks("doc_events").get("Attendance Request", {})
+		methods = events.get("before_insert") or []
+		if isinstance(methods, str):
+			methods = [methods]
+		self.assertIn("hrms.hr.doctype.business_trip.business_trip.block_attendance_request", methods)
