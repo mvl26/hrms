@@ -219,6 +219,18 @@ class TestBangChamCongThang(FrappeTestCase):
 		self.assertEqual(row["day_31"], "-")
 		self.assertNotEqual(row.get("day_10"), "-")  # still employed on day 10
 
+	def test_not_yet_joined_marker_before_joining(self):
+		"""Ngày trước khi vào làm phải có dấu '-' như ngày sau khi nghỉ việc.
+
+		Để trống thì mơ hồ — HR không phân biệt được 'chưa vào làm' với 'quên chấm công', mà
+		payroll thì đã loại các ngày đó khỏi payment_days rồi (theo date_of_joining)."""
+		emp = make_employee("bcct_newjoiner@codes.com")
+		frappe.db.set_value("Employee", emp, {"date_of_joining": f"{self.year}-{self.month:02d}-10"})
+		row = self._row(emp)
+		self.assertEqual(row["day_1"], "-", "trước ngày vào làm")
+		self.assertEqual(row["day_9"], "-", "ngày liền trước ngày vào làm")
+		self.assertNotEqual(row.get("day_10"), "-", "đúng ngày vào làm thì đã đi làm")
+
 	def test_execute_rows_carry_color_state(self):
 		# report row mang sẵn "_state_<day>" cho formatter JS tô nền (logic phân loại ở Python)
 		self._mk(5, custom_attendance_code="X")

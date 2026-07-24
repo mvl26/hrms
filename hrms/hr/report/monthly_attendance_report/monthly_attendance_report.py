@@ -26,6 +26,7 @@ Filters = frappe._dict
 
 # display-only markers derived from the calendar, not Attendance Code master records
 MARKER_TERMINATED = "-"  # after relieving_date — HR convention: rest-day dash
+MARKER_NOT_JOINED = "-"  # before date_of_joining — same dash: chưa thuộc biên chế ngày đó
 MARKER_WEEKLY_OFF = "-"  # nghỉ hàng tuần (CN/T7) — HR convention: rest-day dash
 MARKER_HOLIDAY = "NL"  # ngày nghỉ lễ có lương — kept distinct so paid holidays stay visible
 
@@ -400,7 +401,10 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 						bucket = c.category if c.category != "Công" else CATEGORY_UNEXCUSED
 						totals[bucket] = totals.get(bucket, 0.0) + rest
 			elif joining and d < joining:
-				continue  # chưa vào làm → để trống
+				# chưa vào làm → cùng dấu với ngày sau khi nghỉ việc. Để trống thì mơ hồ: HR không
+				# phân biệt được "chưa vào làm" với "quên chấm công", trong khi payroll đã loại các
+				# ngày này khỏi payment_days theo date_of_joining.
+				day_syms[day] = MARKER_NOT_JOINED
 			elif day in emp_hol:
 				if emp_hol[day]:
 					day_syms[day] = MARKER_WEEKLY_OFF  # nghỉ hàng tuần (CN) — không tính công
