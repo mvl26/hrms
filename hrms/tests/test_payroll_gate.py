@@ -370,9 +370,12 @@ class TestSimulatePayrollModeDelta(FrappeTestCase):
 
 	def test_simulating_does_not_write_anything(self):
 		self.mark(8, "K")
-		before = frappe.db.get_single_value("Payroll Settings", "payroll_based_on")
+		before_mode = frappe.db.get_single_value("Payroll Settings", "payroll_based_on")
+		before_slips = frappe.db.count(
+			"Salary Slip"
+		)  # site có thể đã có slip thật — so delta, không tuyệt đối
 
 		simulate_payroll_mode_delta(2098, 3, company="Miyano", employees=[self.employee])
 
-		self.assertEqual(frappe.db.get_single_value("Payroll Settings", "payroll_based_on"), before)
-		self.assertEqual(frappe.db.count("Salary Slip"), 0, "simulation must not create slips")
+		self.assertEqual(frappe.db.get_single_value("Payroll Settings", "payroll_based_on"), before_mode)
+		self.assertEqual(frappe.db.count("Salary Slip"), before_slips, "simulation must not create slips")
