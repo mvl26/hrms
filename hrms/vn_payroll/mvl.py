@@ -125,7 +125,9 @@ def compute_mvl(inp: MVLInput, cfg: MVLConfig) -> MVLResult:
 	r.K = r.I + r.J
 
 	# Bước 4 — giảm trừ gia cảnh; Bước 5 — thu nhập làm căn cứ quy đổi
-	r.N = (cfg.personal_deduction if inp.register_personal_deduction else 0.0) + cfg.dependent_deduction * inp.dependents
+	r.N = (
+		cfg.personal_deduction if inp.register_personal_deduction else 0.0
+	) + cfg.dependent_deduction * inp.dependents
 	r.O = max(r.K - r.N - r.J, 0.0)
 
 	# Bước 6–7 — quy đổi + thuế, phân nhánh theo loại nhân sự
