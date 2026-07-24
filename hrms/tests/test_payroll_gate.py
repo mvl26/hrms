@@ -15,6 +15,8 @@ from hrms.payroll_gate import (
 	classifier_delta,
 	compare_payroll_baseline,
 	diff_payroll_rows,
+	payroll_mode,
+	simulate_payroll_mode_delta,
 )
 
 
@@ -249,3 +251,128 @@ class TestClassifierDelta(FrappeTestCase):
 
 		self.assertTrue(report["conclusive"])
 		self.assertEqual(report["verdict"], "no-delta")
+
+
+class TestPayrollModeIsMemoryOnly(FrappeTestCase):
+	"""`payroll_mode` answers "what if we switched?" WITHOUT touching the live setting.
+
+	The whole point is that it can be pointed at real payroll data safely, so "it never writes"
+	is the property under test — not an implementation detail.
+	"""
+
+	def stored_mode(self):
+		return frappe.db.get_single_value("Payroll Settings", "payroll_based_on")
+
+	def test_the_stored_setting_is_never_changed(self):
+		before = self.stored_mode()
+		other = "Attendance" if before == "Leave" else "Leave"
+
+		with payroll_mode(other):
+			self.assertEqual(self.stored_mode(), before, "the DB setting must not move")
+
+		self.assertEqual(self.stored_mode(), before)
+
+	def test_salary_slip_reads_the_simulated_mode(self):
+		with payroll_mode("Attendance"):
+			seen = frappe.get_cached_value("Payroll Settings", None, ("payroll_based_on",), as_dict=1)
+			self.assertEqual(seen.payroll_based_on, "Attendance")
+
+		with payroll_mode("Leave"):
+			seen = frappe.get_cached_value("Payroll Settings", None, ("payroll_based_on",), as_dict=1)
+			self.assertEqual(seen.payroll_based_on, "Leave")
+
+	def test_the_real_getter_is_restored_even_when_the_body_raises(self):
+		original = frappe.get_cached_value
+		with self.assertRaises(ValueError):
+			with payroll_mode("Attendance"):
+				raise ValueError("boom")
+		self.assertIs(frappe.get_cached_value, original)
+
+	def test_the_cached_settings_object_is_not_poisoned(self):
+		"""Mutating the cached dict in place would corrupt payroll for the whole process."""
+		with payroll_mode("Attendance"):
+			frappe.get_cached_value("Payroll Settings", None, ("payroll_based_on",), as_dict=1)
+
+		after = frappe.get_cached_value("Payroll Settings", None, ("payroll_based_on",), as_dict=1)
+		self.assertEqual(after.payroll_based_on, self.stored_mode())
+
+
+class TestSimulatePayrollModeDelta(FrappeTestCase):
+	"""Would switching payroll_based_on to Attendance change anyone's paid days?"""
+
+	def setUp(self):
+		from erpnext.setup.doctype.employee.test_employee import make_employee
+
+		self.employee = make_employee("mode_delta@codes.com", company="Miyano")
+
+	def mark(self, day, code):
+		frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.employee,
+				"attendance_date": f"2098-03-{day:02d}",
+				"custom_attendance_code": code,
+			}
+		).insert().submit()
+
+	def row_for(self, report):
+		return next(r for r in report["rows"] if r["employee"] == self.employee)
+
+	def test_unpaid_leave_docks_days_only_under_attendance_mode(self):
+		self.mark(2, "K")  # nghỉ không lương
+
+		report = simulate_payroll_mode_delta(2098, 3, company="Miyano", employees=[self.employee])
+		row = self.row_for(report)
+
+		self.assertEqual(row["Leave"]["leave_without_pay"], 0.0, "no Leave Application exists")
+		self.assertEqual(row["Attendance"]["leave_without_pay"], 1.0, "mã công K is read in Attendance mode")
+		self.assertEqual(row["delta"]["payment_days"], -1.0)
+		self.assertTrue(row["changed"])
+
+	def test_absence_and_half_day_are_counted_in_attendance_mode(self):
+		self.mark(3, "V")  # vắng cả ngày
+		self.mark(4, "NN")  # làm nửa ngày, nửa còn lại không phép
+
+		report = simulate_payroll_mode_delta(2098, 3, company="Miyano", employees=[self.employee])
+		row = self.row_for(report)
+
+		self.assertEqual(row["Attendance"]["absent_days"], 1.5, "V 1.0 + NN 0.5")
+		self.assertEqual(row["delta"]["payment_days"], -1.5)
+
+	def test_a_fully_present_month_moves_nothing(self):
+		self.mark(5, "X")
+
+		report = simulate_payroll_mode_delta(2098, 3, company="Miyano", employees=[self.employee])
+		row = self.row_for(report)
+
+		self.assertEqual(row["delta"]["payment_days"], 0.0)
+		self.assertFalse(row["changed"])
+
+	def test_paid_half_day_leave_is_not_docked(self):
+		"""1/2P is the regression that used to dock half a day — it must stay whole."""
+		self.mark(6, "1/2P")
+
+		report = simulate_payroll_mode_delta(2098, 3, company="Miyano", employees=[self.employee])
+		row = self.row_for(report)
+
+		self.assertEqual(row["Attendance"]["absent_days"], 0.0)
+		self.assertEqual(row["delta"]["payment_days"], 0.0)
+
+	def test_the_report_summarises_who_would_be_affected(self):
+		self.mark(7, "K")
+
+		report = simulate_payroll_mode_delta(2098, 3, company="Miyano", employees=[self.employee])
+
+		self.assertEqual(report["period"], "2098-03-01 .. 2098-03-31")
+		self.assertEqual(report["employees_examined"], 1)
+		self.assertEqual(report["employees_changed"], 1)
+		self.assertFalse(report["payroll_identical"])
+
+	def test_simulating_does_not_write_anything(self):
+		self.mark(8, "K")
+		before = frappe.db.get_single_value("Payroll Settings", "payroll_based_on")
+
+		simulate_payroll_mode_delta(2098, 3, company="Miyano", employees=[self.employee])
+
+		self.assertEqual(frappe.db.get_single_value("Payroll Settings", "payroll_based_on"), before)
+		self.assertEqual(frappe.db.count("Salary Slip"), 0, "simulation must not create slips")
