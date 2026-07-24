@@ -1,9 +1,14 @@
 # Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
 # For license information, please see license.txt
-"""Bảng lương MVL — bảng lương tháng đủ mọi cột như file Excel gốc (docs/Cong_thuc_tinh_luong_MVL.md).
+"""Bảng lương MVL — CỘT GIỐNG HỆT file Excel gốc (docs/Cong_thuc_tinh_luong_MVL.md).
 
-Đọc thẳng các Salary Slip ĐÃ SUBMIT dùng cấu trúc "MVL Việt Nam" trong kỳ: mỗi cột tiền là một Salary
-Component nên bảng chỉ gom lại theo hàng (nhân viên) × cột (thành phần). Read-only. Có dòng TỔNG CỘNG.
+Đọc thẳng Salary Slip ĐÃ SUBMIT dùng cấu trúc "MVL Việt Nam" trong kỳ. Mỗi cột tiền là một Salary
+Component → chỉ gom theo hàng (nhân viên) × cột. Read-only, có dòng TỔNG CỘNG.
+
+Thứ tự cột đúng như Excel: Mã NV (ID, không bỏ được) · Họ tên · Loại (Toàn/Bán thời gian) · NET/GROSS ·
+Hệ số E · Lương ngày công F · Lương đóng BHXH G · Số công H · Lương thực tế I · Phụ cấp ăn J ·
+Tổng thu nhập K · Giảm trừ bản thân L · Số phụ thuộc M · Tổng giảm trừ N · TN quy đổi O · TN tính thuế P ·
+Thuế TNCN Q · BH công ty R · BH NLĐ S · Thực lĩnh T · TN chịu thuế kê khai U.
 """
 
 import frappe
@@ -12,21 +17,29 @@ from frappe.utils import cint, flt, get_first_day, get_last_day, getdate
 
 from hrms.vn_payroll.setup_mvl import STRUCTURE
 
-# (key báo cáo, nhãn cột, tên Salary Component) — theo thứ tự bảng lương Excel
-COMPONENT_COLUMNS = [
-	("base_f", "Lương ngày công (F)", "Lương ngày công"),
-	("bhxh_g", "Lương đóng BHXH (G)", "Lương đóng BHXH"),
-	("work_i", "Lương theo công (I)", "Lương theo công"),
-	("lunch_j", "Phụ cấp ăn (J)", "Phụ cấp ăn trưa"),
-	("gross_k", "Tổng thu nhập (K)", "Tổng thu nhập"),
-	("personal_l", "Giảm trừ bản thân (L)", "Giảm trừ bản thân"),
-	("deduction_n", "Tổng giảm trừ (N)", "Tổng giảm trừ gia cảnh"),
-	("converted_o", "TN quy đổi (O)", "Thu nhập quy đổi"),
-	("taxable_p", "TN tính thuế (P)", "Thu nhập tính thuế"),
-	("tax_q", "Thuế TNCN (Q)", "Thuế TNCN (nộp thay)"),
-	("ins_company_r", "BHXH Cty (R)", "BHXH - Công ty"),
-	("ins_employee_s", "BHXH NLĐ (S)", "BHXH - NLĐ (nộp thay)"),
-	("declared_u", "TN chịu thuế kê khai (U)", "Thu nhập chịu thuế kê khai"),
+# (fieldname, nhãn, kiểu, tên Salary Component | None, width). Thứ tự = thứ tự cột Excel.
+COLUMNS = [
+	("employee", "Mã NV", "Link", None, 110),
+	("employee_name", "Họ tên", "Data", None, 150),
+	("work_type", "Loại", "Data", None, 100),
+	("pay_mode", "NET/GROSS", "Data", None, 80),
+	("coefficient", "Hệ số (E)", "Float", None, 65),
+	("base_f", "Lương ngày công (F)", "Currency", "Lương ngày công", 120),
+	("bhxh_g", "Lương đóng BHXH (G)", "Currency", "Lương đóng BHXH", 120),
+	("worked_days", "Số công (H)", "Float", None, 75),
+	("work_i", "Lương thực tế (I)", "Currency", "Lương theo công", 120),
+	("lunch_j", "Phụ cấp ăn trưa (J)", "Currency", "Phụ cấp ăn trưa", 110),
+	("gross_k", "Tổng thu nhập (K)", "Currency", "Tổng thu nhập", 120),
+	("personal_l", "Giảm trừ bản thân (L)", "Currency", "Giảm trừ bản thân", 120),
+	("dependents", "Số người phụ thuộc (M)", "Int", None, 90),
+	("deduction_n", "Tổng giảm trừ (N)", "Currency", "Tổng giảm trừ gia cảnh", 120),
+	("converted_o", "Thu nhập quy đổi (O)", "Currency", "Thu nhập quy đổi", 120),
+	("taxable_p", "Thu nhập tính thuế (P)", "Currency", "Thu nhập tính thuế", 120),
+	("tax_q", "Thuế TNCN (Q)", "Currency", "Thuế TNCN (nộp thay)", 110),
+	("ins_company_r", "BH công ty (R)", "Currency", "BHXH - Công ty", 110),
+	("ins_employee_s", "BH NLĐ (S)", "Currency", "BHXH - NLĐ (nộp thay)", 110),
+	("net_t", "Thực lĩnh (T)", "Currency", None, 130),
+	("declared_u", "TN chịu thuế kê khai (U)", "Currency", "Thu nhập chịu thuế kê khai", 130),
 ]
 
 
@@ -36,49 +49,20 @@ def execute(filters=None):
 
 
 def get_columns():
-	col = [
-		{
-			"label": _("Mã NV"),
-			"fieldname": "employee",
-			"fieldtype": "Link",
-			"options": "Employee",
-			"width": 110,
-		},
-		{"label": _("Họ tên"), "fieldname": "employee_name", "fieldtype": "Data", "width": 160},
-		{"label": _("Loại lương"), "fieldname": "salary_type", "fieldtype": "Data", "width": 110},
-		{
-			"label": _("Hệ số (E)"),
-			"fieldname": "coefficient",
-			"fieldtype": "Float",
-			"width": 70,
-			"precision": 2,
-		},
-		{
-			"label": _("Công chuẩn"),
-			"fieldname": "total_days",
-			"fieldtype": "Float",
-			"width": 80,
-			"precision": 1,
-		},
-		{
-			"label": _("Công (H)"),
-			"fieldname": "worked_days",
-			"fieldtype": "Float",
-			"width": 75,
-			"precision": 1,
-		},
+	return [
+		{"label": _(label), "fieldname": key, "fieldtype": ftype, "width": width}
+		| ({"options": "Employee"} if key == "employee" else {})
+		| ({"precision": 2} if key == "coefficient" else {})
+		for key, label, ftype, _comp, width in COLUMNS
 	]
-	# F, G ngay sau công chuẩn/H trong file gốc, nhưng gom cột tiền theo COMPONENT_COLUMNS cho gọn
-	for key, label, _comp in COMPONENT_COLUMNS[:2]:
-		col.append({"label": _(label), "fieldname": key, "fieldtype": "Currency", "width": 120})
-	col.append({"label": _("Phụ thuộc (M)"), "fieldname": "dependents", "fieldtype": "Int", "width": 80})
-	for key, label, _comp in COMPONENT_COLUMNS[2:]:
-		col.append({"label": _(label), "fieldname": key, "fieldtype": "Currency", "width": 120})
-	col.append({"label": _("THỰC LĨNH (T)"), "fieldname": "net_t", "fieldtype": "Currency", "width": 130})
-	col.append(
-		{"label": _("Chi phí công ty"), "fieldname": "company_cost", "fieldtype": "Currency", "width": 130}
-	)
-	return col
+
+
+def work_type(salary_type: str) -> str:
+	return "Bán thời gian" if (salary_type or "").startswith("Parttime") else "Toàn thời gian"
+
+
+def pay_mode(salary_type: str) -> str:
+	return "GROSS" if salary_type == "GROSS" else "NET"
 
 
 def get_data(filters):
@@ -108,7 +92,6 @@ def get_data(filters):
 			"custom_salary_type",
 			"custom_coefficient",
 			"custom_dependents_slip",
-			"total_working_days",
 			"payment_days",
 			"net_pay",
 		],
@@ -118,31 +101,29 @@ def get_data(filters):
 		return []
 
 	amounts = component_amounts([s.name for s in slips])
-	comp_by_key = {key: comp for key, _label, comp in COMPONENT_COLUMNS}
+	money_cols = [(key, comp) for key, _l, ftype, comp, _w in COLUMNS if ftype == "Currency"]
 
 	data, totals = [], frappe._dict()
 	for s in slips:
 		row = frappe._dict(
 			employee=s.employee,
 			employee_name=s.employee_name,
-			salary_type=s.custom_salary_type,
+			work_type=work_type(s.custom_salary_type),
+			pay_mode=pay_mode(s.custom_salary_type),
 			coefficient=s.custom_coefficient,
-			total_days=s.total_working_days,
 			worked_days=s.payment_days,
 			dependents=s.custom_dependents_slip,
 			net_t=flt(s.net_pay),
 		)
-		for key, comp in comp_by_key.items():
-			row[key] = flt(amounts.get(s.name, {}).get(comp))
-		# chi phí công ty = thực lĩnh + thuế + BHXH NLĐ nộp thay + BHXH công ty
-		row.company_cost = row.net_t + row.tax_q + row.ins_employee_s + row.ins_company_r
+		for key, comp in money_cols:
+			if comp:  # cột tiền lấy từ component; net_t lấy net_pay ở trên
+				row[key] = flt(amounts.get(s.name, {}).get(comp))
 		data.append(row)
-		for f in (*comp_by_key, "net_t", "company_cost"):
-			totals[f] = totals.get(f, 0.0) + row[f]
+		for key, _comp in money_cols:
+			totals[key] = totals.get(key, 0.0) + flt(row.get(key))
 
 	if data:
-		total_row = frappe._dict(employee_name=_("TỔNG CỘNG"), **totals)
-		data.append(total_row)
+		data.append(frappe._dict(employee_name=_("TỔNG CỘNG"), **totals))
 	return data
 
 
