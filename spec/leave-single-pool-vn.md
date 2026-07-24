@@ -1,6 +1,9 @@
 # Spec: Gộp một quỹ phép năm — mọi nghỉ có lương (trừ miễn trừ) rút từ phép năm
 
-> Status: **DRAFT for approval (Phase 1 / SPECIFY).** Mô hình chốt qua Q&A phiên 2026-07-24.
+> Status: **Bậc 2 BUILT trên nhánh 2026-07-24** (feat/skip-attendance-diag, commits `bd2fbae`+`T5-6`);
+> 6 test xanh qua harness rollback; bảng công (feature cũ) 20 test không hỏng. **CHƯA deploy** (field
+> fixture + hook + cấu hình cần migrate/restart + hoà giải allocation = cổng ký, xem cuối plan).
+> Mô hình chốt qua Q&A phiên 2026-07-24.
 > Nối tiếp và **dựa trên** `spec/leave-entitlement-vn.md` (WS3 — cấp quỹ 12+thâm niên) làm bậc nền.
 > Lưu dưới `spec/` theo quy ước repo. **Cổng sign-off cứng:** đụng Leave Type + cầu nối mã-công↔lương
 > trên site production có lương đang chạy — mỗi bậc phải chứng minh **lương bất biến** và **không

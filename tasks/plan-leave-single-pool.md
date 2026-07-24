@@ -1,7 +1,22 @@
 # Kế hoạch: Gộp một quỹ phép năm — Bậc 2 (field + hook + cấu hình)
 
+> **STATUS: BUILT trên nhánh 2026-07-24.** T1–T6 xong (commits `bd2fbae` T2-4, `T5-6`; `test`
+> Task 1). **6 test xanh** qua harness; bảng công (feature cũ) 20 test không hỏng; 0 lỗi dính hook.
+> **CHƯA deploy** — gate ở "GATE DEPLOY còn treo" cuối file. Bậc 3 (PWA) chưa làm.
+>
 > **For agentic workers:** build TDD từng task, mỗi task RED → GREEN → regression → commit riêng.
 > Test qua **harness rollback** env-python (KHÔNG `bench run-tests` trên miyano; KHÔNG ghi site).
+
+## GATE DEPLOY còn treo (ask-first, CHƯA làm)
+
+1. **Migrate fixture:** field `Leave Application-custom_attendance_code` + (nếu chốt) đổi `leave_type`
+   của Attendance Code Ô/Cô → "Nghỉ phép năm". `bench migrate` re-sync toàn bộ fixtures = cổng cứng.
+2. **Restart** (gunicorn --preload nạp hook `hooks.py` mới — Claude không tự restart được, cần `sudo`).
+3. **Chạy WS3 + hoà giải:** `assign_annual_leave` cấp quỹ cho mọi NV + xử lý 7 allocation tay đang có
+   (5 phép + 2 ốm) — data-migration, không git-revert được.
+4. **Cấu hình loại miễn trừ** (TS/N/T) + K trên site để nộp đơn được (allocation chế độ / flag).
+5. **Bậc 3 — PWA:** form xin nghỉ cho NV chọn "Mã chấm công"; `yarn build` + deploy lại.
+6. **Điều phối phiên hivx** đang sửa payroll/leave song song trước khi deploy.
 
 **Goal:** Đơn xin nghỉ lý do P/Ô/Cô cùng rút một quỹ "Nghỉ phép năm" (Frappe tự chặn khi hết), nhưng
 bảng công vẫn hiện Ô/Cô/P riêng; TS/N/T miễn trừ, K không lương — **lương bất biến**.
