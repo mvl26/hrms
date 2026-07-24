@@ -227,9 +227,36 @@ def ensure_settings():
 	s.save(ignore_permissions=True)
 
 
+PRINT_FORMAT = "Phiếu lương MVL"
+
+
+def ensure_default_print_format():
+	"""Đặt "Phiếu lương MVL" làm print format mặc định của Salary Slip → nút In hiện phiếu đủ thành
+	phần thay vì mẫu chuẩn của Frappe (chỉ có lưới earnings/deductions)."""
+	if not frappe.db.exists("Print Format", PRINT_FORMAT):
+		return  # print format là standard doc, đồng bộ khi migrate/reload — chưa có thì bỏ qua
+	existing = frappe.db.get_value(
+		"Property Setter", {"doc_type": "Salary Slip", "property": "default_print_format"}, "name"
+	)
+	if existing:
+		frappe.db.set_value("Property Setter", existing, "value", PRINT_FORMAT)
+		return
+	frappe.get_doc(
+		{
+			"doctype": "Property Setter",
+			"doctype_or_field": "DocType",
+			"doc_type": "Salary Slip",
+			"property": "default_print_format",
+			"value": PRINT_FORMAT,
+			"property_type": "Data",
+		}
+	).insert(ignore_permissions=True)
+
+
 def ensure_mvl_defaults():
 	"""Điểm vào duy nhất: gọi khi after_install / after_migrate và trong test."""
 	ensure_components()
 	ensure_custom_fields()
 	ensure_structure()
 	ensure_settings()
+	ensure_default_print_format()

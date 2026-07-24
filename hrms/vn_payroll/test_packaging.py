@@ -20,6 +20,16 @@ class TestMVLPackaging(FrappeTestCase):
 		self.assertTrue(frappe.db.exists("Print Format", "Phiếu lương MVL"))
 		self.assertEqual(frappe.db.get_value("Print Format", "Phiếu lương MVL", "doc_type"), "Salary Slip")
 
+	def test_mvl_is_default_print_format(self):
+		# nút In của Salary Slip phải mặc định ra phiếu MVL đầy đủ, không phải mẫu chuẩn Frappe
+		ensure_mvl_defaults()
+		self.assertEqual(
+			frappe.db.get_value(
+				"Property Setter", {"doc_type": "Salary Slip", "property": "default_print_format"}, "value"
+			),
+			"Phiếu lương MVL",
+		)
+
 	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
 	def test_payslip_renders_with_amounts(self):
 		ensure_fiscal_year_2099()
