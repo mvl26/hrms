@@ -11,6 +11,7 @@ lên slip dùng structure "MVL Việt Nam"; slip khác đi đường Frappe gố
 import frappe
 from frappe.utils import flt, rounded
 
+from hrms.vn_payroll.lunch import count_lunch_days
 from hrms.vn_payroll.mvl import MVLInput, compute_mvl
 from hrms.vn_payroll.settings import config_from_settings
 from hrms.vn_payroll.setup_mvl import STRUCTURE
@@ -64,7 +65,8 @@ def apply_mvl(doc, method=None):
 		bhxh_salary=flt(ssa.custom_bhxh_salary),
 		dependents=int(ssa.custom_dependents or 0),
 		register_personal_deduction=bool(ssa.custom_register_personal_deduction),
-		lunch_days=flt(ssa.custom_lunch_days_override) or flt(doc.payment_days),
+		lunch_days=flt(ssa.custom_lunch_days_override)
+		or count_lunch_days(doc.employee, doc.start_date, doc.end_date),
 		standard_days=standard_days,
 		worked_days=flt(doc.payment_days),
 	)

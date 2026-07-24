@@ -53,6 +53,11 @@ def mark_full_month(employee):
 		)
 		att.insert()
 		att.submit()
+		# checkin phủ cả buổi → ngày ăn trưa (số ngày ăn suy từ checkin, không phải số công)
+		for hm in ("08:00:00", "17:30:00"):
+			frappe.get_doc(
+				{"doctype": "Employee Checkin", "employee": employee, "time": f"2099-06-{d:02d} {hm}"}
+			).insert()
 
 
 def make_slip(employee):
