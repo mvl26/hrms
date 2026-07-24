@@ -91,3 +91,30 @@ class TestLeaveSinglePool(FrappeTestCase):
 			self._leave_app(
 				"Nghỉ phép năm", f"{self.year}-03-08", f"{self.year}-03-08", code="TS"
 			)  # sai nhóm
+
+	def test_blocks_when_pool_exhausted(self):
+		# hết quỹ → Frappe chặn nộp đơn (số dư âm, allow_negative=0). "không cho xin phép nghỉ".
+		self._alloc("Nghỉ phép năm", 1)
+		with self.assertRaises(frappe.ValidationError):
+			self._leave_app("Nghỉ phép năm", f"{self.year}-03-10", f"{self.year}-03-11", code="P")  # 2 > 1
+
+	def test_pool_display_code_is_payroll_neutral(self):
+		# Ô rút quỹ phép năm phải giống hệt một ngày P về các field payroll đọc (status/leave_type/
+		# half_day_status) — chỉ khác custom_attendance_code (hiển thị). is_lwp của leave_type = 0.
+		self._alloc("Nghỉ phép năm", 12)
+		p = self._att(self._leave_app("Nghỉ phép năm", f"{self.year}-04-05", f"{self.year}-04-05", code="P"))
+		o = self._att(self._leave_app("Nghỉ phép năm", f"{self.year}-04-06", f"{self.year}-04-06", code="Ô"))
+		self.assertEqual((p.status, p.leave_type), (o.status, o.leave_type))  # payroll đọc giống nhau
+		self.assertEqual(frappe.db.get_value("Leave Type", "Nghỉ phép năm", "is_lwp"), 0)  # có lương
+
+	def test_exempt_leave_does_not_touch_annual_pool(self):
+		# thai sản (miễn trừ) dùng loại nghỉ riêng, KHÔNG giảm quỹ phép năm.
+		from hrms.hr.doctype.leave_application.leave_application import get_leave_balance_on
+
+		self._alloc("Nghỉ phép năm", 12)
+		self._alloc("Nghỉ thai sản", 180)
+		before = get_leave_balance_on(self.emp, "Nghỉ phép năm", f"{self.year}-05-02")
+		la = self._leave_app("Nghỉ thai sản", f"{self.year}-05-02", f"{self.year}-05-02")
+		after = get_leave_balance_on(self.emp, "Nghỉ phép năm", f"{self.year}-05-02")
+		self.assertEqual(before, after)  # quỹ phép năm không đổi
+		self.assertEqual(self._att(la).custom_attendance_code, "TS")  # hiện mã thai sản
