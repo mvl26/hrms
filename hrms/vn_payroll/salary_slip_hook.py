@@ -70,11 +70,18 @@ def apply_mvl(doc, method=None):
 		standard_days=standard_days,
 		worked_days=flt(doc.payment_days),
 	)
-	r = compute_mvl(inp, config_from_settings())
-	amounts = {name: getattr(r, field) for name, field in COMPONENT_FIELD.items()}
+	cfg = config_from_settings()
+	r = compute_mvl(inp, cfg)
+	_set_component_amounts(doc, inp, r)
+	_set_totals(doc)
+	_set_breakdown_fields(doc, inp, cfg, r)
 
-	# Với NET, thuế + BHXH NLĐ do công ty nộp thay → KHÔNG trừ vào tiền NV nhận. Ép cờ ngay trên
-	# row của slip (không tin cờ kế thừa từ component — Frappe recompute lúc submit đọc cờ trên row).
+
+def _set_component_amounts(doc, inp, r):
+	"""Gán amount cho từng component MVL trên slip + ép cờ do_not_include_in_total của thuế/BHXH NLĐ."""
+	amounts = {name: getattr(r, field) for name, field in COMPONENT_FIELD.items()}
+	# NET: thuế + BHXH NLĐ do công ty nộp thay → không trừ net. Ép cờ ngay trên row (không tin cờ
+	# kế thừa từ component — Frappe recompute lúc submit đọc cờ trên row). GROSS thì trừ thật.
 	deduct_from_net = inp.salary_type == "GROSS"
 	for row in list(doc.earnings) + list(doc.deductions):
 		if row.salary_component in amounts:
@@ -83,10 +90,12 @@ def apply_mvl(doc, method=None):
 			if row.parentfield == "deductions":
 				row.do_not_include_in_total = 0 if deduct_from_net else 1
 
+
+def _set_totals(doc):
+	"""Tính lại gross/net theo amount vừa gán (gross = Σ earnings; deduction bỏ qua do_not_include)."""
 	gross = sum(flt(row.amount) for row in doc.earnings)
 	deduction = sum(flt(row.amount) for row in doc.deductions if not row.do_not_include_in_total)
 	rate = flt(doc.exchange_rate) or 1.0
-
 	doc.gross_pay = gross
 	doc.total_deduction = deduction
 	doc.net_pay = gross - deduction
@@ -96,6 +105,18 @@ def apply_mvl(doc, method=None):
 	doc.base_net_pay = doc.net_pay * rate
 	doc.base_rounded_total = rounded(doc.base_net_pay)
 
-	# Kê khai (không hiện thành deduction để khỏi trừ net)
-	doc.custom_taxable_income = r.U
+
+def _set_breakdown_fields(doc, inp, cfg, r):
+	"""Chi tiết đầy đủ như bảng lương Excel — mọi phiếu đều có đủ thành phần (F..P + kê khai)."""
+	doc.custom_salary_type = inp.salary_type
+	doc.custom_coefficient = cfg.probation_coef if inp.salary_type == "Thử việc" else 1.0
+	doc.custom_base_salary = inp.base  # F
+	doc.custom_bhxh_salary_slip = inp.bhxh_salary  # G
+	doc.custom_gross_income = r.K
+	doc.custom_personal_deduction = cfg.personal_deduction if inp.register_personal_deduction else 0.0  # L
+	doc.custom_dependents_slip = inp.dependents  # M
+	doc.custom_total_deduction = r.N
+	doc.custom_converted_income = r.O
+	doc.custom_taxable_income_gross = r.P
+	doc.custom_taxable_income = r.U  # kê khai
 	doc.custom_ins_company = r.R

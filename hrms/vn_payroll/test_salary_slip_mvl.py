@@ -96,6 +96,12 @@ class TestSalarySlipMVL(FrappeTestCase):
 		self.assertEqual(ss.custom_ins_company, 5_375_000)  # 25tr × 21.5%
 		# NET: thuế + BHXH KHÔNG trừ vào net → net = K = I + J
 		self.assertEqual(ss.net_pay, 25_000_000 + ss.payment_days * 35_000)
+		# phiếu mang đủ chi tiết F..U để in bảng lương
+		self.assertEqual(ss.custom_base_salary, 25_000_000)  # F
+		self.assertEqual(ss.custom_gross_income, ss.net_pay)  # K = T (NET)
+		self.assertEqual(ss.custom_total_deduction, 21_700_000)  # N = 15.5tr + 6.2tr
+		self.assertEqual(ss.custom_converted_income, 3_300_000)  # O
+		self.assertEqual(ss.custom_ins_company, 5_375_000)  # R
 
 	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
 	def test_net_tracks_payment_days(self):

@@ -38,6 +38,14 @@ class TestMVLPackaging(FrappeTestCase):
 		ss.submit()
 
 		html = frappe.get_print("Salary Slip", ss.name, print_format="Phiếu lương MVL")
-		self.assertIn("PHIẾU LƯƠNG", html)
-		self.assertIn("THỰC LĨNH", html)
-		self.assertIn("Lương theo công", html)
+		# phiếu phải in đủ mọi thành phần bảng lương F..U
+		for label in (
+			"PHIẾU LƯƠNG",
+			"Lương ngày công (F)",
+			"Tổng thu nhập (K)",
+			"Tổng giảm trừ (N)",
+			"Thu nhập tính thuế (P)",
+			"THỰC LĨNH (T)",
+			"kê khai (U)",
+		):
+			self.assertIn(label, html, label)

@@ -82,10 +82,66 @@ def ensure_structure():
 	doc.db_set("docstatus", 1)  # submit để dùng được trong Salary Structure Assignment
 
 
+def _slip_breakdown_fields():
+	"""Toàn bộ thành phần lương MVL hiện trên MỖI phiếu (đầy đủ như bảng lương Excel).
+
+	Read-only, engine điền khi validate. I/J là Earning, Q/S là Deduction (nằm trong lưới component);
+	các trường ở đây là số trung gian F..P + kê khai để phiếu lương in ra đủ mọi cột.
+	"""
+	ro = {"read_only": 1}
+
+	def f(fieldname, label, fieldtype="Currency", after=None, **kw):
+		return {
+			"fieldname": fieldname,
+			"label": label,
+			"fieldtype": fieldtype,
+			"insert_after": after,
+			**ro,
+			**kw,
+		}
+
+	return [
+		{
+			"fieldname": "custom_mvl_section",
+			"fieldtype": "Section Break",
+			"label": "Chi tiết lương MVL",
+			"insert_after": "net_pay",
+		},
+		f("custom_salary_type", "Loại lương", "Data", "custom_mvl_section"),
+		f("custom_coefficient", "Hệ số lương (E)", "Float", "custom_salary_type", precision="2"),
+		f("custom_base_salary", "Lương ngày công (F)", "Currency", "custom_coefficient"),
+		f("custom_bhxh_salary_slip", "Lương đóng BHXH (G)", "Currency", "custom_base_salary"),
+		{
+			"fieldname": "custom_mvl_col1",
+			"fieldtype": "Column Break",
+			"insert_after": "custom_bhxh_salary_slip",
+		},
+		f("custom_gross_income", "Tổng thu nhập (K)", "Currency", "custom_mvl_col1"),
+		f("custom_personal_deduction", "Giảm trừ bản thân (L)", "Currency", "custom_gross_income"),
+		f("custom_dependents_slip", "Số người phụ thuộc (M)", "Int", "custom_personal_deduction"),
+		f("custom_total_deduction", "Tổng giảm trừ (N)", "Currency", "custom_dependents_slip"),
+		{
+			"fieldname": "custom_mvl_col2",
+			"fieldtype": "Column Break",
+			"insert_after": "custom_total_deduction",
+		},
+		f("custom_converted_income", "Thu nhập quy đổi (O)", "Currency", "custom_mvl_col2"),
+		f("custom_taxable_income_gross", "Thu nhập tính thuế (P)", "Currency", "custom_converted_income"),
+		f(
+			"custom_taxable_income",
+			"Thu nhập chịu thuế kê khai (U)",
+			"Currency",
+			"custom_taxable_income_gross",
+		),
+		f("custom_ins_company", "BHXH - Công ty (R)", "Currency", "custom_taxable_income"),
+	]
+
+
 def ensure_custom_fields():
 	# create_custom_fields chạy ALTER TABLE (DDL) → không gọi được trong transaction của test
-	# (ImplicitCommitError). Guard: đã cài rồi thì thôi. Cài lần đầu chạy ngoài test (migrate/execute).
-	if frappe.db.exists("Custom Field", "Salary Structure Assignment-custom_salary_type"):
+	# (ImplicitCommitError). Guard theo field MỚI NHẤT: đã cài đủ thì thôi. Cài lần đầu / khi thêm
+	# field mới chạy ngoài test (migrate/execute); test dựa vào migrate đã cài sẵn.
+	if frappe.db.exists("Custom Field", "Salary Slip-custom_base_salary"):
 		return
 	create_custom_fields(
 		{
@@ -131,28 +187,7 @@ def ensure_custom_fields():
 					"insert_after": "custom_register_personal_deduction",
 				},
 			],
-			"Salary Slip": [
-				{
-					"fieldname": "custom_mvl_section",
-					"fieldtype": "Section Break",
-					"label": "MVL — kê khai",
-					"insert_after": "net_pay",
-				},
-				{
-					"fieldname": "custom_taxable_income",
-					"fieldtype": "Currency",
-					"label": "Thu nhập chịu thuế kê khai (U)",
-					"read_only": 1,
-					"insert_after": "custom_mvl_section",
-				},
-				{
-					"fieldname": "custom_ins_company",
-					"fieldtype": "Currency",
-					"label": "BHXH - Công ty (R)",
-					"read_only": 1,
-					"insert_after": "custom_taxable_income",
-				},
-			],
+			"Salary Slip": _slip_breakdown_fields(),
 		},
 		ignore_validate=True,
 	)

@@ -14,7 +14,18 @@ class TestSetupMVL(FrappeTestCase):
 			self.assertTrue(frappe.db.exists("Salary Component", c), c)
 		self.assertTrue(frappe.db.exists("Salary Structure", STRUCTURE))
 		self.assertTrue(frappe.db.exists("Custom Field", "Salary Structure Assignment-custom_salary_type"))
-		self.assertTrue(frappe.db.exists("Custom Field", "Salary Slip-custom_taxable_income"))
+		# phiếu lương phải có đủ mọi thành phần F..U của bảng lương
+		for fn in (
+			"custom_base_salary",
+			"custom_coefficient",
+			"custom_gross_income",
+			"custom_total_deduction",
+			"custom_converted_income",
+			"custom_taxable_income_gross",
+			"custom_taxable_income",
+			"custom_ins_company",
+		):
+			self.assertTrue(frappe.db.exists("Custom Field", f"Salary Slip-{fn}"), fn)
 
 	def test_lunch_component_is_tax_exempt(self):
 		ensure_mvl_defaults()
