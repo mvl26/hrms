@@ -39,6 +39,8 @@ SALARY_TYPES = "\n".join(
 def ensure_components():
 	for name, ctype, taxable, do_not_include in COMPONENTS:
 		if frappe.db.exists("Salary Component", name):
+			# self-heal: engine điền amount khi validate, nên component KHÔNG được biến mất khi = 0
+			frappe.db.set_value("Salary Component", name, "remove_if_zero_valued", 0)
 			continue
 		frappe.get_doc(
 			{
@@ -49,6 +51,7 @@ def ensure_components():
 				"is_tax_applicable": taxable,
 				"do_not_include_in_total": do_not_include,
 				"depends_on_payment_days": 0,  # engine đã tính theo công, không để Frappe prorate lại
+				"remove_if_zero_valued": 0,  # giữ lại dù amount = 0 → apply_mvl mới có row để điền
 				"description": "Tự sinh cho lương MVL (đừng xoá).",
 			}
 		).insert(ignore_permissions=True)

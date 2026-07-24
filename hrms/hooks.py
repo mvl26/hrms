@@ -193,6 +193,8 @@ doc_events = {
 		"on_trash": "hrms.utils.holiday_list.invalidate_cache",
 	},
 	"Timesheet": {"validate": "hrms.hr.utils.validate_active_employee"},
+	# Miyano: lương NET gross-up theo công thức MVL — chạy sau calculate_net_pay của controller.
+	"Salary Slip": {"validate": "hrms.vn_payroll.salary_slip_hook.apply_mvl"},
 	"Payment Entry": {
 		"on_submit": "hrms.hr.doctype.expense_claim.expense_claim.update_payment_for_expense_claim",
 		"on_cancel": "hrms.hr.doctype.expense_claim.expense_claim.update_payment_for_expense_claim",
