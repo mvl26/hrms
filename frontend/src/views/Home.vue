@@ -17,7 +17,6 @@ import CheckInPanel from "@/components/CheckInPanel.vue"
 import QuickLinks from "@/components/QuickLinks.vue"
 import BaseLayout from "@/components/BaseLayout.vue"
 import RequestPanel from "@/components/RequestPanel.vue"
-import AttendanceIcon from "@/components/icons/AttendanceIcon.vue"
 import ShiftIcon from "@/components/icons/ShiftIcon.vue"
 import LeaveIcon from "@/components/icons/LeaveIcon.vue"
 import ExpenseIcon from "@/components/icons/ExpenseIcon.vue"
@@ -27,11 +26,8 @@ import SalaryIcon from "@/components/icons/SalaryIcon.vue"
 const __ = inject("$translate")
 
 const quickLinks = [
-	{
-		icon: markRaw(AttendanceIcon),
-		title: __("Request Attendance"),
-		route: "AttendanceRequestFormView",
-	},
+	// Miyano: bỏ ô "Request Attendance" — xin đi công tác đi qua Công Tác (Business Trip),
+	// Attendance Request bị khoá server-side (business_trip.block_attendance_request).
 	{
 		icon: markRaw(ShiftIcon),
 		title: __("Request a Shift"),

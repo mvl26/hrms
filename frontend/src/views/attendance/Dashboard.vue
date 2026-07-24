@@ -3,22 +3,9 @@
 		<template #body>
 			<div class="flex flex-col mt-7 mb-7 p-4 gap-7">
 				<AttendanceCalendar />
-				<div class="w-full">
-					<router-link :to="{ name: 'AttendanceRequestFormView' }" v-slot="{ navigate }">
-						<Button @click="navigate" variant="solid" class="w-full py-5 text-base">
-							{{ __("Request Attendance") }}
-						</Button>
-					</router-link>
-				</div>
-				<div>
-					<div class="text-lg text-gray-800 font-bold">{{ __("Recent Attendance Requests") }}</div>
-					<RequestList
-						:component="markRaw(AttendanceRequestItem)"
-						:items="myAttendanceRequests?.data?.slice(0, 5)"
-						:addListButton="true"
-						:listButtonRoute="__('AttendanceRequestListView')"
-					/>
-				</div>
+				<!-- Miyano: bỏ "Request Attendance" + "Recent Attendance Requests" — xin đi công tác
+				     đi qua Công Tác (Business Trip) để có duyệt COO; Attendance Request bị khoá
+				     server-side (business_trip.block_attendance_request). -->
 				<div>
 					<div class="text-lg text-gray-800 font-bold">{{ __("Upcoming Shifts") }}</div>
 					<RequestList
@@ -55,7 +42,6 @@ import { computed, inject, markRaw } from "vue"
 import { createResource } from "frappe-ui"
 
 import BaseLayout from "@/components/BaseLayout.vue"
-import AttendanceRequestItem from "@/components/AttendanceRequestItem.vue"
 import ShiftRequestItem from "@/components/ShiftRequestItem.vue"
 import ShiftAssignmentItem from "@/components/ShiftAssignmentItem.vue"
 import RequestList from "@/components/RequestList.vue"
@@ -65,7 +51,6 @@ import {
 	getShiftDates,
 	getTotalShiftDays,
 	getShiftTiming,
-	myAttendanceRequests,
 	myShiftRequests,
 } from "@/data/attendance"
 
