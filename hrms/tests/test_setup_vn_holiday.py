@@ -67,6 +67,44 @@ class TestSetupVNHoliday(FrappeTestCase):
 		create_vn_holiday_list(2022, self.company, weekly_off_days=("Sunday",))
 		self.assertEqual(len(self._dates(name)), n1)  # chạy lại không nhân đôi ngày nghỉ bù
 
+	def test_extra_holidays_are_added_as_public_holidays(self):
+		"""Tết Âm lịch / Giỗ Tổ trôi theo âm lịch nên không hardcode được — truyền vào từ ngoài.
+		Chúng phải thành ngày nghỉ LỄ (weekly_off=0), không phải nghỉ tuần."""
+		name = create_vn_holiday_list(
+			2027,
+			self.company,
+			weekly_off_days=("Sunday",),
+			extra_holidays={"2027-02-06": "Tết Nguyên Đán (mùng 1)"},
+		)
+		dates = self._dates(name)
+		self.assertEqual(dates.get(getdate("2027-02-06")), 0)
+
+	def test_extra_holiday_on_a_weekly_off_gets_a_compensatory_day(self):
+		"""Điều 112 khoản 3 áp cho cả lễ âm: 2026-04-26 (Giỗ Tổ) rơi đúng Chủ nhật."""
+		name = create_vn_holiday_list(
+			2026,
+			self.company,
+			weekly_off_days=("Sunday",),
+			extra_holidays={"2026-04-26": "Giỗ Tổ Hùng Vương"},
+		)
+		dates = self._dates(name)
+		self.assertEqual(dates.get(getdate("2026-04-26")), 1, "26/4 vẫn là CN (nghỉ tuần)")
+		self.assertEqual(dates.get(getdate("2026-04-27")), 0, "nghỉ bù rơi vào thứ Hai kế tiếp")
+
+	def test_extra_holidays_are_idempotent(self):
+		extra = {"2027-02-06": "Tết Nguyên Đán (mùng 1)", "2027-04-16": "Giỗ Tổ Hùng Vương"}
+		name = create_vn_holiday_list(2027, self.company, extra_holidays=extra)
+		n1 = len(self._dates(name))
+		create_vn_holiday_list(2027, self.company, extra_holidays=extra)
+		self.assertEqual(len(self._dates(name)), n1)
+
+	def test_saturday_and_sunday_leaves_only_weekdays_working(self):
+		"""Miyano nghỉ T7+CN: mọi ngày nghỉ tuần phải là T7 hoặc CN, và có ~104 ngày."""
+		name = create_vn_holiday_list(2027, self.company, weekly_off_days=("Saturday", "Sunday"))
+		wo = [d for d, w in self._dates(name).items() if w]
+		self.assertTrue(all(d.weekday() in (5, 6) for d in wo))
+		self.assertGreaterEqual(len(wo), 104)
+
 	def test_report_resolves_company_default_list(self):
 		# an employee WITHOUT an explicit holiday_list must resolve the company default,
 		# so the bảng công report can mark '-' on that employee's rest days.

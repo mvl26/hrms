@@ -39,8 +39,13 @@ SOLAR_LABELS = {
 }
 
 
-def create_vn_holiday_list(year, company, weekly_off_days=("Sunday",), name=None):
-	"""Create/refresh a VN Holiday List for `year`. Returns its name. Idempotent."""
+def create_vn_holiday_list(year, company, weekly_off_days=("Sunday",), name=None, extra_holidays=None):
+	"""Create/refresh a VN Holiday List for `year`. Returns its name. Idempotent.
+
+	`extra_holidays` = {"YYYY-MM-DD": "Nhãn"} cho những ngày lễ KHÔNG cố định theo dương lịch
+	(Tết Âm lịch, Giỗ Tổ) — chúng trôi mỗi năm nên không hardcode được; truyền vào từ ngoài và
+	vẫn được áp cùng quy tắc nghỉ bù của Điều 112 khoản 3 như lễ dương.
+	"""
 	year = int(year)
 	list_name = name or f"VN {company} {year}"
 
@@ -64,23 +69,28 @@ def create_vn_holiday_list(year, company, weekly_off_days=("Sunday",), name=None
 	weekly_off_dates = {getdate(h.holiday_date) for h in doc.holidays if h.weekly_off}
 	holiday_dates = {getdate(h.holiday_date) for h in doc.holidays if not h.weekly_off}
 	bu_descriptions = {h.description for h in doc.holidays if not h.weekly_off}
-	for mm, dd in SOLAR_HOLIDAYS:
-		d = getdate(f"{year}-{mm:02d}-{dd:02d}")
-		label = SOLAR_LABELS[(mm, dd)]
+
+	def add_public_holiday(d, label):
+		"""Một ngày nghỉ lễ; nếu trùng ngày nghỉ hàng tuần thì sinh nghỉ bù (Điều 112 khoản 3)."""
 		if d in weekly_off_dates:
-			# lễ trùng ngày nghỉ hàng tuần -> nghỉ bù vào ngày làm việc kế tiếp (Điều 112 khoản 3)
 			bu_label = f"Nghỉ bù {label}"
 			if bu_label in bu_descriptions:
-				continue  # đã có ngày bù cho lễ này -> chạy lại không nhân đôi
+				return  # đã có ngày bù cho lễ này -> chạy lại không nhân đôi
 			bu = d + timedelta(days=1)
 			while bu in weekly_off_dates or bu in holiday_dates:
-				bu = bu + timedelta(days=1)  # bỏ qua CN + ngày lễ liền kề
+				bu = bu + timedelta(days=1)  # bỏ qua ngày nghỉ tuần + ngày lễ liền kề
 			doc.append("holidays", {"holiday_date": bu, "description": bu_label, "weekly_off": 0})
 			holiday_dates.add(bu)
 			bu_descriptions.add(bu_label)
 		elif d not in holiday_dates:
 			doc.append("holidays", {"holiday_date": d, "description": label, "weekly_off": 0})
 			holiday_dates.add(d)
+
+	for mm, dd in SOLAR_HOLIDAYS:
+		add_public_holiday(getdate(f"{year}-{mm:02d}-{dd:02d}"), SOLAR_LABELS[(mm, dd)])
+
+	for date_str, label in (extra_holidays or {}).items():
+		add_public_holiday(getdate(date_str), label)
 
 	doc.save()  # validate() sorts, counts, and rejects duplicate dates
 	frappe.msgprint(
