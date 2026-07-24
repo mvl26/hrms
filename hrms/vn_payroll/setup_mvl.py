@@ -15,13 +15,29 @@ from hrms.vn_payroll.mvl import default_config
 
 STRUCTURE = "MVL Việt Nam"
 
+# Mọi cột tiền của bảng lương MVL là một Salary Component (auto-sinh trong cấu trúc). Chỉ Lương theo
+# công (I) + Phụ cấp ăn (J) là khoản THẬT cộng vào lương; còn lại do_not_include_in_total → hiện trên
+# lưới phiếu để đọc đủ như bảng lương nhưng KHÔNG làm sai tổng (thuế/BHXH do công ty nộp thay).
 # (tên, loại, is_tax_applicable, do_not_include_in_total)
 COMPONENTS = [
-	("Lương theo công", "Earning", 1, 0),
-	("Phụ cấp ăn trưa", "Earning", 0, 0),  # miễn thuế TNCN
-	("Thuế TNCN (nộp thay)", "Deduction", 0, 1),  # công ty nộp thay → không trừ net
-	("BHXH - NLĐ (nộp thay)", "Deduction", 0, 1),
+	("Lương ngày công", "Earning", 0, 1),  # F — mức lương/công (tham chiếu)
+	("Lương đóng BHXH", "Earning", 0, 1),  # G
+	("Lương theo công", "Earning", 1, 0),  # I — thật, cộng lương
+	("Phụ cấp ăn trưa", "Earning", 0, 0),  # J — thật, miễn thuế
+	("Tổng thu nhập", "Earning", 0, 1),  # K
+	("Thu nhập quy đổi", "Earning", 0, 1),  # O
+	("Thu nhập tính thuế", "Earning", 0, 1),  # P
+	("Thu nhập chịu thuế kê khai", "Earning", 0, 1),  # U
+	("Giảm trừ bản thân", "Deduction", 0, 1),  # L
+	("Tổng giảm trừ gia cảnh", "Deduction", 0, 1),  # N
+	("Thuế TNCN (nộp thay)", "Deduction", 0, 1),  # Q — công ty nộp thay
+	("BHXH - NLĐ (nộp thay)", "Deduction", 0, 1),  # S
+	("BHXH - Công ty", "Deduction", 0, 1),  # R
 ]
+EARNINGS = [c[0] for c in COMPONENTS if c[1] == "Earning"]
+DEDUCTIONS = [c[0] for c in COMPONENTS if c[1] == "Deduction"]
+# Khoản THẬT cộng vào net (NET mode). GROSS thêm Thuế/BHXH NLĐ vào deduction — xử lý ở apply_mvl.
+REAL_EARNINGS = ("Lương theo công", "Phụ cấp ăn trưa")
 
 SALARY_TYPES = "\n".join(
 	[
@@ -58,47 +74,42 @@ def ensure_components():
 
 
 def ensure_structure():
-	if frappe.db.exists("Salary Structure", STRUCTURE):
-		return
-	doc = frappe.get_doc(
-		{
-			"doctype": "Salary Structure",
-			"name": STRUCTURE,
-			"company": frappe.defaults.get_defaults().get("company")
-			or frappe.db.get_value("Company", {}, "name"),
-			"is_active": "Yes",
-			"payroll_frequency": "Monthly",
-			"earnings": [
-				{"salary_component": "Lương theo công", "amount": 0},
-				{"salary_component": "Phụ cấp ăn trưa", "amount": 0},
-			],
-			"deductions": [
-				{"salary_component": "Thuế TNCN (nộp thay)", "amount": 0},
-				{"salary_component": "BHXH - NLĐ (nộp thay)", "amount": 0},
-			],
-		}
-	)
-	doc.insert(ignore_permissions=True)
-	doc.db_set("docstatus", 1)  # submit để dùng được trong Salary Structure Assignment
+	"""Tạo/đồng bộ cấu trúc MVL: mọi component trong COMPONENTS phải có mặt ở đúng bảng (idempotent)."""
+	if not frappe.db.exists("Salary Structure", STRUCTURE):
+		frappe.get_doc(
+			{
+				"doctype": "Salary Structure",
+				"name": STRUCTURE,
+				"company": frappe.defaults.get_defaults().get("company")
+				or frappe.db.get_value("Company", {}, "name"),
+				"is_active": "Yes",
+				"payroll_frequency": "Monthly",
+			}
+		).insert(ignore_permissions=True)
+
+	doc = frappe.get_doc("Salary Structure", STRUCTURE)
+	changed = False
+	for table, names in (("earnings", EARNINGS), ("deductions", DEDUCTIONS)):
+		present = {r.salary_component for r in doc.get(table)}
+		for name in names:
+			if name not in present:
+				doc.append(table, {"salary_component": name, "amount": 0})
+				changed = True
+	if changed:
+		if doc.docstatus == 1:
+			doc.db_set("docstatus", 0)  # cho phép sửa rồi submit lại
+		doc.flags.ignore_validate_update_after_submit = True
+		doc.save(ignore_permissions=True)
+		doc.db_set("docstatus", 1)  # submit để dùng trong Salary Structure Assignment
 
 
+# Tham số KHÔNG phải tiền (không làm Salary Component được): hệ số E, số phụ thuộc M, loại lương.
+# Mọi cột TIỀN (F,G,K,L,N,O,P,Q,R,S,U) là Salary Component. Số công H = payment_days native.
 def _slip_breakdown_fields():
-	"""Toàn bộ thành phần lương MVL hiện trên MỖI phiếu (đầy đủ như bảng lương Excel).
-
-	Read-only, engine điền khi validate. I/J là Earning, Q/S là Deduction (nằm trong lưới component);
-	các trường ở đây là số trung gian F..P + kê khai để phiếu lương in ra đủ mọi cột.
-	"""
 	ro = {"read_only": 1}
 
-	def f(fieldname, label, fieldtype="Currency", after=None, **kw):
-		return {
-			"fieldname": fieldname,
-			"label": label,
-			"fieldtype": fieldtype,
-			"insert_after": after,
-			**ro,
-			**kw,
-		}
+	def f(fieldname, label, fieldtype, after):
+		return {"fieldname": fieldname, "label": label, "fieldtype": fieldtype, "insert_after": after, **ro}
 
 	return [
 		{
@@ -108,41 +119,38 @@ def _slip_breakdown_fields():
 			"insert_after": "net_pay",
 		},
 		f("custom_salary_type", "Loại lương", "Data", "custom_mvl_section"),
-		f("custom_coefficient", "Hệ số lương (E)", "Float", "custom_salary_type", precision="2"),
-		f("custom_base_salary", "Lương ngày công (F)", "Currency", "custom_coefficient"),
-		f("custom_bhxh_salary_slip", "Lương đóng BHXH (G)", "Currency", "custom_base_salary"),
-		{
-			"fieldname": "custom_mvl_col1",
-			"fieldtype": "Column Break",
-			"insert_after": "custom_bhxh_salary_slip",
-		},
-		f("custom_gross_income", "Tổng thu nhập (K)", "Currency", "custom_mvl_col1"),
-		f("custom_personal_deduction", "Giảm trừ bản thân (L)", "Currency", "custom_gross_income"),
-		f("custom_dependents_slip", "Số người phụ thuộc (M)", "Int", "custom_personal_deduction"),
-		f("custom_total_deduction", "Tổng giảm trừ (N)", "Currency", "custom_dependents_slip"),
-		{
-			"fieldname": "custom_mvl_col2",
-			"fieldtype": "Column Break",
-			"insert_after": "custom_total_deduction",
-		},
-		f("custom_converted_income", "Thu nhập quy đổi (O)", "Currency", "custom_mvl_col2"),
-		f("custom_taxable_income_gross", "Thu nhập tính thuế (P)", "Currency", "custom_converted_income"),
-		f(
-			"custom_taxable_income",
-			"Thu nhập chịu thuế kê khai (U)",
-			"Currency",
-			"custom_taxable_income_gross",
-		),
-		f("custom_ins_company", "BHXH - Công ty (R)", "Currency", "custom_taxable_income"),
+		f("custom_coefficient", "Hệ số lương (E)", "Float", "custom_salary_type"),
+		f("custom_dependents_slip", "Số người phụ thuộc (M)", "Int", "custom_coefficient"),
 	]
 
 
+# Custom field tiền cũ (nay đã chuyển thành Salary Component) → gỡ khỏi phiếu khi migrate/execute.
+OBSOLETE_SLIP_FIELDS = [
+	"custom_base_salary",
+	"custom_bhxh_salary_slip",
+	"custom_gross_income",
+	"custom_personal_deduction",
+	"custom_total_deduction",
+	"custom_converted_income",
+	"custom_taxable_income_gross",
+	"custom_taxable_income",
+	"custom_ins_company",
+	"custom_mvl_col1",
+	"custom_mvl_col2",
+]
+
+
 def ensure_custom_fields():
-	# create_custom_fields chạy ALTER TABLE (DDL) → không gọi được trong transaction của test
-	# (ImplicitCommitError). Guard theo field MỚI NHẤT: đã cài đủ thì thôi. Cài lần đầu / khi thêm
-	# field mới chạy ngoài test (migrate/execute); test dựa vào migrate đã cài sẵn.
-	if frappe.db.exists("Custom Field", "Salary Slip-custom_base_salary"):
+	# create_custom_fields / delete đều chạy ALTER TABLE (DDL) → ImplicitCommitError trong transaction
+	# của test. Guard: đã đúng trạng thái (field mới có + field tiền cũ đã gỡ) thì thôi. Chỉ đụng schema
+	# khi chưa đúng → chạy lúc migrate/execute (ngoài test); test dựa vào migrate đã dọn sẵn.
+	ready = frappe.db.exists("Custom Field", "Salary Slip-custom_coefficient") and not frappe.db.exists(
+		"Custom Field", "Salary Slip-custom_base_salary"
+	)
+	if ready:
 		return
+	for fn in OBSOLETE_SLIP_FIELDS:
+		frappe.delete_doc_if_exists("Custom Field", f"Salary Slip-{fn}")
 	create_custom_fields(
 		{
 			"Salary Structure Assignment": [

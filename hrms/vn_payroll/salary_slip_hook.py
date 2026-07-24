@@ -14,14 +14,29 @@ from frappe.utils import flt, rounded
 from hrms.vn_payroll.lunch import count_lunch_days
 from hrms.vn_payroll.mvl import MVLInput, compute_mvl
 from hrms.vn_payroll.settings import config_from_settings
-from hrms.vn_payroll.setup_mvl import STRUCTURE
+from hrms.vn_payroll.setup_mvl import REAL_EARNINGS, STRUCTURE
 
-COMPONENT_FIELD = {
-	"Lương theo công": "I",
-	"Phụ cấp ăn trưa": "J",
-	"Thuế TNCN (nộp thay)": "Q",
-	"BHXH - NLĐ (nộp thay)": "S",
-}
+# Khoản THẬT cộng vào net (NET). GROSS thêm thuế + BHXH NLĐ vào deduction.
+GROSS_DEDUCTIONS = ("Thuế TNCN (nộp thay)", "BHXH - NLĐ (nộp thay)")
+
+
+def component_values(inp, cfg, r) -> dict:
+	"""Số tiền cho MỖI component MVL (mọi cột tiền của bảng lương)."""
+	return {
+		"Lương ngày công": inp.base,  # F
+		"Lương đóng BHXH": inp.bhxh_salary,  # G
+		"Lương theo công": r.I,
+		"Phụ cấp ăn trưa": r.J,
+		"Tổng thu nhập": r.K,
+		"Thu nhập quy đổi": r.O,
+		"Thu nhập tính thuế": r.P,
+		"Thu nhập chịu thuế kê khai": r.U,
+		"Giảm trừ bản thân": cfg.personal_deduction if inp.register_personal_deduction else 0.0,  # L
+		"Tổng giảm trừ gia cảnh": r.N,
+		"Thuế TNCN (nộp thay)": r.Q,
+		"BHXH - NLĐ (nộp thay)": r.S,
+		"BHXH - Công ty": r.R,
+	}
 
 
 def get_mvl_assignment(doc) -> frappe._dict | None:
@@ -72,28 +87,32 @@ def apply_mvl(doc, method=None):
 	)
 	cfg = config_from_settings()
 	r = compute_mvl(inp, cfg)
-	_set_component_amounts(doc, inp, r)
+	_set_component_amounts(doc, inp, component_values(inp, cfg, r))
 	_set_totals(doc)
-	_set_breakdown_fields(doc, inp, cfg, r)
+	_set_breakdown_fields(doc, inp, cfg)
 
 
-def _set_component_amounts(doc, inp, r):
-	"""Gán amount cho từng component MVL trên slip + ép cờ do_not_include_in_total của thuế/BHXH NLĐ."""
-	amounts = {name: getattr(r, field) for name, field in COMPONENT_FIELD.items()}
-	# NET: thuế + BHXH NLĐ do công ty nộp thay → không trừ net. Ép cờ ngay trên row (không tin cờ
-	# kế thừa từ component — Frappe recompute lúc submit đọc cờ trên row). GROSS thì trừ thật.
-	deduct_from_net = inp.salary_type == "GROSS"
+def _set_component_amounts(doc, inp, values):
+	"""Gán amount cho MỖI component MVL + ép cờ do_not_include_in_total.
+
+	NET: chỉ Lương theo công + Phụ cấp ăn cộng vào net; mọi component khác do_not_include (hiện trên
+	lưới nhưng không làm sai tổng — thuế/BHXH do công ty nộp thay). GROSS thêm thuế + BHXH NLĐ vào trừ.
+	"""
+	is_gross = inp.salary_type == "GROSS"
 	for row in list(doc.earnings) + list(doc.deductions):
-		if row.salary_component in amounts:
-			row.amount = amounts[row.salary_component]
-			row.default_amount = amounts[row.salary_component]
-			if row.parentfield == "deductions":
-				row.do_not_include_in_total = 0 if deduct_from_net else 1
+		if row.salary_component not in values:
+			continue
+		row.amount = values[row.salary_component]
+		row.default_amount = values[row.salary_component]
+		real = row.salary_component in REAL_EARNINGS or (
+			is_gross and row.salary_component in GROSS_DEDUCTIONS
+		)
+		row.do_not_include_in_total = 0 if real else 1
 
 
 def _set_totals(doc):
-	"""Tính lại gross/net theo amount vừa gán (gross = Σ earnings; deduction bỏ qua do_not_include)."""
-	gross = sum(flt(row.amount) for row in doc.earnings)
+	"""Tính lại gross/net theo amount vừa gán — cả earnings lẫn deductions đều bỏ qua do_not_include."""
+	gross = sum(flt(row.amount) for row in doc.earnings if not row.do_not_include_in_total)
 	deduction = sum(flt(row.amount) for row in doc.deductions if not row.do_not_include_in_total)
 	rate = flt(doc.exchange_rate) or 1.0
 	doc.gross_pay = gross
@@ -106,17 +125,8 @@ def _set_totals(doc):
 	doc.base_rounded_total = rounded(doc.base_net_pay)
 
 
-def _set_breakdown_fields(doc, inp, cfg, r):
-	"""Chi tiết đầy đủ như bảng lương Excel — mọi phiếu đều có đủ thành phần (F..P + kê khai)."""
+def _set_breakdown_fields(doc, inp, cfg):
+	"""Chỉ 3 tham số KHÔNG phải tiền (không làm component được); mọi cột tiền đã là Salary Component."""
 	doc.custom_salary_type = inp.salary_type
 	doc.custom_coefficient = cfg.probation_coef if inp.salary_type == "Thử việc" else 1.0
-	doc.custom_base_salary = inp.base  # F
-	doc.custom_bhxh_salary_slip = inp.bhxh_salary  # G
-	doc.custom_gross_income = r.K
-	doc.custom_personal_deduction = cfg.personal_deduction if inp.register_personal_deduction else 0.0  # L
 	doc.custom_dependents_slip = inp.dependents  # M
-	doc.custom_total_deduction = r.N
-	doc.custom_converted_income = r.O
-	doc.custom_taxable_income_gross = r.P
-	doc.custom_taxable_income = r.U  # kê khai
-	doc.custom_ins_company = r.R

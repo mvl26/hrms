@@ -93,15 +93,18 @@ class TestSalarySlipMVL(FrappeTestCase):
 		# O = K − 21.7tr − J = 25tr − 21.7tr = 3.3tr (J triệt tiêu) → Q = 173.684 bất kể J
 		self.assertEqual(comp["Thuế TNCN (nộp thay)"], 173_684)
 		self.assertEqual(comp["BHXH - NLĐ (nộp thay)"], 2_625_000)  # 25tr × 10.5%
-		self.assertEqual(ss.custom_ins_company, 5_375_000)  # 25tr × 21.5%
+		self.assertEqual(comp["BHXH - Công ty"], 5_375_000)  # R = 25tr × 21.5%
 		# NET: thuế + BHXH KHÔNG trừ vào net → net = K = I + J
 		self.assertEqual(ss.net_pay, 25_000_000 + ss.payment_days * 35_000)
-		# phiếu mang đủ chi tiết F..U để in bảng lương
-		self.assertEqual(ss.custom_base_salary, 25_000_000)  # F
-		self.assertEqual(ss.custom_gross_income, ss.net_pay)  # K = T (NET)
-		self.assertEqual(ss.custom_total_deduction, 21_700_000)  # N = 15.5tr + 6.2tr
-		self.assertEqual(ss.custom_converted_income, 3_300_000)  # O
-		self.assertEqual(ss.custom_ins_company, 5_375_000)  # R
+		# mọi cột tiền là Salary Component trong lưới (không phải field): F, G, K, N, O, R, U…
+		self.assertEqual(comp["Lương ngày công"], 25_000_000)  # F
+		self.assertEqual(comp["Lương đóng BHXH"], 25_000_000)  # G
+		self.assertEqual(comp["Tổng thu nhập"], ss.net_pay)  # K = T (NET)
+		self.assertEqual(comp["Tổng giảm trừ gia cảnh"], 21_700_000)  # N
+		self.assertEqual(comp["Thu nhập quy đổi"], 3_300_000)  # O
+		self.assertEqual(comp["Thu nhập chịu thuế kê khai"], 25_000_000 + 173_684 + 2_625_000)  # U = 25tr+Q+S
+		# các cột do_not_include KHÔNG làm sai net
+		self.assertEqual(ss.gross_pay, ss.net_pay)
 
 	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
 	def test_net_tracks_payment_days(self):

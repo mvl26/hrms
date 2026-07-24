@@ -4,28 +4,27 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from hrms.vn_payroll.setup_mvl import STRUCTURE, ensure_mvl_defaults
+from hrms.vn_payroll.setup_mvl import COMPONENTS, DEDUCTIONS, EARNINGS, STRUCTURE, ensure_mvl_defaults
 
 
 class TestSetupMVL(FrappeTestCase):
-	def test_creates_components_structure_and_custom_fields(self):
+	def test_every_money_column_is_a_component_in_the_structure(self):
 		ensure_mvl_defaults()
-		for c in ("Lương theo công", "Phụ cấp ăn trưa", "Thuế TNCN (nộp thay)", "BHXH - NLĐ (nộp thay)"):
-			self.assertTrue(frappe.db.exists("Salary Component", c), c)
-		self.assertTrue(frappe.db.exists("Salary Structure", STRUCTURE))
-		self.assertTrue(frappe.db.exists("Custom Field", "Salary Structure Assignment-custom_salary_type"))
-		# phiếu lương phải có đủ mọi thành phần F..U của bảng lương
-		for fn in (
-			"custom_base_salary",
-			"custom_coefficient",
-			"custom_gross_income",
-			"custom_total_deduction",
-			"custom_converted_income",
-			"custom_taxable_income_gross",
-			"custom_taxable_income",
-			"custom_ins_company",
-		):
-			self.assertTrue(frappe.db.exists("Custom Field", f"Salary Slip-{fn}"), fn)
+		# mọi cột tiền của bảng lương là 1 Salary Component
+		for name, *_ in COMPONENTS:
+			self.assertTrue(frappe.db.exists("Salary Component", name), name)
+		# và đều nằm trong cấu trúc "MVL Việt Nam" đúng bảng earnings/deductions
+		doc = frappe.get_doc("Salary Structure", STRUCTURE)
+		self.assertEqual({r.salary_component for r in doc.earnings}, set(EARNINGS))
+		self.assertEqual({r.salary_component for r in doc.deductions}, set(DEDUCTIONS))
+
+	def test_only_nonmoney_params_are_slip_fields(self):
+		ensure_mvl_defaults()
+		self.assertTrue(frappe.db.exists("Custom Field", "Salary Slip-custom_coefficient"))  # E
+		self.assertTrue(frappe.db.exists("Custom Field", "Salary Slip-custom_dependents_slip"))  # M
+		# các cột tiền cũ KHÔNG còn là field (đã thành component)
+		for fn in ("custom_base_salary", "custom_gross_income", "custom_ins_company"):
+			self.assertFalse(frappe.db.exists("Custom Field", f"Salary Slip-{fn}"), fn)
 
 	def test_lunch_component_is_tax_exempt(self):
 		ensure_mvl_defaults()
