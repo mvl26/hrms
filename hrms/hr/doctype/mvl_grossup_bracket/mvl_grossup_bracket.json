@@ -1,0 +1,50 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-24 11:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "threshold_upto",
+  "subtract",
+  "divisor"
+ ],
+ "fields": [
+  {
+   "columns": 3,
+   "description": "Áp dụng khi thu nhập NET (O) <= ngưỡng này (bậc cuối để trống = vô cực).",
+   "fieldname": "threshold_upto",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Ngưỡng trên (<=)"
+  },
+  {
+   "columns": 3,
+   "fieldname": "subtract",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Trừ"
+  },
+  {
+   "columns": 2,
+   "description": "Thu nhập tính thuế P = (O - Trừ) / Chia.",
+   "fieldname": "divisor",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Chia",
+   "reqd": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-24 11:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "HR",
+ "name": "Mvl Grossup Bracket",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
