@@ -111,6 +111,10 @@ def _coefficient(salary_type: str, cfg: MVLConfig) -> float:
 
 def compute_mvl(inp: MVLInput, cfg: MVLConfig) -> MVLResult:
 	"""Chạy toàn bộ Bước 1–9 cho một nhân sự trong một kỳ. Trả mọi số trung gian để in + kiểm."""
+	# GROSS chưa hiện thực (Bước 6.3.6 khác cấu trúc). Fail lớn tiếng thay vì ra phiếu sai âm thầm —
+	# nhánh này để trống sẽ cho P/Q = 0 mà hook vẫn trừ thuế/BHXH. Miyano trả toàn NET.
+	if inp.salary_type == "GROSS":
+		raise ValueError("Loại lương GROSS chưa được hỗ trợ trong engine MVL (Miyano trả toàn NET).")
 	r = MVLResult()
 	is_net_fulltime = inp.salary_type in NET_FULLTIME_TYPES
 	e = _coefficient(inp.salary_type, cfg)

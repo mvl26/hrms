@@ -4,10 +4,22 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from hrms.vn_payroll.setup_mvl import COMPONENTS, DEDUCTIONS, EARNINGS, STRUCTURE, ensure_mvl_defaults
+from hrms.vn_payroll.setup_mvl import (
+	COMPONENTS,
+	DEDUCTIONS,
+	EARNINGS,
+	SALARY_TYPES,
+	STRUCTURE,
+	ensure_mvl_defaults,
+)
 
 
 class TestSetupMVL(FrappeTestCase):
+	def test_gross_not_offered_until_implemented(self):
+		# GROSS chưa hiện thực → không được cho HR chọn (tránh ra phiếu sai âm thầm)
+		self.assertNotIn("GROSS", SALARY_TYPES.split("\n"))
+		self.assertIn("Chính thức", SALARY_TYPES.split("\n"))
+
 	def test_every_money_column_is_a_component_in_the_structure(self):
 		ensure_mvl_defaults()
 		# mọi cột tiền của bảng lương là 1 Salary Component

@@ -100,6 +100,12 @@ class TestMVLCore(unittest.TestCase):
 		self.assertEqual(r0.Q, 173_684)
 		self.assertGreater(r.Q, r0.Q)  # thưởng làm thuế tăng
 
+	def test_gross_type_raises_instead_of_silently_wrong(self):
+		# GROSS chưa hiện thực → phải nổ lỗi, KHÔNG được ra kết quả sai âm thầm (P/Q=0)
+		inp = MVLInput("GROSS", 30_000_000, 30_000_000, 0, True, 22, 22, 22)
+		with self.assertRaises(ValueError):
+			compute_mvl(inp, self.cfg)
+
 	def test_grossup_bracket_boundaries(self):
 		# O đúng ngưỡng 9.5tr thuộc bậc 1 (/0.95); vượt lên bậc 2 ((O-500k)/0.9)
 		r1 = compute_mvl(MVLInput("Chính thức", 9_500_000, 0, 0, False, 0, 22, 22), self.cfg)

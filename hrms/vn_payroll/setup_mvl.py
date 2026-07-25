@@ -42,6 +42,8 @@ REAL_EARNINGS = ("Lương theo công", "Phụ cấp ăn trưa", "Tiền thưởn
 # Component HR TỰ ĐIỀN — engine đọc chứ KHÔNG ghi đè.
 BONUS_COMPONENT = "Tiền thưởng"
 
+# GROSS bị BỎ khỏi lựa chọn: engine chưa hiện thực nhánh GROSS (r.P/r.Q về 0, J=0) trong khi hook lại
+# nối thuế/BHXH thành trừ thật → phiếu GROSS sai âm thầm. Miyano trả TOÀN NET. Thêm lại khi làm xong GROSS.
 SALARY_TYPES = "\n".join(
 	[
 		"Chính thức",
@@ -50,7 +52,6 @@ SALARY_TYPES = "\n".join(
 		"Parttime nước ngoài",
 		"Parttime cam kết 08",
 		"Khoán",
-		"GROSS",
 	]
 )
 
