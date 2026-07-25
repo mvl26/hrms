@@ -131,3 +131,32 @@ class TestSalarySlipMVL(FrappeTestCase):
 		# I = ROUND(22tr / 30 × 27) = 19.800.000
 		self.assertEqual(ss.payment_days, 27)
 		self.assertEqual(comp["Lương theo công"], 19_800_000)
+
+	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
+	def test_bonus_and_lunch_days_on_slip(self):
+		ensure_fiscal_year_2099()
+		ensure_mvl_defaults()
+		emp = make_employee("mvl_bonus@codes.com", company="Miyano")
+		make_ssa(
+			emp,
+			base=25_000_000,
+			custom_salary_type="Chính thức",
+			custom_bhxh_salary=25_000_000,
+			custom_register_personal_deduction=1,
+		)
+		mark_full_month(emp)  # checkin 08:00–17:30 mỗi ngày → phủ trưa
+		ss = make_slip(emp)
+		base_net = ss.net_pay
+		# dữ liệu ăn trưa hiện trên phiếu (checkin phủ trưa mỗi ngày công)
+		self.assertEqual(ss.custom_lunch_days, ss.payment_days)
+
+		# HR điền Tiền thưởng → engine đọc, không ghi đè
+		for row in ss.earnings:
+			if row.salary_component == "Tiền thưởng":
+				row.amount = 5_000_000
+		ss.save()
+		comp = {r.salary_component: r.amount for r in ss.earnings + ss.deductions}
+		self.assertEqual(comp["Tiền thưởng"], 5_000_000)  # giữ nguyên số HR nhập
+		self.assertEqual(ss.net_pay, base_net + 5_000_000)  # thưởng cộng vào thực lĩnh
+		self.assertEqual(comp["Tổng thu nhập"], base_net + 5_000_000)  # K gồm thưởng
+		self.assertGreater(comp["Thuế TNCN (nộp thay)"], 0)  # thưởng chịu thuế

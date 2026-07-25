@@ -87,6 +87,19 @@ class TestMVLCore(unittest.TestCase):
 		self.assertEqual(_progressive_tax(100_000_000, b), _round(100_000_000 * 0.35 - 14_500_000))
 		self.assertEqual(_progressive_tax(-1, b), 0)
 
+	def test_bonus_added_to_income_and_taxed(self):
+		# Chính thức 25M, 22/22, ăn 21, 1 phụ thuộc + thưởng 5M (HR tự điền)
+		r = compute_mvl(
+			MVLInput("Chính thức", 25_000_000, 25_000_000, 1, True, 21, 22, 22, bonus=5_000_000), self.cfg
+		)
+		self.assertEqual(r.K, 25_735_000 + 5_000_000)  # K = I + J + thưởng
+		self.assertEqual(r.O, 8_300_000)  # O = K − N − J → thưởng chịu thuế
+		self.assertEqual(r.T, 30_735_000)  # thực lĩnh gồm cả thưởng
+		# không thưởng → như cũ
+		r0 = compute_mvl(MVLInput("Chính thức", 25_000_000, 25_000_000, 1, True, 21, 22, 22), self.cfg)
+		self.assertEqual(r0.Q, 173_684)
+		self.assertGreater(r.Q, r0.Q)  # thưởng làm thuế tăng
+
 	def test_grossup_bracket_boundaries(self):
 		# O đúng ngưỡng 9.5tr thuộc bậc 1 (/0.95); vượt lên bậc 2 ((O-500k)/0.9)
 		r1 = compute_mvl(MVLInput("Chính thức", 9_500_000, 0, 0, False, 0, 22, 22), self.cfg)

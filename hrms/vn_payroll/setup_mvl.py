@@ -24,6 +24,7 @@ COMPONENTS = [
 	("Lương đóng BHXH", "Earning", 0, 1),  # G
 	("Lương theo công", "Earning", 1, 0),  # I — thật, cộng lương
 	("Phụ cấp ăn trưa", "Earning", 0, 0),  # J — thật, miễn thuế
+	("Tiền thưởng", "Earning", 1, 0),  # HR tự điền — thật, chịu thuế, cộng lương
 	("Tổng thu nhập", "Earning", 0, 1),  # K
 	("Thu nhập quy đổi", "Earning", 0, 1),  # O
 	("Thu nhập tính thuế", "Earning", 0, 1),  # P
@@ -37,7 +38,9 @@ COMPONENTS = [
 EARNINGS = [c[0] for c in COMPONENTS if c[1] == "Earning"]
 DEDUCTIONS = [c[0] for c in COMPONENTS if c[1] == "Deduction"]
 # Khoản THẬT cộng vào net (NET mode). GROSS thêm Thuế/BHXH NLĐ vào deduction — xử lý ở apply_mvl.
-REAL_EARNINGS = ("Lương theo công", "Phụ cấp ăn trưa")
+REAL_EARNINGS = ("Lương theo công", "Phụ cấp ăn trưa", "Tiền thưởng")
+# Component HR TỰ ĐIỀN — engine đọc chứ KHÔNG ghi đè.
+BONUS_COMPONENT = "Tiền thưởng"
 
 SALARY_TYPES = "\n".join(
 	[
@@ -121,6 +124,7 @@ def _slip_breakdown_fields():
 		f("custom_salary_type", "Loại lương", "Data", "custom_mvl_section"),
 		f("custom_coefficient", "Hệ số lương (E)", "Float", "custom_salary_type"),
 		f("custom_dependents_slip", "Số người phụ thuộc (M)", "Int", "custom_coefficient"),
+		f("custom_lunch_days", "Số ngày ăn trưa", "Int", "custom_dependents_slip"),
 	]
 
 
@@ -144,7 +148,7 @@ def ensure_custom_fields():
 	# create_custom_fields / delete đều chạy ALTER TABLE (DDL) → ImplicitCommitError trong transaction
 	# của test. Guard: đã đúng trạng thái (field mới có + field tiền cũ đã gỡ) thì thôi. Chỉ đụng schema
 	# khi chưa đúng → chạy lúc migrate/execute (ngoài test); test dựa vào migrate đã dọn sẵn.
-	ready = frappe.db.exists("Custom Field", "Salary Slip-custom_coefficient") and not frappe.db.exists(
+	ready = frappe.db.exists("Custom Field", "Salary Slip-custom_lunch_days") and not frappe.db.exists(
 		"Custom Field", "Salary Slip-custom_base_salary"
 	)
 	if ready:

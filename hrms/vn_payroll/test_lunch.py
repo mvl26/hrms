@@ -1,12 +1,33 @@
 # Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
 # See license.txt
 
+from datetime import timedelta
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import get_datetime
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
-from hrms.vn_payroll.lunch import count_lunch_days
+from hrms.vn_payroll.lunch import (
+	DEFAULT_LUNCH_END,
+	DEFAULT_LUNCH_START,
+	count_lunch_days,
+	shift_lunch_window,
+)
+
+
+class TestShiftLunchWindow(FrappeTestCase):
+	def test_falls_back_to_default_when_no_shift(self):
+		self.assertEqual(shift_lunch_window(None), (DEFAULT_LUNCH_START, DEFAULT_LUNCH_END))
+
+	def test_reads_window_from_shift_type(self):
+		from hrms.hr.doctype.shift_type.test_shift_type import setup_shift_type
+
+		st = setup_shift_type(shift_type="MVL Lunch Win", start_time="08:00:00", end_time="17:00:00")
+		st.custom_lunch_start = timedelta(hours=11)
+		st.custom_lunch_end = timedelta(hours=14)
+		st.save()
+		self.assertEqual(shift_lunch_window(st.name), (11 * 60, 14 * 60))
 
 
 class TestCountLunchDays(FrappeTestCase):

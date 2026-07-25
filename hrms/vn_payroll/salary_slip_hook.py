@@ -14,7 +14,7 @@ from frappe.utils import flt, rounded
 from hrms.vn_payroll.lunch import count_lunch_days
 from hrms.vn_payroll.mvl import MVLInput, compute_mvl
 from hrms.vn_payroll.settings import config_from_settings
-from hrms.vn_payroll.setup_mvl import REAL_EARNINGS, STRUCTURE
+from hrms.vn_payroll.setup_mvl import BONUS_COMPONENT, REAL_EARNINGS, STRUCTURE
 
 # Khoản THẬT cộng vào net (NET). GROSS thêm thuế + BHXH NLĐ vào deduction.
 GROSS_DEDUCTIONS = ("Thuế TNCN (nộp thay)", "BHXH - NLĐ (nộp thay)")
@@ -74,22 +74,30 @@ def apply_mvl(doc, method=None):
 	if not standard_days:
 		return  # tránh chia 0 khi kỳ toàn ngày nghỉ
 
+	lunch_days = flt(ssa.custom_lunch_days_override) or count_lunch_days(
+		doc.employee, doc.start_date, doc.end_date
+	)
 	inp = MVLInput(
 		salary_type=ssa.custom_salary_type or "Chính thức",
 		base=flt(ssa.base),
 		bhxh_salary=flt(ssa.custom_bhxh_salary),
 		dependents=int(ssa.custom_dependents or 0),
 		register_personal_deduction=bool(ssa.custom_register_personal_deduction),
-		lunch_days=flt(ssa.custom_lunch_days_override)
-		or count_lunch_days(doc.employee, doc.start_date, doc.end_date),
+		lunch_days=lunch_days,
 		standard_days=standard_days,
 		worked_days=flt(doc.payment_days),
+		bonus=_bonus_amount(doc),  # HR tự điền, engine đọc chứ không ghi đè
 	)
 	cfg = config_from_settings()
 	r = compute_mvl(inp, cfg)
 	_set_component_amounts(doc, inp, component_values(inp, cfg, r))
 	_set_totals(doc)
-	_set_breakdown_fields(doc, inp, cfg)
+	_set_breakdown_fields(doc, inp, cfg, lunch_days)
+
+
+def _bonus_amount(doc) -> float:
+	"""Tiền thưởng HR tự điền trên phiếu — engine đọc để tính thuế, KHÔNG bị ghi đè."""
+	return next((flt(row.amount) for row in doc.earnings if row.salary_component == BONUS_COMPONENT), 0.0)
 
 
 def _set_component_amounts(doc, inp, values):
@@ -125,8 +133,9 @@ def _set_totals(doc):
 	doc.base_rounded_total = rounded(doc.base_net_pay)
 
 
-def _set_breakdown_fields(doc, inp, cfg):
-	"""Chỉ 3 tham số KHÔNG phải tiền (không làm component được); mọi cột tiền đã là Salary Component."""
+def _set_breakdown_fields(doc, inp, cfg, lunch_days):
+	"""Tham số KHÔNG phải tiền (không làm component được); mọi cột tiền đã là Salary Component."""
 	doc.custom_salary_type = inp.salary_type
 	doc.custom_coefficient = cfg.probation_coef if inp.salary_type == "Thử việc" else 1.0
 	doc.custom_dependents_slip = inp.dependents  # M
+	doc.custom_lunch_days = int(lunch_days)  # số ngày ăn trưa (dữ liệu ăn trưa trên phiếu)

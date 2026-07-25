@@ -31,6 +31,7 @@ class MVLInput:
 	lunch_days: float  # số ngày ăn tại công ty
 	standard_days: float  # H7 — công chuẩn tháng
 	worked_days: float  # H — công thực tế (payment_days)
+	bonus: float = 0.0  # tiền thưởng (HR tự điền) — cộng vào thu nhập chịu thuế + thực lĩnh
 
 
 @dataclass
@@ -120,9 +121,9 @@ def compute_mvl(inp: MVLInput, cfg: MVLConfig) -> MVLResult:
 	else:
 		r.I = _round(inp.base * e / inp.standard_days * inp.worked_days)
 
-	# Bước 2 — phụ cấp ăn (chỉ NET fulltime); Bước 3 — tổng thu nhập
+	# Bước 2 — phụ cấp ăn (chỉ NET fulltime); Bước 3 — tổng thu nhập (+ tiền thưởng nếu có)
 	r.J = _round(inp.lunch_days * cfg.lunch_rate) if is_net_fulltime else 0.0
-	r.K = r.I + r.J
+	r.K = r.I + r.J + _round(inp.bonus)
 
 	# Bước 4 — giảm trừ gia cảnh; Bước 5 — thu nhập làm căn cứ quy đổi
 	r.N = (
