@@ -41,6 +41,25 @@ là chế độ BHXH riêng) — được chủ doanh nghiệp chốt để dễ
   "Nghỉ không lương" hoặc không nghỉ. HR **không** đánh mã trừ-quỹ vượt số dư.
 - Nhóm miễn trừ dùng loại nghỉ riêng, cấu hình để **không** chặn theo quỹ phép (nghỉ chế độ).
 
+## Bổ sung 2026-07-25 — Required "Loại nghỉ" (VN) tự suy mã + nghỉ nửa ngày sáng/chiều
+
+- **Loại nghỉ bắt buộc (tiếng Việt):** field mới `custom_leave_reason` (Select), **hiện + bắt buộc khi
+  `leave_type = "Nghỉ phép năm"`**, đúng **3** loại trừ-quỹ ở VN (không thừa không thiếu):
+  **Nghỉ phép năm→P · Nghỉ ốm→Ô · Nghỉ chăm con ốm→Cô**. Hệ thống **tự suy mã công** (không nhập mã tay);
+  `validate_pool_code` bắt buộc chọn Loại nghỉ hợp lệ. Field cũ `custom_attendance_code` (Link mã) trên
+  Leave Application chuyển **ẩn + read-only** (deprecated — mã suy từ Loại nghỉ, không nhập tay).
+- **Nghỉ nửa ngày:** field `custom_half_day_period` (Select Sáng/Chiều), **bắt buộc khi `half_day=1`**.
+  Hook tách mã theo buổi lên Attendance ngày nửa: nghỉ **Sáng** → morning=mã, afternoon=X; nghỉ **Chiều**
+  → morning=X, afternoon=mã. Payroll giữ Half Day + `half_day_status`="Present" (db_set thuần hiển thị)
+  → **lương bất biến**.
+- Test: **12 test xanh** qua harness. Deploy: cần `bench migrate` để 2 field mới (`custom_leave_reason`,
+  `custom_half_day_period`) lên site + **restart** để hook mới live.
+- **Bậc 3 PWA — ĐÃ build:** `frontend/src/views/leave/Form.vue` ẩn/hiện + `reqd` `custom_leave_reason`
+  theo `leave_type=="Nghỉ phép năm"` và `custom_half_day_period` theo `half_day` (FormView không đọc
+  `depends_on` như desk nên wire tay, mirror `half_day_date`); guard field-missing → **no-op trước
+  migrate**. Desk form dùng `depends_on`/`mandatory_depends_on` native, không cần JS. PWA compile sạch.
+  Deploy PWA = `yarn build` (ghi đè bundle live) đi kèm migrate + restart.
+
 ## Mấu chốt kỹ thuật: "một quỹ" nhưng "hiện riêng"
 
 Đơn xin nghỉ chỉ có **một** `leave_type` để trừ số dư. Muốn Ô/Cô/P cùng rút quỹ "Nghỉ phép năm"

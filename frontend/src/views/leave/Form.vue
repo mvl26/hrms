@@ -49,6 +49,12 @@ const formFields = createResource({
 		return fields.map((field) => {
 			if (field.fieldname === "half_day_date") field.hidden = true
 
+			// Miyano: mã công suy tự động từ "Loại nghỉ"; ẩn field mã cũ + mặc định ẩn 2 field điều
+			// kiện (hiện lại qua watcher theo leave_type / half_day).
+			if (field.fieldname === "custom_attendance_code") field.hidden = true
+			if (field.fieldname === "custom_leave_reason") field.hidden = true
+			if (field.fieldname === "custom_half_day_period") field.hidden = true
+
 			if (field.fieldname === "posting_date") field.default = today
 
 			return field
@@ -95,12 +101,18 @@ watch(
 )
 watch(
 	() => leaveApplication.value.leave_type,
-	(leave_type) => setLeaveBalance(leave_type)
+	(leave_type) => {
+		setLeaveBalance(leave_type)
+		setLeaveReasonVisibility(leave_type)
+	}
 )
 
 watch(
 	() => leaveApplication.value.half_day,
-	(half_day) => setHalfDayDate(half_day)
+	(half_day) => {
+		setHalfDayDate(half_day)
+		setHalfDayPeriodVisibility(half_day)
+	}
 )
 
 watch(
@@ -248,6 +260,30 @@ function setHalfDayDateRange() {
 	half_day_date.maxDate = leaveApplication.value.to_date
 }
 
+// Miyano: "Loại nghỉ" (Nghỉ phép năm / Nghỉ ốm / Nghỉ chăm con ốm) bắt buộc khi rút quỹ phép năm;
+// hệ thống tự suy mã công. Ẩn/hiện thủ công vì FormView không đọc depends_on như desk.
+function setLeaveReasonVisibility(leave_type) {
+	const field = formFields.data?.find(
+		(field) => field.fieldname === "custom_leave_reason"
+	)
+	if (!field) return
+	const is_pool = leave_type === "Nghỉ phép năm"
+	field.hidden = !is_pool
+	field.reqd = is_pool
+	if (!is_pool) leaveApplication.value.custom_leave_reason = null
+}
+
+// Miyano: nghỉ nửa ngày phải chọn buổi (Sáng/Chiều) → bảng công tách sáng/chiều.
+function setHalfDayPeriodVisibility(half_day) {
+	const field = formFields.data?.find(
+		(field) => field.fieldname === "custom_half_day_period"
+	)
+	if (!field) return
+	field.hidden = !half_day
+	field.reqd = Boolean(half_day)
+	if (!half_day) leaveApplication.value.custom_half_day_period = null
+}
+
 function setLeaveApprovers(data) {
 	const leave_approver = formFields.data?.find(
 		(field) => field.fieldname === "leave_approver"
@@ -286,6 +322,8 @@ function areValuesSet() {
 
 function validateForm() {
 	setHalfDayDate(leaveApplication.value.half_day)
+	setHalfDayPeriodVisibility(leaveApplication.value.half_day)
+	setLeaveReasonVisibility(leaveApplication.value.leave_type)
 	leaveApplication.value.employee = currEmployee.value
 }
 </script>
