@@ -5,6 +5,8 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from hrms.tests.isolation import PerTestRollback
+
 SHIFT_FIELDS = (
 	"custom_split_half_day",
 	"custom_lunch_start",
@@ -14,7 +16,7 @@ SHIFT_FIELDS = (
 )
 
 
-class TestVNHalfDayClassifier(FrappeTestCase):
+class TestVNHalfDayClassifier(PerTestRollback, FrappeTestCase):
 	def test_shift_type_config_fields_exist(self):
 		for fn in SHIFT_FIELDS:
 			self.assertTrue(
@@ -22,7 +24,7 @@ class TestVNHalfDayClassifier(FrappeTestCase):
 			)
 
 
-class TestVNHalfDayLogic(FrappeTestCase):
+class TestVNHalfDayLogic(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()

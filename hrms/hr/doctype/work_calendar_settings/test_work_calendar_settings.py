@@ -10,9 +10,10 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import getdate
 
 from hrms.hr.doctype.work_calendar_settings.work_calendar_settings import generate_holiday_list
+from hrms.tests.isolation import PerTestRollback
 
 
-class TestWorkCalendarSettings(FrappeTestCase):
+class TestWorkCalendarSettings(PerTestRollback, FrappeTestCase):
 	def setUp(self):
 		self.company = frappe.db.get_value("Company", {}, "name")
 		self.settings = frappe.get_single("Work Calendar Settings")

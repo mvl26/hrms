@@ -37,6 +37,7 @@ import random
 import frappe
 from frappe.utils import getdate
 
+from hrms.db_utils import commit_unless_test
 from hrms.demo_data import COMPANY, EMP_DEFS, SHIFT, _ensure_employees
 from hrms.rebuild_attendance_from_checkin import run_auto_attendance_for_period
 
@@ -352,8 +353,7 @@ def generate(year=2026, month=6, apply=False):
 		employees=emps,
 	)
 	if apply:
-		# commit chủ đích: công cụ chạy ngoài request cycle (bench execute), ghi từng phần để lần chạy dài không mất việc đã làm
-		frappe.db.commit()  # nosemgrep
+		commit_unless_test()
 	else:
 		frappe.db.rollback()
 		result["note"] = "DRY-RUN: đã rollback. Thêm --kwargs \"{'apply': True}\" để ghi thật."

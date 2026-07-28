@@ -9,6 +9,8 @@ Month = Sep 2026 (has 01-02/09 Quốc khánh -> 'NL'; Sundays -> '-').
 import frappe
 from frappe.utils import getdate
 
+from hrms.db_utils import commit_unless_test
+
 COMPANY = "Miyano"
 SHIFT = "Ca Hành Chính"
 YEAR, MONTH = 2026, 9
@@ -261,7 +263,6 @@ def create_demo_data():
 		_sheet(status)
 	except Exception as e:
 		status["_sheet"] = f"FAILED: {e}"
-	# commit chủ đích: công cụ chạy ngoài request cycle (bench execute), ghi từng phần để lần chạy dài không mất việc đã làm
-	frappe.db.commit()  # nosemgrep
+	commit_unless_test()
 	status["employees"] = emps
 	return status

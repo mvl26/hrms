@@ -17,6 +17,7 @@ from hrms.payroll.doctype.salary_slip.test_salary_slip import (
 	make_holiday_list,
 	mark_attendance,
 )
+from hrms.tests.isolation import PerTestRollback
 
 # (day offset from first sunday, native status, native leave_type, equivalent single-day code)
 # full-day scenarios only: for a full On-Leave day half_day_status is irrelevant to payroll,
@@ -31,7 +32,7 @@ SCENARIOS = [
 ]
 
 
-class TestAttendanceCodePayrollInvariance(FrappeTestCase):
+class TestAttendanceCodePayrollInvariance(PerTestRollback, FrappeTestCase):
 	def setUp(self):
 		make_holiday_list()
 		frappe.db.set_value(

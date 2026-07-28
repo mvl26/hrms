@@ -6,8 +6,10 @@ from frappe.tests.utils import FrappeTestCase
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
+from hrms.tests.isolation import PerTestRollback
 
-class TestMonthlyAttendanceSheet(FrappeTestCase):
+
+class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()

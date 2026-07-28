@@ -10,6 +10,8 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import getdate
 
+from hrms.tests.isolation import PerTestRollback
+
 ANNUAL_LEAVE = "Nghỉ phép năm"
 FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "..", "fixtures", "leave_type.json")
 
@@ -19,7 +21,7 @@ def load_fixture_types():
 		return {row["name"]: row for row in json.load(f)}
 
 
-class TestAnnualLeaveEarnedFixture(FrappeTestCase):
+class TestAnnualLeaveEarnedFixture(PerTestRollback, FrappeTestCase):
 	"""T1 — 'Nghỉ phép năm' becomes a monthly earned leave; the other 7 types stay untouched."""
 
 	def test_fixture_json_flags(self):
@@ -70,7 +72,7 @@ class TestAnnualLeaveEarnedFixture(FrappeTestCase):
 			self.assertTrue(meta.has_field(key), f"Leave Type has no field {key}")
 
 
-class TestEntitlementAndLeavePeriod(FrappeTestCase):
+class TestEntitlementAndLeavePeriod(PerTestRollback, FrappeTestCase):
 	"""T2 — entitlement tiers (Điều 113/114) + idempotent Leave Period helper."""
 
 	@classmethod
@@ -115,7 +117,7 @@ class TestEntitlementAndLeavePeriod(FrappeTestCase):
 		)
 
 
-class TestAssignAnnualLeave(FrappeTestCase):
+class TestAssignAnnualLeave(PerTestRollback, FrappeTestCase):
 	"""T3 — bulk yearly grant: tiered policies + LPA + initial passed-months allocation; idempotent."""
 
 	@classmethod
@@ -292,7 +294,7 @@ class TestAssignAnnualLeave(FrappeTestCase):
 		self.assertEqual(frappe.get_all("Leave Policy Assignment", {"employee": emp}), before)
 
 
-class TestMonthlyAccrualAndCap(FrappeTestCase):
+class TestMonthlyAccrualAndCap(PerTestRollback, FrappeTestCase):
 	"""T4 — scheduler stock cộng dồn 1 ngày/tháng (bậc 12) và cap tại định mức năm."""
 
 	@classmethod
@@ -399,7 +401,7 @@ class TestMonthlyAccrualAndCap(FrappeTestCase):
 		self.assertLessEqual(total, 12)
 
 
-class TestUnlockedLeaveFlows(FrappeTestCase):
+class TestUnlockedLeaveFlows(PerTestRollback, FrappeTestCase):
 	"""T5 — với định mức đã cấp: Leave Application phép năm submit được (Attendance mang mã P);
 	Compensatory Leave Request submit được (Leave Period + Holiday List + Attendance ngày lễ)."""
 

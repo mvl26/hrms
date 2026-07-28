@@ -4,6 +4,8 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from hrms.tests.isolation import PerTestRollback
+
 
 def create_attendance_code(code, **kwargs):
 	"""Insert (or replace) an Attendance Code for tests."""
@@ -21,7 +23,7 @@ def create_attendance_code(code, **kwargs):
 	return doc.insert()
 
 
-class TestAttendanceCode(FrappeTestCase):
+class TestAttendanceCode(PerTestRollback, FrappeTestCase):
 	def test_record_is_named_after_its_code(self):
 		doc = create_attendance_code("X", code_name="Công đủ ngày")
 		self.assertEqual(doc.name, "X")

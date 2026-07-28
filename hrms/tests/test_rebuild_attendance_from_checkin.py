@@ -13,12 +13,13 @@ from hrms.rebuild_attendance_from_checkin import (
 	rebuild,
 	shift_employees,
 )
+from hrms.tests.isolation import PerTestRollback
 
 D = datetime.date
 SHIFT = "Ca Hành Chính"
 
 
-class TestRebuildAttendanceFromCheckin(FrappeTestCase):
+class TestRebuildAttendanceFromCheckin(PerTestRollback, FrappeTestCase):
 	def test_month_bounds(self):
 		self.assertEqual(month_bounds(2026, 6), (D(2026, 6, 1), D(2026, 6, 30)))
 		self.assertEqual(month_bounds(2026, 2), (D(2026, 2, 1), D(2026, 2, 28)))

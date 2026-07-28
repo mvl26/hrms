@@ -5,9 +5,10 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from hrms.setup_vn_defaults import check_fixture_master_data, ensure_defaults
+from hrms.tests.isolation import PerTestRollback
 
 
-class TestSetupVnDefaults(FrappeTestCase):
+class TestSetupVnDefaults(PerTestRollback, FrappeTestCase):
 	def test_ensure_defaults_creates_workflow_and_role(self):
 		# Remove the workflow so ensure_defaults() has to recreate it (self-healing path)
 		frappe.db.delete("Workflow", {"name": "Cong Tac Approval"})

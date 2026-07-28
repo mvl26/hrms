@@ -12,6 +12,8 @@ import os
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from hrms.tests.isolation import PerTestRollback
+
 _CF = os.path.join(frappe.get_app_path("hrms"), "fixtures", "custom_field.json")
 
 
@@ -20,7 +22,7 @@ def _custom_fields():
 		return {c["name"]: c for c in json.load(f)}
 
 
-class TestLunchFlagFixture(FrappeTestCase):
+class TestLunchFlagFixture(PerTestRollback, FrappeTestCase):
 	"""L1 — field cờ ăn trưa trên Attendance."""
 
 	def test_custom_lunch_field_defined(self):
@@ -41,7 +43,7 @@ class TestLunchFlagFixture(FrappeTestCase):
 		self.assertIn("Attendance-custom_lunch", names)
 
 
-class TestLunchRule(FrappeTestCase):
+class TestLunchRule(PerTestRollback, FrappeTestCase):
 	"""L2 — luật per-ngày ``is_lunch_day`` (thuần, không DB)."""
 
 	def _dt(self, *hhmm):
@@ -77,7 +79,7 @@ class TestLunchRule(FrappeTestCase):
 		self.assertFalse(is_lunch_day("Present", None, []))
 
 
-class TestLunchFlagForAttendance(FrappeTestCase):
+class TestLunchFlagForAttendance(PerTestRollback, FrappeTestCase):
 	"""L2 — ``lunch_flag_for_attendance`` đọc checkin thật của ngày rồi áp luật."""
 
 	def setUp(self):
@@ -108,7 +110,7 @@ class TestLunchFlagForAttendance(FrappeTestCase):
 		self.assertFalse(lunch_flag_for_attendance(self.emp, "2098-12-04", "On Leave", None))
 
 
-class TestLunchPayrollInvariance(FrappeTestCase):
+class TestLunchPayrollInvariance(PerTestRollback, FrappeTestCase):
 	"""L3 — GATE: Σ cờ per-Attendance == count_lunch_days cũ → phụ cấp ăn trưa (J) bất biến."""
 
 	def setUp(self):
@@ -170,7 +172,7 @@ class TestLunchPayrollInvariance(FrappeTestCase):
 		)
 
 
-class TestLunchReport(FrappeTestCase):
+class TestLunchReport(PerTestRollback, FrappeTestCase):
 	"""L4 — report Bảng chấm công có cột 'Số buổi ăn trưa'."""
 
 	def setUp(self):
@@ -210,7 +212,7 @@ class TestLunchReport(FrappeTestCase):
 		self.assertEqual(row["lunch_days"], 2)
 
 
-class TestSheetLunch(FrappeTestCase):
+class TestSheetLunch(PerTestRollback, FrappeTestCase):
 	"""L5 — Bảng Công Tháng (Monthly Attendance Sheet) mang tổng ăn trưa."""
 
 	def setUp(self):
@@ -250,7 +252,7 @@ class TestSheetLunch(FrappeTestCase):
 		self.assertEqual(row.get("lunch_days") or 0, 2)
 
 
-class TestLunchRecompute(FrappeTestCase):
+class TestLunchRecompute(PerTestRollback, FrappeTestCase):
 	"""L6 — tiện ích tính lại cờ ăn trưa (làm mới khi checkin về muộn)."""
 
 	def setUp(self):
@@ -315,7 +317,7 @@ class TestLunchRecompute(FrappeTestCase):
 		self.assertEqual(r["changed"], 0)
 
 
-class TestShiftLunchWindow(FrappeTestCase):
+class TestShiftLunchWindow(PerTestRollback, FrappeTestCase):
 	"""Fix: khung nghỉ trưa rác/để-trống trên Shift Type → tự về mặc định 12:00-13:30.
 
 	Time field để trống có thể bị đặt = giờ hiện tại (không NULL) → khung ~23:xx làm số buổi ăn = 0.
@@ -364,7 +366,7 @@ class TestShiftLunchWindow(FrappeTestCase):
 			self.assertEqual(shift_lunch_window("Ca Hành Chính"), (12 * 60, 13 * 60 + 30))
 
 
-class TestWFHCodeOnSheet(FrappeTestCase):
+class TestWFHCodeOnSheet(PerTestRollback, FrappeTestCase):
 	"""Round 2 — làm tại nhà (W) hiển thị + tính Công đúng trên bảng chấm công (integration).
 
 	W là Attendance Code (DML) chưa migrate lên site; tạo trong test (savepoint rollback) để kiểm

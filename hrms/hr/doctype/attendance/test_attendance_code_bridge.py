@@ -8,8 +8,10 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import getdate
 
+from hrms.tests.isolation import PerTestRollback
 
-class TestAttendanceCodeBridge(FrappeTestCase):
+
+class TestAttendanceCodeBridge(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
@@ -205,7 +207,7 @@ class TestAttendanceCodeBridge(FrappeTestCase):
 		self.assertEqual(d.custom_work_credit, 0)
 
 
-class TestHalfDayLeaveCodeFullValidation(FrappeTestCase):
+class TestHalfDayLeaveCodeFullValidation(PerTestRollback, FrappeTestCase):
 	"""Half-day *leave* codes (1/2P, 1/2K, worked+leave splits) must survive FULL validation.
 
 	The bridge sets half_day_status="Present" (worked half present, other half = leave_type).

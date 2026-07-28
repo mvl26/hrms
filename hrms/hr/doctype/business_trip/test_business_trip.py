@@ -6,9 +6,10 @@ from frappe.model.workflow import apply_workflow
 from frappe.tests.utils import FrappeTestCase
 
 from hrms.patches.v15_0.setup_cong_tac_workflow import ensure_workflow
+from hrms.tests.isolation import PerTestRollback
 
 
-class TestBusinessTrip(FrappeTestCase):
+class TestBusinessTrip(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()

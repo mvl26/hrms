@@ -10,6 +10,7 @@ from frappe.utils import getdate, now_datetime
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms.skip_attendance_diag import diagnose, export_csv, reset_wrongly_skipped
+from hrms.tests.isolation import PerTestRollback
 
 
 def make_skipped_checkin(employee, minutes_ago=1, log_type="IN", reason=None, linked=False):
@@ -47,7 +48,7 @@ def make_skipped_checkin(employee, minutes_ago=1, log_type="IN", reason=None, li
 	return log
 
 
-class TestSkipAttendanceDiag(FrappeTestCase):
+class TestSkipAttendanceDiag(PerTestRollback, FrappeTestCase):
 	def setUp(self):
 		self.employee = make_employee("test_skip_diag@example.com")
 		# isolate: this employee starts each test with no checkins

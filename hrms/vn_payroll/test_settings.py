@@ -4,11 +4,12 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from hrms.tests.isolation import PerTestRollback
 from hrms.vn_payroll.settings import config_from_settings
 from hrms.vn_payroll.setup_mvl import ensure_mvl_defaults
 
 
-class TestMVLSettings(FrappeTestCase):
+class TestMVLSettings(PerTestRollback, FrappeTestCase):
 	def test_config_from_settings_matches_defaults(self):
 		ensure_mvl_defaults()
 		cfg = config_from_settings()

@@ -13,6 +13,8 @@ import os
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from hrms.tests.isolation import PerTestRollback
+
 _FIX_DIR = os.path.join(frappe.get_app_path("hrms"), "fixtures")
 _FIXTURE = os.path.join(_FIX_DIR, "attendance_code.json")
 
@@ -30,7 +32,7 @@ def _load_fixture(name):
 		return json.load(f)
 
 
-class TestAttendanceCodeFixturesW(FrappeTestCase):
+class TestAttendanceCodeFixturesW(PerTestRollback, FrappeTestCase):
 	"""T1 — mã công W (mới) cho kênh yêu cầu chấm công; on-duty tái dùng CT có sẵn."""
 
 	def test_W_work_from_home_paid_full(self):
@@ -57,7 +59,7 @@ class TestAttendanceCodeFixturesW(FrappeTestCase):
 		self.assertNotIn("CV", codes)  # đã bỏ CV, dùng CT cho công tác/on-duty
 
 
-class TestAttendanceRequestFixtures(FrappeTestCase):
+class TestAttendanceRequestFixtures(PerTestRollback, FrappeTestCase):
 	"""T2 — field người duyệt + mở rộng options reason, đồng bộ bộ lọc fixtures."""
 
 	def _custom_fields(self):
@@ -110,7 +112,7 @@ def _flatten(hook_val):
 	return [hook_val] if isinstance(hook_val, str) else list(hook_val)
 
 
-class TestAttendanceRequestApproval(FrappeTestCase):
+class TestAttendanceRequestApproval(PerTestRollback, FrappeTestCase):
 	"""T3 — mở lại Attendance Request có DUYỆT bởi quản lý trực tiếp (reports_to)."""
 
 	def _mgr_emp(self):
@@ -243,7 +245,7 @@ class TestAttendanceRequestApproval(FrappeTestCase):
 		self.assertIn(base + "set_attendance_request_code", _flatten(events.get("on_submit")))
 
 
-class TestAttendanceRequestCode(FrappeTestCase):
+class TestAttendanceRequestCode(PerTestRollback, FrappeTestCase):
 	"""T4 — mã công theo reason (payroll-neutral). WFH→W, On Duty→CT, quên/muộn→X."""
 
 	def setUp(self):
@@ -368,7 +370,7 @@ class TestAttendanceRequestCode(FrappeTestCase):
 		self.assertEqual(att.custom_attendance_code, "W")
 
 
-class TestAttendanceRequestPayrollInvariance(FrappeTestCase):
+class TestAttendanceRequestPayrollInvariance(PerTestRollback, FrappeTestCase):
 	"""T5 — GATE: ngày tạo qua Yêu cầu chấm công (WFH/On Duty/quên/muộn) KHÔNG làm đổi lương so với
 	một ngày Present thường. Payroll chỉ đọc Attendance qua ``get_employee_attendance`` (lọc
 	status ∈ Absent/Half Day/On Leave) → mọi ngày làm việc (Present/Work From Home) đều vô hình

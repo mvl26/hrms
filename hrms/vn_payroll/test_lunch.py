@@ -9,6 +9,7 @@ from frappe.utils import get_datetime
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
+from hrms.tests.isolation import PerTestRollback
 from hrms.vn_payroll.lunch import (
 	DEFAULT_LUNCH_END,
 	DEFAULT_LUNCH_START,
@@ -17,7 +18,7 @@ from hrms.vn_payroll.lunch import (
 )
 
 
-class TestShiftLunchWindow(FrappeTestCase):
+class TestShiftLunchWindow(PerTestRollback, FrappeTestCase):
 	def test_falls_back_to_default_when_no_shift(self):
 		self.assertEqual(shift_lunch_window(None), (DEFAULT_LUNCH_START, DEFAULT_LUNCH_END))
 
@@ -31,7 +32,7 @@ class TestShiftLunchWindow(FrappeTestCase):
 		self.assertEqual(shift_lunch_window(st.name), (11 * 60, 14 * 60))
 
 
-class TestCountLunchDays(FrappeTestCase):
+class TestCountLunchDays(PerTestRollback, FrappeTestCase):
 	def setUp(self):
 		self.emp = make_employee("lunch_test@codes.com", company="Miyano")
 

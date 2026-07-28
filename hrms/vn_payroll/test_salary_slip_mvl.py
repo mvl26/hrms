@@ -11,6 +11,7 @@ from frappe.tests.utils import FrappeTestCase, change_settings
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
+from hrms.tests.isolation import PerTestRollback
 from hrms.vn_payroll.setup_mvl import ensure_mvl_defaults, structure_for_type
 
 
@@ -72,7 +73,7 @@ def make_slip(employee, salary_type="Chính thức"):
 	return ss
 
 
-class TestSalarySlipMVL(FrappeTestCase):
+class TestSalarySlipMVL(PerTestRollback, FrappeTestCase):
 	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
 	def test_chinh_thuc_full_month(self):
 		ensure_fiscal_year_2099()

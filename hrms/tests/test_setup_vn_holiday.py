@@ -10,9 +10,10 @@ from frappe.utils import getdate
 import erpnext
 
 from hrms.setup_vn_holiday import SOLAR_HOLIDAYS, create_vn_holiday_list
+from hrms.tests.isolation import PerTestRollback
 
 
-class TestSetupVNHoliday(FrappeTestCase):
+class TestSetupVNHoliday(PerTestRollback, FrappeTestCase):
 	def setUp(self):
 		self.company = erpnext.get_default_company() or frappe.get_all("Company", limit=1)[0].name
 		self.year = 2027

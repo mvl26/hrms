@@ -10,6 +10,8 @@ import os
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from hrms.tests.isolation import PerTestRollback
+
 FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "..", "fixtures", "custom_field.json")
 
 CCCD = "Employee-custom_citizen_id"
@@ -21,7 +23,7 @@ def load_fixture_fields():
 		return {row["name"]: row for row in json.load(f)}
 
 
-class TestEmployeeIdentityFixtures(FrappeTestCase):
+class TestEmployeeIdentityFixtures(PerTestRollback, FrappeTestCase):
 	def test_fixture_json_has_identity_fields(self):
 		rows = load_fixture_fields()
 

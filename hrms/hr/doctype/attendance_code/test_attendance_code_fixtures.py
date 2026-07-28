@@ -6,6 +6,8 @@ Attendance Codes). These assert the fixtures shipped by the app resolve correctl
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from hrms.tests.isolation import PerTestRollback
+
 # VN Leave Type anchors (Phase 0) — name -> expected flags. All BHXH-funded leaves stay
 # is_lwp=0 so company payroll is unchanged (user decision 2026-07-08).
 VN_LEAVE_TYPES = {
@@ -45,7 +47,7 @@ VN_ATTENDANCE_CODES = {
 }
 
 
-class TestAttendanceCodeFixtures(FrappeTestCase):
+class TestAttendanceCodeFixtures(PerTestRollback, FrappeTestCase):
 	def test_vn_leave_type_anchors_exist(self):
 		for name, flags in VN_LEAVE_TYPES.items():
 			self.assertTrue(frappe.db.exists("Leave Type", name), f"Missing Leave Type: {name}")

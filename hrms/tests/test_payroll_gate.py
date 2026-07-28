@@ -18,6 +18,7 @@ from hrms.payroll_gate import (
 	payroll_mode,
 	simulate_payroll_mode_delta,
 )
+from hrms.tests.isolation import PerTestRollback
 
 
 def slip(name, employee="EMP-1", payment_days=22, absent_days=0, leave_without_pay=0):
@@ -33,7 +34,7 @@ def slip(name, employee="EMP-1", payment_days=22, absent_days=0, leave_without_p
 	}
 
 
-class TestDiffPayrollRows(FrappeTestCase):
+class TestDiffPayrollRows(PerTestRollback, FrappeTestCase):
 	"""Pure diff logic — the heart of the T1/T2 'byte-identical' gate."""
 
 	def test_identical_snapshots_report_no_difference(self):
@@ -80,7 +81,7 @@ class TestDiffPayrollRows(FrappeTestCase):
 		self.assertEqual([r["name"] for r in result["added"]], ["SS-2"])
 
 
-class TestCapturePayrollBaseline(FrappeTestCase):
+class TestCapturePayrollBaseline(PerTestRollback, FrappeTestCase):
 	def test_capture_writes_a_readable_snapshot_and_reports_its_count(self):
 		with tempfile.TemporaryDirectory() as d:
 			path = os.path.join(d, "baseline.json")
@@ -122,7 +123,7 @@ class TestCapturePayrollBaseline(FrappeTestCase):
 			self.assertEqual([r["name"] for r in result["missing"]], ["SS-DOES-NOT-EXIST"])
 
 
-class TestClassifierDelta(FrappeTestCase):
+class TestClassifierDelta(PerTestRollback, FrappeTestCase):
 	"""T4: does the VN classifier move any payroll-relevant field vs the upstream threshold rule?"""
 
 	@classmethod
@@ -253,7 +254,7 @@ class TestClassifierDelta(FrappeTestCase):
 		self.assertEqual(report["verdict"], "no-delta")
 
 
-class TestPayrollModeIsMemoryOnly(FrappeTestCase):
+class TestPayrollModeIsMemoryOnly(PerTestRollback, FrappeTestCase):
 	"""`payroll_mode` answers "what if we switched?" WITHOUT touching the live setting.
 
 	The whole point is that it can be pointed at real payroll data safely, so "it never writes"
@@ -297,7 +298,7 @@ class TestPayrollModeIsMemoryOnly(FrappeTestCase):
 		self.assertEqual(after.payroll_based_on, self.stored_mode())
 
 
-class TestSimulatePayrollModeDelta(FrappeTestCase):
+class TestSimulatePayrollModeDelta(PerTestRollback, FrappeTestCase):
 	"""Would switching payroll_based_on to Attendance change anyone's paid days?"""
 
 	def setUp(self):

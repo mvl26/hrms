@@ -8,11 +8,12 @@ from frappe.tests.utils import FrappeTestCase, change_settings
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms import hooks
+from hrms.tests.isolation import PerTestRollback
 from hrms.vn_payroll.setup_mvl import ensure_mvl_defaults
 from hrms.vn_payroll.test_salary_slip_mvl import ensure_fiscal_year_2099, make_slip, make_ssa, mark_full_month
 
 
-class TestMVLPackaging(FrappeTestCase):
+class TestMVLPackaging(PerTestRollback, FrappeTestCase):
 	def test_ensure_mvl_defaults_wired_to_after_migrate(self):
 		self.assertIn("hrms.vn_payroll.setup_mvl.ensure_mvl_defaults", hooks.after_migrate)
 

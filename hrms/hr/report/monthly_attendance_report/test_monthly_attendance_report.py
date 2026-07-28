@@ -8,9 +8,10 @@ from frappe.utils import getdate
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
+from hrms.tests.isolation import PerTestRollback
 
 
-class TestBangChamCongThang(FrappeTestCase):
+class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
@@ -281,7 +282,7 @@ class TestBangChamCongThang(FrappeTestCase):
 		)
 
 
-class TestAttendanceColorState(FrappeTestCase):
+class TestAttendanceColorState(PerTestRollback, FrappeTestCase):
 	"""Mã màu hiển thị (thuần trình bày): day_state() phân loại mỗi ô bảng công về một state màu."""
 
 	def _fake_code_map(self):

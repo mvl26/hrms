@@ -25,10 +25,11 @@ from hrms.hr.working_hours import (
 	get_week_buckets,
 	prepare_filters,
 )
+from hrms.tests.isolation import PerTestRollback
 from hrms.tests.test_utils import create_company
 
 
-class TestComputeNetHours(FrappeTestCase):
+class TestComputeNetHours(PerTestRollback, FrappeTestCase):
 	def test_present_full_day_deducts_lunch(self):
 		# 08:00 -> 17:30 = 9.5h gross, trừ 1.5h = 8.0h
 		net = compute_net_hours("Present", "2026-03-02 08:00:00", "2026-03-02 17:30:00", 9.5)
@@ -67,7 +68,7 @@ class TestComputeNetHours(FrappeTestCase):
 		self.assertEqual(net, 4.0)
 
 
-class TestGetWeekBuckets(FrappeTestCase):
+class TestGetWeekBuckets(PerTestRollback, FrappeTestCase):
 	def test_march_2026_buckets(self):
 		# 1/3/2026 là Chủ nhật -> nằm riêng ở tuần đầu (phần đuôi của tuần ISO trước)
 		buckets = get_week_buckets(2026, 3)
@@ -85,7 +86,7 @@ class TestGetWeekBuckets(FrappeTestCase):
 		self.assertEqual(labels, [f"{_('Week')} {i}" for i in range(1, len(buckets) + 1)])
 
 
-class TestGetNetHoursMap(FrappeTestCase):
+class TestGetNetHoursMap(PerTestRollback, FrappeTestCase):
 	def setUp(self):
 		self.company = "_Test Company"
 		self.employee = make_employee("wh_map_test@example.com", company=self.company)
@@ -117,7 +118,7 @@ class TestGetNetHoursMap(FrappeTestCase):
 		self.assertEqual(get_net_hours_map(filters), {})
 
 
-class TestHoursAggregation(FrappeTestCase):
+class TestHoursAggregation(PerTestRollback, FrappeTestCase):
 	def setUp(self):
 		self.company = "_Test Company"
 		self.employee = make_employee("wh_agg_test@example.com", company=self.company)
@@ -141,7 +142,7 @@ class TestHoursAggregation(FrappeTestCase):
 		self.assertEqual(round(sum(data["values"]), 2), 8.0)
 
 
-class TestStandardHours(FrappeTestCase):
+class TestStandardHours(PerTestRollback, FrappeTestCase):
 	def test_standard_hours_excludes_holidays(self):
 		# tháng 31 ngày, 5 ngày nghỉ -> 26 ngày công x 8h = 208
 		self.assertEqual(get_standard_hours(31, 5), 208.0)
@@ -153,7 +154,7 @@ class TestStandardHours(FrappeTestCase):
 		self.assertEqual(get_standard_hours(5, 10), 0.0)
 
 
-class TestEffectiveDays(FrappeTestCase):
+class TestEffectiveDays(PerTestRollback, FrappeTestCase):
 	def test_past_month_uses_full_month(self):
 		# tháng 1/2020 đã qua -> đủ 31 ngày
 		self.assertEqual(get_effective_days_in_month(2020, 1), 31)
@@ -164,7 +165,7 @@ class TestEffectiveDays(FrappeTestCase):
 		self.assertEqual(eff, today.day)
 
 
-class TestWorkingHoursCards(FrappeTestCase):
+class TestWorkingHoursCards(PerTestRollback, FrappeTestCase):
 	def setUp(self):
 		self.company = "_Test Company"
 		self.employee = make_employee("wh_card_test@example.com", company=self.company)
@@ -208,7 +209,7 @@ class TestWorkingHoursCards(FrappeTestCase):
 		self.assertEqual(get_avg_working_hours_card(self.filters)["value"], round(8.0 / after, 2))
 
 
-class TestPrepareFilters(FrappeTestCase):
+class TestPrepareFilters(PerTestRollback, FrappeTestCase):
 	def test_includes_company_descendants(self):
 		parent = create_company("_WH Parent Co", is_group=1)
 		child = create_company("_WH Child Co", parent_company=parent.name)

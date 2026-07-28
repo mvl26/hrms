@@ -30,6 +30,7 @@ import json
 import frappe
 from frappe.utils import add_days, getdate
 
+from hrms.db_utils import commit_unless_test
 from hrms.rebuild_attendance_from_checkin import run_auto_attendance_for_period
 
 COMPANY = "Miyano"
@@ -525,8 +526,7 @@ def generate(apply=False):
 		for m in MONTHS:
 			make_payroll(e, m, log)
 			make_sheet(m, log)
-		# commit chủ đích: công cụ chạy ngoài request cycle (bench execute), ghi từng phần để lần chạy dài không mất việc đã làm
-		frappe.db.commit()  # nosemgrep
+		commit_unless_test()
 	else:
 		frappe.db.rollback()
 

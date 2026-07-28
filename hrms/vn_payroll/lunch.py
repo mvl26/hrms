@@ -11,6 +11,8 @@ Giờ nghỉ trưa lấy từ Shift Type của ngày đó (`custom_lunch_start`/
 import frappe
 from frappe.utils import cint, get_datetime, get_last_day, getdate
 
+from hrms.db_utils import commit_unless_test
+
 DEFAULT_LUNCH_START = 12 * 60  # 12:00 = 720 phút (hết ca sáng)
 DEFAULT_LUNCH_END = 13 * 60 + 30  # 13:30 = 810 phút (vào ca chiều)
 # Nghỉ trưa luôn rơi vào giữa ngày. Chỉ tin cấu hình khi start < end và nằm trong khoảng này; ngoài
@@ -140,8 +142,7 @@ def backfill_lunch_flags(dry_run: int = 1) -> dict:
 			if not dry:
 				frappe.db.set_value("Attendance", a.name, "custom_lunch", flag, update_modified=False)
 	if not dry:
-		# commit chủ đích: tác vụ bảo trì chạy dài trước kỳ chốt lương; chỉ ghi field hiển thị custom_lunch, không đụng payroll
-		frappe.db.commit()  # nosemgrep
+		commit_unless_test()
 	return {"total": len(atts), "to_change": to_change, "written": 0 if dry else to_change, "dry_run": dry}
 
 

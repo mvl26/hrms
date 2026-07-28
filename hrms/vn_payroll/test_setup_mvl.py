@@ -4,6 +4,7 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from hrms.tests.isolation import PerTestRollback
 from hrms.vn_payroll.setup_mvl import (
 	COMPONENT_ACCOUNT_NUMBERS,
 	COMPONENTS,
@@ -13,7 +14,7 @@ from hrms.vn_payroll.setup_mvl import (
 )
 
 
-class TestSetupMVL(FrappeTestCase):
+class TestSetupMVL(PerTestRollback, FrappeTestCase):
 	def test_gross_not_offered_until_implemented(self):
 		# GROSS chưa hiện thực → không được cho HR chọn (tránh ra phiếu sai âm thầm)
 		self.assertNotIn("GROSS", SALARY_TYPES.split("\n"))

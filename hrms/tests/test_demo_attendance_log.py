@@ -20,13 +20,14 @@ from hrms.demo_attendance_log import (
 	leave_dates,
 	month_bounds,
 )
+from hrms.tests.isolation import PerTestRollback
 
 D = datetime.date
 # Tháng 6/2026: mùng 1 là thứ Hai, không ngày lễ -> 26 ngày công, chỉ nghỉ Chủ nhật 7/14/21/28.
 JUNE_2026_WORKDAYS = [d for d in daterange(D(2026, 6, 1), D(2026, 6, 30)) if d.weekday() != 6]
 
 
-class TestDemoAttendanceLog(FrappeTestCase):
+class TestDemoAttendanceLog(PerTestRollback, FrappeTestCase):
 	def test_june_2026_has_26_workdays(self):
 		self.assertEqual(len(JUNE_2026_WORKDAYS), 26)
 

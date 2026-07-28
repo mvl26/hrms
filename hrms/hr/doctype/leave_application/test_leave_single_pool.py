@@ -9,8 +9,10 @@ Chạy qua harness rollback (KHÔNG bench run-tests trên miyano)."""
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from hrms.tests.isolation import PerTestRollback
 
-class TestLeaveSinglePool(FrappeTestCase):
+
+class TestLeaveSinglePool(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()

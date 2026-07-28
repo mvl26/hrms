@@ -8,9 +8,10 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import getdate
 
 from hrms.patches.v15_0.backfill_attendance_codes import backfill
+from hrms.tests.isolation import PerTestRollback
 
 
-class TestBackfillAttendanceCodes(FrappeTestCase):
+class TestBackfillAttendanceCodes(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()

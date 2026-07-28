@@ -8,6 +8,8 @@ from collections import defaultdict
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from hrms.tests.isolation import PerTestRollback
+
 # The VN labels HR must see for the doctypes/reports renamed to English names
 # (tasks/plan-english-naming-standardization.md). Source string -> expected translation.
 VN_TIMEKEEPING_LABELS = {
@@ -25,7 +27,7 @@ def read_vi_csv():
 		return path, [row for row in csv.reader(f) if row]
 
 
-class TestVnTranslations(FrappeTestCase):
+class TestVnTranslations(PerTestRollback, FrappeTestCase):
 	def test_no_source_key_has_two_different_translations(self):
 		"""frappe.translate keys a 2-column row by source text alone and lets a later row overwrite an
 		earlier one, so a duplicated source string silently drops one translation. Catch it here."""

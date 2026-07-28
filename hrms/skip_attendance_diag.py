@@ -31,6 +31,8 @@ import csv
 
 import frappe
 
+from hrms.db_utils import commit_unless_test
+
 LINE = "=" * 64
 
 
@@ -233,8 +235,7 @@ def reset_wrongly_skipped(
 	frappe.db.set_value(
 		"Employee Checkin", {"name": ["in", names]}, "skip_auto_attendance", 0, update_modified=False
 	)
-	# commit chủ đích: công cụ chạy ngoài request cycle (bench execute), ghi từng phần để lần chạy dài không mất việc đã làm
-	frappe.db.commit()  # nosemgrep
+	commit_unless_test()
 	print(f"  DONE — reset skip_auto_attendance=0 on {len(names)} checkins.")
 	print("  They will be reprocessed on the next hourly auto-attendance run,")
 	print("  or trigger now via Shift Type -> Mark Attendance / process_auto_attendance.")
