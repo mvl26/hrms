@@ -88,7 +88,7 @@ class TestVNHalfDayLogic(FrappeTestCase):
 		self.assertEqual(d.custom_work_credit, 0.5)
 
 	def test_early_leave_below_threshold_is_half_day(self):
-		# leaves 15:00: afternoon coverage 13:30–15:15(grace) = 1.75h/4h = 44% < 50% -> morning only
+		# leaves 15:00: afternoon coverage 13:30-15:15(grace) = 1.75h/4h = 44% < 50% -> morning only
 		d = self._cls("08:00", "15:00")
 		self.assertEqual(d.status, "Half Day")
 		self.assertEqual(d.custom_attendance_code, "1/2K")

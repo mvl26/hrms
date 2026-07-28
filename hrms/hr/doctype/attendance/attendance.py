@@ -228,7 +228,7 @@ class Attendance(Document):
 		if not (m and a):
 			return
 
-		# công đi làm thực tế = Σ work_fraction (worked-công fraction) of each half × 0.5.
+		# công đi làm thực tế = Σ work_fraction (worked-công fraction) of each half x 0.5.
 		# work_fraction already excludes non-working codes (P/Ô/K = 0), so no category filter needed;
 		# this also lets a single half-day code (NN/1/2P/1/2K, work_fraction 0.5) count its worked half.
 		self.custom_work_credit = sum(flt(c.work_fraction) * 0.5 for c in (m, a))

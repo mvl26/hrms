@@ -77,7 +77,7 @@ class TestAttendanceRequestFixtures(FrappeTestCase):
 		for entry in hooks.fixtures:
 			if isinstance(entry, dict) and entry.get("dt") == "Custom Field":
 				nf = (entry.get("filters") or {}).get("name")
-				if isinstance(nf, (list, tuple)) and nf and nf[0] == "in":
+				if isinstance(nf, list | tuple) and nf and nf[0] == "in":
 					names |= set(nf[1])
 		self.assertIn("Attendance Request-custom_approver", names)
 

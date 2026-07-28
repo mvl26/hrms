@@ -8,6 +8,7 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import get_datetime
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
+
 from hrms.vn_payroll.lunch import (
 	DEFAULT_LUNCH_END,
 	DEFAULT_LUNCH_START,

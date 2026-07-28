@@ -28,12 +28,17 @@ class TestBackfillAttendanceCodes(FrappeTestCase):
 		doc.insert(ignore_permissions=True)
 		doc.submit()
 		frappe.db.set_value(
-			"Attendance", doc.name, {"custom_attendance_code": None, "custom_work_credit": 0}, update_modified=False
+			"Attendance",
+			doc.name,
+			{"custom_attendance_code": None, "custom_work_credit": 0},
+			update_modified=False,
 		)
 		return doc.name
 
 	def _code(self, name):
-		return frappe.db.get_value("Attendance", name, ["custom_attendance_code", "custom_work_credit"], as_dict=True)
+		return frappe.db.get_value(
+			"Attendance", name, ["custom_attendance_code", "custom_work_credit"], as_dict=True
+		)
 
 	def test_backfill_populates_codes(self):
 		n_present = self._bare(1, "Present")

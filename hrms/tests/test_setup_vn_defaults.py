@@ -45,7 +45,7 @@ class TestSetupVnDefaults(FrappeTestCase):
 			if not isinstance(entry, dict):
 				continue
 			name_filter = (entry.get("filters") or {}).get("name")
-			if not (isinstance(name_filter, (list, tuple)) and name_filter and name_filter[0] == "in"):
+			if not (isinstance(name_filter, list | tuple) and name_filter and name_filter[0] == "in"):
 				continue
 			filtered = set(name_filter[1])
 			file_names = set(_fixture_names(frappe.scrub(entry["dt"])))

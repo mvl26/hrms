@@ -45,9 +45,7 @@ class TestAttendanceCode(FrappeTestCase):
 			).insert()
 
 	def test_maps_to_status_is_mandatory(self):
-		doc = frappe.get_doc(
-			{"doctype": "Attendance Code", "code": "NN", "code_name": "no status"}
-		)
+		doc = frappe.get_doc({"doctype": "Attendance Code", "code": "NN", "code_name": "no status"})
 		with self.assertRaises(frappe.exceptions.MandatoryError):
 			doc.insert()
 

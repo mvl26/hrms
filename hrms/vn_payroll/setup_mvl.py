@@ -143,7 +143,7 @@ def salary_type_of(structure: str) -> str | None:
 
 
 def structure_for_type(salary_type: str) -> str:
-	"""Tên Salary Structure ứng với loại lương (một–một) — dùng khi tạo SSA/slip. Mặc định chính thức."""
+	"""Tên Salary Structure ứng với loại lương (một-một) — dùng khi tạo SSA/slip. Mặc định chính thức."""
 	return _TYPE_TO_STRUCTURE.get(salary_type, "Chính thức")
 
 

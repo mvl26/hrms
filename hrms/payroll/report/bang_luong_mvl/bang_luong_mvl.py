@@ -3,7 +3,7 @@
 """Bảng lương MVL — CỘT GIỐNG HỆT file Excel gốc (docs/Cong_thuc_tinh_luong_MVL.md).
 
 Đọc thẳng Salary Slip ĐÃ SUBMIT dùng MỘT trong các cấu trúc MVL (mỗi loại lương một cấu trúc) trong kỳ.
-Mỗi cột tiền là một Salary Component → chỉ gom theo hàng (nhân viên) × cột. Read-only, có dòng TỔNG CỘNG.
+Mỗi cột tiền là một Salary Component → chỉ gom theo hàng (nhân viên) x cột. Read-only, có dòng TỔNG CỘNG.
 
 Thứ tự cột đúng như Excel: Mã NV (ID, không bỏ được) · Họ tên · Loại (Toàn/Bán thời gian) · NET/GROSS ·
 Hệ số E · Lương ngày công F · Lương đóng BHXH G · Số công H · Lương thực tế I · Phụ cấp ăn J ·

@@ -22,7 +22,9 @@ frappe.ui.form.on("Work Calendar Settings", {
 						title: __("Xong"),
 						indicator: "green",
 						message: __("Đã sinh {0}. Mở để kiểm tra ngày nghỉ tuần và ngày lễ.", [
-							`<a href="/app/holiday-list/${encodeURIComponent(r.message)}">${frappe.utils.escape_html(r.message)}</a>`,
+							`<a href="/app/holiday-list/${encodeURIComponent(
+								r.message,
+							)}">${frappe.utils.escape_html(r.message)}</a>`,
 						]),
 					});
 				},

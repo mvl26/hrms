@@ -36,7 +36,7 @@ class TestLunchFlagFixture(FrappeTestCase):
 		for entry in hooks.fixtures:
 			if isinstance(entry, dict) and entry.get("dt") == "Custom Field":
 				nf = (entry.get("filters") or {}).get("name")
-				if isinstance(nf, (list, tuple)) and nf and nf[0] == "in":
+				if isinstance(nf, list | tuple) and nf and nf[0] == "in":
 					names |= set(nf[1])
 		self.assertIn("Attendance-custom_lunch", names)
 
@@ -52,7 +52,7 @@ class TestLunchRule(FrappeTestCase):
 	def test_present_covering_window_is_lunch(self):
 		from hrms.vn_payroll.lunch import is_lunch_day
 
-		# vào 08:00 (<12:00), ra 17:30 (≥13:30), ca None → mặc định 12:00–13:30
+		# vào 08:00 (<12:00), ra 17:30 (≥13:30), ca None → mặc định 12:00-13:30
 		self.assertTrue(is_lunch_day("Present", None, self._dt("08:00:00", "17:30:00")))
 
 	def test_half_day_covering_is_lunch(self):
@@ -316,7 +316,7 @@ class TestLunchRecompute(FrappeTestCase):
 
 
 class TestShiftLunchWindow(FrappeTestCase):
-	"""Fix: khung nghỉ trưa rác/để-trống trên Shift Type → tự về mặc định 12:00–13:30.
+	"""Fix: khung nghỉ trưa rác/để-trống trên Shift Type → tự về mặc định 12:00-13:30.
 
 	Time field để trống có thể bị đặt = giờ hiện tại (không NULL) → khung ~23:xx làm số buổi ăn = 0.
 	shift_lunch_window phải chỉ tin cấu hình khi là khung giữa ngày hợp lý (start < end)."""
@@ -357,7 +357,7 @@ class TestShiftLunchWindow(FrappeTestCase):
 		self.assertEqual(shift_lunch_window(None), (12 * 60, 13 * 60 + 30))
 
 	def test_real_shift_window_unchanged(self):
-		# ca thật đã cấu hình đúng 12:00–13:30 → KHÔNG đổi (payroll bất biến).
+		# ca thật đã cấu hình đúng 12:00-13:30 → KHÔNG đổi (payroll bất biến).
 		from hrms.vn_payroll.lunch import shift_lunch_window
 
 		if frappe.db.exists("Shift Type", "Ca Hành Chính"):

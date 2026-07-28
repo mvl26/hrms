@@ -116,9 +116,7 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 
 		row = next(r for r in report[1] if r.get("employee") == self.employee)
 		self.assertGreater(row["standard_hours"], 0)
-		self.assertEqual(
-			row["variance"], round(row["total_working_hours"] - row["standard_hours"], 2)
-		)
+		self.assertEqual(row["variance"], round(row["total_working_hours"] - row["standard_hours"], 2))
 
 	@set_holiday_list("Salary Slip Test Holiday List", "_Test Company")
 	def test_multi_shift_detailed_consistent_variance(self):

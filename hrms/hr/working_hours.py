@@ -162,12 +162,12 @@ def get_hours_by_department(filters):
 
 
 # ---------------------------------------------------------------------------
-# Định mức (standard hours = 8h × số ngày công theo Holiday List)
+# Định mức (standard hours = 8h x số ngày công theo Holiday List)
 # ---------------------------------------------------------------------------
 
 
 def get_standard_hours(total_days, num_holidays):
-	"""Giờ định mức = 8h × số ngày công (tổng ngày trừ ngày nghỉ/lễ)."""
+	"""Giờ định mức = 8h x số ngày công (tổng ngày trừ ngày nghỉ/lễ)."""
 	working_days = max(cint(total_days) - cint(num_holidays), 0)
 	return round(STANDARD_HOURS_PER_DAY * working_days, 2)
 
@@ -189,9 +189,7 @@ def _count_holidays_in_month(holiday_list, year, month, up_to_day=None):
 	last_day = up_to_day or monthrange(cint(year), cint(month))[1]
 	first = getdate(f"{year}-{cint(month):02d}-01")
 	last = getdate(f"{year}-{cint(month):02d}-{cint(last_day):02d}")
-	return frappe.db.count(
-		"Holiday", {"parent": holiday_list, "holiday_date": ["between", [first, last]]}
-	)
+	return frappe.db.count("Holiday", {"parent": holiday_list, "holiday_date": ["between", [first, last]]})
 
 
 def get_standard_hours_map(filters, employees=None):
@@ -240,10 +238,10 @@ def get_active_employee_count(filters):
 def _parse_card_filters(filters):
 	if isinstance(filters, str):
 		filters = frappe.parse_json(filters)
-	if isinstance(filters, (list, tuple)):
+	if isinstance(filters, list | tuple):
 		parsed = {}
 		for f in filters:
-			if isinstance(f, (list, tuple)) and len(f) >= 4:
+			if isinstance(f, list | tuple) and len(f) >= 4:
 				parsed[f[1]] = f[3]
 		filters = parsed
 	filters = frappe._dict(filters or {})

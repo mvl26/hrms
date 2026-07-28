@@ -53,10 +53,17 @@ EMP_NAMES = {
 
 # Phân bổ phép cần có TRƯỚC khi nộp đơn (chỉ thêm nếu thiếu). (key, leave_type, số ngày).
 ALLOCATIONS = [
-	("an", "Nghỉ phép năm", 12), ("an", "Nghỉ ốm", 30), ("an", "Nghỉ chăm con ốm", 30), ("an", "Nghỉ bù", 10),
-	("binh", "Nghỉ phép năm", 12), ("binh", "Nghỉ thai sản", 60), ("binh", "Nghỉ kết hôn", 6),
-	("dung", "Nghỉ phép năm", 12), ("dung", "Nghỉ con kết hôn", 4),
-	("dung", "Nghỉ tang", 6), ("dung", "Nghỉ tai nạn lao động", 30),
+	("an", "Nghỉ phép năm", 12),
+	("an", "Nghỉ ốm", 30),
+	("an", "Nghỉ chăm con ốm", 30),
+	("an", "Nghỉ bù", 10),
+	("binh", "Nghỉ phép năm", 12),
+	("binh", "Nghỉ thai sản", 60),
+	("binh", "Nghỉ kết hôn", 6),
+	("dung", "Nghỉ phép năm", 12),
+	("dung", "Nghỉ con kết hôn", 4),
+	("dung", "Nghỉ tang", 6),
+	("dung", "Nghỉ tai nạn lao động", 30),
 ]
 
 # Kịch bản neo theo THỨ TỰ NGÀY CÔNG trong tháng (ord 1 = ngày công đầu). Dùng chung cho cả 2 tháng.
@@ -65,39 +72,39 @@ ALLOCATIONS = [
 SCEN = {
 	"an": {
 		"leaves": [
-			("Nghỉ phép năm", 3, 1, False, None),        # P
-			("Nghỉ phép năm", 5, 1, True, "Sáng"),       # 1/2P
-			("Nghỉ ốm", 7, 1, False, None),              # Ô
-			("Nghỉ chăm con ốm", 9, 1, False, None),     # Cô
-			("Nghỉ không lương", 11, 1, False, None),    # K
-			("Nghỉ bù", 15, 1, False, None),             # NB
+			("Nghỉ phép năm", 3, 1, False, None),  # P
+			("Nghỉ phép năm", 5, 1, True, "Sáng"),  # 1/2P
+			("Nghỉ ốm", 7, 1, False, None),  # Ô
+			("Nghỉ chăm con ốm", 9, 1, False, None),  # Cô
+			("Nghỉ không lương", 11, 1, False, None),  # K
+			("Nghỉ bù", 15, 1, False, None),  # NB
 		],
-		"half_checkin": {13},                            # 1/2K (làm sáng, chiều không lương)
+		"half_checkin": {13},  # 1/2K (làm sáng, chiều không lương)
 	},
 	"binh": {
 		"leaves": [
-			("Nghỉ thai sản", 6, 3, False, None),        # TS x3
-			("Nghỉ kết hôn", 12, 3, False, None),        # KH x3
+			("Nghỉ thai sản", 6, 3, False, None),  # TS x3
+			("Nghỉ kết hôn", 12, 3, False, None),  # KH x3
 		],
 	},
 	"cuong": {
-		"trip": (["dung"], 4, 3),                        # CT x3 (Cường đăng ký + Dung đi cùng)
-		"requests": [("Work From Home", 16)],            # W
-		"absent": {10},                                  # V
+		"trip": (["dung"], 4, 3),  # CT x3 (Cường đăng ký + Dung đi cùng)
+		"requests": [("Work From Home", 16)],  # W
+		"absent": {10},  # V
 	},
 	"dung": {
 		"leaves": [
-			("Nghỉ con kết hôn", 8, 1, False, None),     # R1
-			("Nghỉ tang", 10, 3, False, None),           # R2 x3
+			("Nghỉ con kết hôn", 8, 1, False, None),  # R1
+			("Nghỉ tang", 10, 3, False, None),  # R2 x3
 			("Nghỉ tai nạn lao động", 15, 1, False, None),  # T
 		],
 	},
 	"em": {
-		"half_checkin": {5},                             # 1/2K
+		"half_checkin": {5},  # 1/2K
 		"overtime": {9, 14, 18},
 	},
 	"hieu": {
-		"half_checkin": {17},                            # 1/2K
+		"half_checkin": {17},  # 1/2K
 	},
 }
 
@@ -169,9 +176,28 @@ def snapshot(emp_ids, log):
 	for m in MONTHS:
 		start, end = month_bounds(YEAR, m)
 		snap[f"{YEAR}-{m:02d}"] = {
-			"attendance": frappe.get_all("Attendance", filters={"employee": ["in", emp_ids], "attendance_date": ["between", [start, end]]}, fields=["name", "employee", "attendance_date", "status", "leave_type", "custom_attendance_code"]),
-			"leave_app": frappe.get_all("Leave Application", filters={"employee": ["in", emp_ids], "from_date": ["between", [start, end]]}, fields=["name", "employee", "leave_type", "from_date", "to_date"]),
-			"slips": frappe.get_all("Salary Slip", filters={"employee": ["in", emp_ids], "start_date": [">=", start], "end_date": ["<=", end]}, fields=["name", "employee", "payment_days", "net_pay"]),
+			"attendance": frappe.get_all(
+				"Attendance",
+				filters={"employee": ["in", emp_ids], "attendance_date": ["between", [start, end]]},
+				fields=[
+					"name",
+					"employee",
+					"attendance_date",
+					"status",
+					"leave_type",
+					"custom_attendance_code",
+				],
+			),
+			"leave_app": frappe.get_all(
+				"Leave Application",
+				filters={"employee": ["in", emp_ids], "from_date": ["between", [start, end]]},
+				fields=["name", "employee", "leave_type", "from_date", "to_date"],
+			),
+			"slips": frappe.get_all(
+				"Salary Slip",
+				filters={"employee": ["in", emp_ids], "start_date": [">=", start], "end_date": ["<=", end]},
+				fields=["name", "employee", "payment_days", "net_pay"],
+			),
 		}
 	with open(SNAPSHOT, "w") as f:
 		json.dump(snap, f, default=str, ensure_ascii=False, indent=1)
@@ -182,11 +208,17 @@ def clean(emp_ids, log):
 	for m in MONTHS:
 		start, end = month_bounds(YEAR, m)
 		targets = [
-			("Salary Slip", {"employee": ["in", emp_ids], "start_date": [">=", start], "end_date": ["<=", end]}),
+			(
+				"Salary Slip",
+				{"employee": ["in", emp_ids], "start_date": [">=", start], "end_date": ["<=", end]},
+			),
 			("Monthly Attendance Sheet", {"company": COMPANY, "month": str(m), "year": YEAR}),
 			("Attendance", {"employee": ["in", emp_ids], "attendance_date": ["between", [start, end]]}),
 			("Leave Application", {"employee": ["in", emp_ids], "from_date": ["between", [start, end]]}),
-			("Employee Checkin", {"employee": ["in", emp_ids], "time": ["between", [f"{start} 00:00:00", f"{end} 23:59:59"]]}),
+			(
+				"Employee Checkin",
+				{"employee": ["in", emp_ids], "time": ["between", [f"{start} 00:00:00", f"{end} 23:59:59"]]},
+			),
 		]
 		for dt, filt in targets:
 			for n in frappe.get_all(dt, filters=filt, pluck="name"):
@@ -203,7 +235,7 @@ def clean(emp_ids, log):
 
 # ---------------------------------------------------------------------------- build
 def ensure_assignments(e, log):
-	for key, emp in e.items():
+	for _key, emp in e.items():
 		joining = frappe.db.get_value("Employee", emp, "date_of_joining")
 		for m in MONTHS:
 			start, end = month_bounds(YEAR, m)
@@ -211,10 +243,22 @@ def ensure_assignments(e, log):
 				start = getdate(joining)
 			if start > end:
 				continue
-			if frappe.db.exists("Shift Assignment", {"employee": emp, "start_date": start, "docstatus": ["<", 2]}):
+			if frappe.db.exists(
+				"Shift Assignment", {"employee": emp, "start_date": start, "docstatus": ["<", 2]}
+			):
 				continue
 			try:
-				submit_doc({"doctype": "Shift Assignment", "employee": emp, "company": COMPANY, "shift_type": SHIFT, "start_date": start, "end_date": end, "status": "Active"})
+				submit_doc(
+					{
+						"doctype": "Shift Assignment",
+						"employee": emp,
+						"company": COMPANY,
+						"shift_type": SHIFT,
+						"start_date": start,
+						"end_date": end,
+						"status": "Active",
+					}
+				)
 				log.n("shift_assignment")
 			except Exception as exc:
 				log.fail(f"ShiftAssignment {emp} {m}", exc)
@@ -226,10 +270,22 @@ def ensure_allocations(e, log):
 		if not emp:
 			continue
 		frm, to = f"{YEAR}-01-01", f"{YEAR}-12-31"
-		if frappe.db.exists("Leave Allocation", {"employee": emp, "leave_type": leave_type, "from_date": frm, "docstatus": 1}):
+		if frappe.db.exists(
+			"Leave Allocation", {"employee": emp, "leave_type": leave_type, "from_date": frm, "docstatus": 1}
+		):
 			continue
 		try:
-			submit_doc({"doctype": "Leave Allocation", "employee": emp, "company": COMPANY, "leave_type": leave_type, "from_date": frm, "to_date": to, "new_leaves_allocated": days})
+			submit_doc(
+				{
+					"doctype": "Leave Allocation",
+					"employee": emp,
+					"company": COMPANY,
+					"leave_type": leave_type,
+					"from_date": frm,
+					"to_date": to,
+					"new_leaves_allocated": days,
+				}
+			)
 			log.n("leave_allocation")
 		except Exception as exc:
 			log.fail(f"LeaveAllocation {emp}/{leave_type}", exc)
@@ -247,7 +303,7 @@ def covered_ordinals(key):
 	for _r, o in s.get("requests", []):
 		cov.add(o)
 	# ord đi công tác với tư cách khách mời (traveler trong trip của người khác)
-	for owner, os in SCEN.items():
+	for _owner, os in SCEN.items():
 		if "trip" in os and key in os["trip"][0]:
 			_co, o, nd = os["trip"]
 			cov.update(range(o, o + nd))
@@ -265,9 +321,15 @@ def make_leaves(e, m, wds, log):
 			first = wds[o - 1]
 			last = wds[min(o - 1 + nd - 1, len(wds) - 1)]
 			payload = {
-				"doctype": "Leave Application", "employee": emp, "company": COMPANY,
-				"leave_type": lt, "from_date": first, "to_date": last,
-				"posting_date": add_days(first, -3), "leave_approver": "Administrator", "status": "Approved",
+				"doctype": "Leave Application",
+				"employee": emp,
+				"company": COMPANY,
+				"leave_type": lt,
+				"from_date": first,
+				"to_date": last,
+				"posting_date": add_days(first, -3),
+				"leave_approver": "Administrator",
+				"status": "Approved",
 				"description": f"Demo {lt}",
 			}
 			if lt == "Nghỉ phép năm":
@@ -299,11 +361,19 @@ def make_trips(e, m, wds, log):
 			if e.get(ck):
 				travelers.append({"employee": e[ck], "is_registrant": 0})
 		try:
-			trip = frappe.get_doc({
-				"doctype": "Business Trip", "company": COMPANY, "destination": "Hà Nội",
-				"purpose": "Họp giao ban", "from_date": first, "to_date": last,
-				"registered_by": reg, "approver_coo": "Administrator", "travelers": travelers,
-			})
+			trip = frappe.get_doc(
+				{
+					"doctype": "Business Trip",
+					"company": COMPANY,
+					"destination": "Hà Nội",
+					"purpose": "Họp giao ban",
+					"from_date": first,
+					"to_date": last,
+					"registered_by": reg,
+					"approver_coo": "Administrator",
+					"travelers": travelers,
+				}
+			)
 			trip.flags.ignore_permissions = True
 			trip.insert()
 			for action in ("Gửi duyệt", "Duyệt", "Ra QĐ"):
@@ -323,11 +393,17 @@ def make_requests(e, m, wds, log):
 				continue
 			day = wds[o - 1]
 			try:
-				submit_doc({
-					"doctype": "Attendance Request", "employee": emp, "company": COMPANY,
-					"from_date": day, "to_date": day, "reason": reason,
-					"explanation": f"Demo {reason}",
-				})
+				submit_doc(
+					{
+						"doctype": "Attendance Request",
+						"employee": emp,
+						"company": COMPANY,
+						"from_date": day,
+						"to_date": day,
+						"reason": reason,
+						"explanation": f"Demo {reason}",
+					}
+				)
 				log.n(f"request_{reason}")
 			except Exception as exc:
 				log.fail(f"Request {key} {reason} {m}", exc)
@@ -357,10 +433,17 @@ def make_checkins(e, m, wds, log):
 				if frappe.db.exists("Employee Checkin", {"employee": emp, "time": stamp}):
 					continue
 				try:
-					doc = frappe.get_doc({
-						"doctype": "Employee Checkin", "employee": emp, "log_type": log_type,
-						"time": stamp, "shift": SHIFT, "device_id": DEVICE_ID, "skip_auto_attendance": 0,
-					})
+					doc = frappe.get_doc(
+						{
+							"doctype": "Employee Checkin",
+							"employee": emp,
+							"log_type": log_type,
+							"time": stamp,
+							"shift": SHIFT,
+							"device_id": DEVICE_ID,
+							"skip_auto_attendance": 0,
+						}
+					)
 					doc.flags.ignore_permissions = True
 					doc.insert()
 					log.n("checkin")
@@ -370,8 +453,14 @@ def make_checkins(e, m, wds, log):
 
 def make_payroll(e, m, log):
 	start, end = month_bounds(YEAR, m)
-	for key, emp in e.items():
-		ssa = frappe.get_all("Salary Structure Assignment", filters={"employee": emp, "docstatus": 1, "from_date": ["<=", end]}, fields=["salary_structure"], order_by="from_date desc", limit=1)
+	for _key, emp in e.items():
+		ssa = frappe.get_all(
+			"Salary Structure Assignment",
+			filters={"employee": emp, "docstatus": 1, "from_date": ["<=", end]},
+			fields=["salary_structure"],
+			order_by="from_date desc",
+			limit=1,
+		)
 		if not ssa:
 			log.fail(f"Payroll {emp} {m}", "no SSA")
 			continue
@@ -394,7 +483,9 @@ def make_payroll(e, m, log):
 
 def make_sheet(m, log):
 	try:
-		sheet = frappe.get_doc({"doctype": "Monthly Attendance Sheet", "company": COMPANY, "month": str(m), "year": YEAR})
+		sheet = frappe.get_doc(
+			{"doctype": "Monthly Attendance Sheet", "company": COMPANY, "month": str(m), "year": YEAR}
+		)
 		sheet.flags.ignore_permissions = True
 		sheet.insert()
 		sheet.populate_from_attendance()
@@ -437,7 +528,13 @@ def generate(apply=False):
 	else:
 		frappe.db.rollback()
 
-	result = log.d(applied=bool(apply), employees=e, months=list(MONTHS),
-		note="" if apply else "DRY-RUN đã rollback (scheduler/lương/bảng công BỎ QUA). apply=True để ghi thật.")
+	result = log.d(
+		applied=bool(apply),
+		employees=e,
+		months=list(MONTHS),
+		note=""
+		if apply
+		else "DRY-RUN đã rollback (scheduler/lương/bảng công BỎ QUA). apply=True để ghi thật.",
+	)
 	print(frappe.as_json(result))
 	return result

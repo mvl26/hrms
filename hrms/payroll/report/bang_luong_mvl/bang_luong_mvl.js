@@ -15,7 +15,10 @@ frappe.query_reports["Bảng Lương MVL"] = {
 			fieldname: "month",
 			label: __("Tháng"),
 			fieldtype: "Select",
-			options: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => ({ value: m, label: String(m) })),
+			options: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => ({
+				value: m,
+				label: String(m),
+			})),
 			default: new Date().getMonth() + 1,
 			reqd: 1,
 		},

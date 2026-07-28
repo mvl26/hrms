@@ -6,6 +6,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase, change_settings
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
+
 from hrms.payroll.report.bang_luong_mvl.bang_luong_mvl import execute
 from hrms.vn_payroll.setup_mvl import ensure_mvl_defaults
 from hrms.vn_payroll.test_salary_slip_mvl import ensure_fiscal_year_2099, make_slip, make_ssa, mark_full_month

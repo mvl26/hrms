@@ -181,11 +181,21 @@ def get_working_hours_columns(filters: Filters) -> list[dict]:
 				{"label": f"{_('Week')} {idx}", "fieldname": f"week_{idx}", "fieldtype": "Float", "width": 90}
 			)
 		columns.append(
-			{"label": _("Total (Month)"), "fieldname": "total_working_hours", "fieldtype": "Float", "width": 110}
+			{
+				"label": _("Total (Month)"),
+				"fieldname": "total_working_hours",
+				"fieldtype": "Float",
+				"width": 110,
+			}
 		)
 	else:
 		columns.append(
-			{"label": _("Total Working Hours"), "fieldname": "total_working_hours", "fieldtype": "Float", "width": 130}
+			{
+				"label": _("Total Working Hours"),
+				"fieldname": "total_working_hours",
+				"fieldtype": "Float",
+				"width": 130,
+			}
 		)
 
 	columns.append(
@@ -272,8 +282,8 @@ def get_attendance_map(filters: Filters) -> dict:
 	for d in attendance_list:
 		# giờ làm net dựng từ chính lượt quét này (tránh quét Attendance lần 2)
 		shift_key = d.shift or ""
-		net_hours_map.setdefault(d.employee, {}).setdefault(shift_key, {})[d.day_of_month] = compute_net_hours(
-			d.raw_status, d.in_time, d.out_time, d.working_hours
+		net_hours_map.setdefault(d.employee, {}).setdefault(shift_key, {})[d.day_of_month] = (
+			compute_net_hours(d.raw_status, d.in_time, d.out_time, d.working_hours)
 		)
 
 		if d.status == "On Leave":

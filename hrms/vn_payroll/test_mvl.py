@@ -45,7 +45,7 @@ class TestMVLCore(unittest.TestCase):
 		self.assertEqual(r.T, 6_313_295)
 
 	def test_nghi_khong_luong_giam_cong(self):
-		# doc 3: Phạm Thị Yến lương 20tr, đi làm 10/22 công → I = 20tr × 10/22
+		# doc 3: Phạm Thị Yến lương 20tr, đi làm 10/22 công → I = 20tr x 10/22
 		r = compute_mvl(MVLInput("Chính thức", 20_000_000, 0, 0, False, 0, 22, 10), self.cfg)
 		self.assertEqual(r.I, 9_090_909)  # ROUND(20_000_000 / 22 * 10)
 
@@ -97,7 +97,7 @@ class TestMVLCore(unittest.TestCase):
 			MVLInput("Chính thức", 25_000_000, 25_000_000, 1, True, 21, 22, 22, bonus=5_000_000), self.cfg
 		)
 		self.assertEqual(r.K, 25_735_000 + 5_000_000)  # K = I + J + thưởng
-		self.assertEqual(r.O, 8_300_000)  # O = K − N − J → thưởng chịu thuế
+		self.assertEqual(r.O, 8_300_000)  # O = K - N - J → thưởng chịu thuế
 		self.assertEqual(r.T, 30_735_000)  # thực lĩnh gồm cả thưởng
 		# không thưởng → như cũ
 		r0 = compute_mvl(MVLInput("Chính thức", 25_000_000, 25_000_000, 1, True, 21, 22, 22), self.cfg)
@@ -111,7 +111,7 @@ class TestMVLCore(unittest.TestCase):
 			MVLInput("Chính thức", 18_000_000, 0, 0, False, 0, 22, 22, probation_worked_days=11),
 			self.cfg,
 		)
-		# I = 18tr/22 × (0.85×11 + 1.0×11) = 18tr/22 × 20.35 = 16.650.000
+		# I = 18tr/22 x (0.85x11 + 1.0x11) = 18tr/22 x 20.35 = 16.650.000
 		self.assertEqual(r.I, _round(18_000_000 / 22 * (0.85 * 11 + 1.0 * 11)))
 		self.assertEqual(r.I, 16_650_000)
 
@@ -126,7 +126,7 @@ class TestMVLCore(unittest.TestCase):
 			MVLInput("Chính thức", 18_000_000, 0, 0, False, 0, 22, 10, probation_worked_days=15),
 			self.cfg,
 		)
-		# prob kẹp về 10 → I = 18tr/22 × 0.85×10
+		# prob kẹp về 10 → I = 18tr/22 x 0.85x10
 		self.assertEqual(r.I, _round(18_000_000 / 22 * (0.85 * 10)))
 
 	def test_gross_type_raises_instead_of_silently_wrong(self):

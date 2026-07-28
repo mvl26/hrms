@@ -14,7 +14,6 @@ from hrms.hr.doctype.attendance.attendance import mark_attendance
 from hrms.hr.working_hours import (
 	compute_net_hours,
 	get_active_employee_count,
-	prepare_filters,
 	get_avg_working_hours_card,
 	get_effective_days_in_month,
 	get_hours_by_department,
@@ -24,6 +23,7 @@ from hrms.hr.working_hours import (
 	get_total_working_hours_card,
 	get_under_target_count_card,
 	get_week_buckets,
+	prepare_filters,
 )
 from hrms.tests.test_utils import create_company
 
@@ -58,7 +58,7 @@ class TestComputeNetHours(FrappeTestCase):
 		self.assertEqual(compute_net_hours("On Leave", None, None, 0), 0.0)
 
 	def test_split_shift_uses_stored_net(self):
-		# split shift already stored net working_hours (lunch excluded) -> use as-is, no further −1.5
+		# split shift already stored net working_hours (lunch excluded) -> use as-is, no further -1.5
 		net = compute_net_hours("Present", "2026-03-02 08:00:00", "2026-03-02 17:30:00", 8.0, is_split=True)
 		self.assertEqual(net, 8.0)
 
@@ -128,9 +128,7 @@ class TestHoursAggregation(FrappeTestCase):
 			name,
 			{"in_time": "2026-03-02 08:00:00", "out_time": "2026-03-02 17:30:00"},
 		)
-		self.filters = frappe._dict(
-			company=self.company, companies=[self.company], month=3, year=2026
-		)
+		self.filters = frappe._dict(company=self.company, companies=[self.company], month=3, year=2026)
 
 	def test_by_week_total_matches(self):
 		data = get_hours_by_week(self.filters)

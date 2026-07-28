@@ -109,16 +109,12 @@ def assign_annual_leave(year: int, company: str, employees=None, dry_run: bool =
 		period = create_leave_period(year, company)
 
 	if employees is None:
-		employees = frappe.get_all(
-			"Employee", filters={"status": "Active", "company": company}, pluck="name"
-		)
+		employees = frappe.get_all("Employee", filters={"status": "Active", "company": company}, pluck="name")
 
 	report = {}
 	for employee in employees:
 		days = entitlement_for(employee, on_date)
-		emp = frappe.db.get_value(
-			"Employee", employee, ["company", "date_of_joining"], as_dict=True
-		)
+		emp = frappe.db.get_value("Employee", employee, ["company", "date_of_joining"], as_dict=True)
 
 		# sanity checks for explicitly-passed employee lists
 		if not emp or emp.company != company:
@@ -196,9 +192,7 @@ def assign_annual_leave(year: int, company: str, employees=None, dry_run: bool =
 			}
 		except Exception:
 			frappe.db.rollback(save_point=savepoint)
-			frappe.log_error(
-				title="assign_annual_leave failed", message=frappe.get_traceback()
-			)
+			frappe.log_error(title="assign_annual_leave failed", message=frappe.get_traceback())
 			report[employee] = {"status": "error", "entitlement": days}
 
 	return report

@@ -2,7 +2,7 @@
 
 Creates ONE Holiday List per (company, year) using the stock Holiday List doctype:
   - weekly-off rows (Chủ nhật, optionally + Thứ 7) via the doctype's own get_weekly_off_dates;
-  - the fixed SOLAR public holidays of Điều 112 BLLĐ 2019 (Tết dương, 30/4, 1/5, Quốc khánh ×2);
+  - the fixed SOLAR public holidays of Điều 112 BLLĐ 2019 (Tết dương, 30/4, 1/5, Quốc khánh x2);
   - a compensatory day off (nghỉ bù, Điều 112 khoản 3) on the next working day whenever a solar
     holiday coincides with a weekly-off day.
 

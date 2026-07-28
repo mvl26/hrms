@@ -81,8 +81,13 @@ def diagnose():
 		print("\nNo skipped checkins. Nothing to diagnose.")
 		print(LINE + "\n")
 		return {
-			"total": total, "skipped": 0, "linked": 0, "nolink": 0,
-			"offshift": 0, "no_comment": 0, "date_has_attendance": 0,
+			"total": total,
+			"skipped": 0,
+			"linked": 0,
+			"nolink": 0,
+			"offshift": 0,
+			"no_comment": 0,
+			"date_has_attendance": 0,
 		}
 
 	sk_linked = frappe.db.count("Employee Checkin", {"skip_auto_attendance": 1, "attendance": ["is", "set"]})
@@ -139,8 +144,13 @@ def diagnose():
 	print("  -> high here  => DuplicateAttendanceError is the cause (path #3).")
 	print(LINE + "\n")
 	return {
-		"total": total, "skipped": skipped, "linked": sk_linked, "nolink": sk_nolink,
-		"offshift": sk_offshift, "no_comment": no_comment, "date_has_attendance": dup,
+		"total": total,
+		"skipped": skipped,
+		"linked": sk_linked,
+		"nolink": sk_nolink,
+		"offshift": sk_offshift,
+		"no_comment": no_comment,
+		"date_has_attendance": dup,
 	}
 
 
@@ -217,7 +227,7 @@ def reset_wrongly_skipped(
 		print("  DRY RUN — nothing changed. Sample that WOULD be re-enabled:")
 		for n in names[:10]:
 			print("   ", n)
-		print(f'  Re-run with --kwargs "{{\'apply\': True}}" to apply to all {len(names)}.')
+		print(f"  Re-run with --kwargs \"{{'apply': True}}\" to apply to all {len(names)}.")
 		return names
 
 	frappe.db.set_value(
@@ -233,8 +243,8 @@ def reset_wrongly_skipped(
 def export_csv(path="/tmp/skipped_checkins.csv"):
 	"""Dump every skipped checkin with its reason to a CSV for eyeballing in a spreadsheet.
 
-	  bench --site <site> execute hrms.skip_attendance_diag.export_csv
-	  bench --site <site> execute hrms.skip_attendance_diag.export_csv --kwargs "{'path': '/tmp/x.csv'}"
+	bench --site <site> execute hrms.skip_attendance_diag.export_csv
+	bench --site <site> execute hrms.skip_attendance_diag.export_csv --kwargs "{'path': '/tmp/x.csv'}"
 	"""
 	rows = frappe.get_all(
 		"Employee Checkin",
@@ -246,12 +256,30 @@ def export_csv(path="/tmp/skipped_checkins.csv"):
 	with open(path, "w", newline="") as f:
 		w = csv.writer(f)
 		w.writerow(
-			["checkin", "employee", "employee_name", "time", "shift", "log_type",
-			 "linked_attendance", "offshift", "skip_reason_comment"]
+			[
+				"checkin",
+				"employee",
+				"employee_name",
+				"time",
+				"shift",
+				"log_type",
+				"linked_attendance",
+				"offshift",
+				"skip_reason_comment",
+			]
 		)
 		for r in rows:
 			w.writerow(
-				[r.name, r.employee, r.employee_name, r.time, r.shift, r.log_type,
-				 r.attendance or "", r.offshift, cmap.get(r.name, "")]
+				[
+					r.name,
+					r.employee,
+					r.employee_name,
+					r.time,
+					r.shift,
+					r.log_type,
+					r.attendance or "",
+					r.offshift,
+					cmap.get(r.name, ""),
+				]
 			)
 	print(f"Wrote {len(rows)} skipped checkins -> {path}")

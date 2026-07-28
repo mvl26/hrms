@@ -92,10 +92,10 @@ class TestSalarySlipMVL(FrappeTestCase):
 		comp = {r.salary_component: r.amount for r in list(ss.earnings) + list(ss.deductions)}
 		self.assertEqual(comp["Lương theo công"], 25_000_000)  # đi làm đủ 30/30 → I = base
 		self.assertEqual(comp["Phụ cấp ăn trưa"], ss.payment_days * 35_000)
-		# O = K − 21.7tr − J = 25tr − 21.7tr = 3.3tr (J triệt tiêu) → Q = 173.684 bất kể J
+		# O = K - 21.7tr - J = 25tr - 21.7tr = 3.3tr (J triệt tiêu) → Q = 173.684 bất kể J
 		self.assertEqual(comp["Thuế TNCN (nộp thay)"], 173_684)
-		self.assertEqual(comp["BHXH - NLĐ (nộp thay)"], 2_625_000)  # 25tr × 10.5%
-		self.assertEqual(comp["BHXH - Công ty"], 5_375_000)  # R = 25tr × 21.5%
+		self.assertEqual(comp["BHXH - NLĐ (nộp thay)"], 2_625_000)  # 25tr x 10.5%
+		self.assertEqual(comp["BHXH - Công ty"], 5_375_000)  # R = 25tr x 21.5%
 		# gương chi phí (hạch toán) = Q + S + R → Nợ 6421 của bút toán accrual; KHÔNG cộng net
 		self.assertEqual(comp["Chi phí thuế & BHXH DN nộp thay"], 173_684 + 2_625_000 + 5_375_000)
 		# NET: thuế + BHXH + gương KHÔNG trừ/cộng vào net → net = K = I + J
@@ -132,7 +132,7 @@ class TestSalarySlipMVL(FrappeTestCase):
 		ss = make_slip(emp)
 
 		comp = {r.salary_component: r.amount for r in ss.earnings}
-		# I = ROUND(22tr / 30 × 27) = 19.800.000
+		# I = ROUND(22tr / 30 x 27) = 19.800.000
 		self.assertEqual(ss.payment_days, 27)
 		self.assertEqual(comp["Lương theo công"], 19_800_000)
 
@@ -148,10 +148,10 @@ class TestSalarySlipMVL(FrappeTestCase):
 		mark_full_month(emp)  # chấm đủ 30 ngày Present (không Holiday List → 30 công)
 		ss = make_slip(emp, salary_type="Chính thức")
 		comp = {r.salary_component: r.amount for r in ss.earnings}
-		# I blend = 18tr/30 × (0.85×15 công thử việc + 1.0×15 công chính thức) = 16.650.000
+		# I blend = 18tr/30 x (0.85x15 công thử việc + 1.0x15 công chính thức) = 16.650.000
 		# KHÔNG phải 18tr (toàn chính thức) và KHÔNG phải 15.3tr (toàn thử việc)
 		self.assertEqual(comp["Lương theo công"], 16_650_000)
-		# hệ số E hiện trên phiếu là blend có trọng số: (0.85×15 + 1.0×15)/30 = 0.925
+		# hệ số E hiện trên phiếu là blend có trọng số: (0.85x15 + 1.0x15)/30 = 0.925
 		self.assertEqual(ss.custom_coefficient, 0.925)
 
 	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
@@ -166,7 +166,7 @@ class TestSalarySlipMVL(FrappeTestCase):
 			custom_bhxh_salary=25_000_000,
 			custom_register_personal_deduction=1,
 		)
-		mark_full_month(emp)  # checkin 08:00–17:30 mỗi ngày → phủ trưa
+		mark_full_month(emp)  # checkin 08:00-17:30 mỗi ngày → phủ trưa
 		ss = make_slip(emp)
 		base_net = ss.net_pay
 		# dữ liệu ăn trưa hiện trên phiếu (checkin phủ trưa mỗi ngày công)

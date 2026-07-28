@@ -2,7 +2,7 @@
 # License: GNU General Public License v3. See license.txt
 """Bảng chấm công tháng — read-only monthly timekeeping sheet.
 
-Pivots by employee × day-of-month. Each cell is the mã công for that day:
+Pivots by employee x day-of-month. Each cell is the mã công for that day:
 - a real Attendance record → its code (or morning/afternoon codes, e.g. "X/P");
 - otherwise a calendar marker derived (NOT stored) from the employee's data:
   `-` on a weekly-off (rest day) or after the relieving date, `NL` on a public holiday.
@@ -362,7 +362,7 @@ def _reverse_code(status, leave_type, code_map: dict):
 def get_sheet_rows(filters: Filters) -> list[dict]:
 	"""Semantic per-employee rows shared by this report AND the Bảng Công Tháng DocType:
 	``{employee, employee_name, days: {day-of-month: symbol}, totals: {category: float}}``.
-	Công total = Σ work_fraction × 0.5 (worked-công); the unworked remainder (1 − work_fraction) × 0.5
+	Công total = Σ work_fraction x 0.5 (worked-công); the unworked remainder (1 - work_fraction) x 0.5
 	of each half lands in that code's category, falling back to Vắng for a half-covering "Công" code.
 	This is the single source of timekeeping derivation — consumers must not re-implement it."""
 	filters = frappe._dict(filters or {})

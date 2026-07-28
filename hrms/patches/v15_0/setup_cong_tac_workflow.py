@@ -22,19 +22,21 @@ def execute():
 
 def ensure_workflow():
 	if not frappe.db.exists("Role", "COO"):
-		frappe.get_doc({"doctype": "Role", "role_name": "COO", "desk_access": 1}).insert(ignore_permissions=True)
+		frappe.get_doc({"doctype": "Role", "role_name": "COO", "desk_access": 1}).insert(
+			ignore_permissions=True
+		)
 
 	for name, style in STATES.items():
 		if not frappe.db.exists("Workflow State", name):
-			frappe.get_doc(
-				{"doctype": "Workflow State", "workflow_state_name": name, "style": style}
-			).insert(ignore_permissions=True)
+			frappe.get_doc({"doctype": "Workflow State", "workflow_state_name": name, "style": style}).insert(
+				ignore_permissions=True
+			)
 
 	for name in ACTIONS:
 		if not frappe.db.exists("Workflow Action Master", name):
-			frappe.get_doc(
-				{"doctype": "Workflow Action Master", "workflow_action_name": name}
-			).insert(ignore_permissions=True)
+			frappe.get_doc({"doctype": "Workflow Action Master", "workflow_action_name": name}).insert(
+				ignore_permissions=True
+			)
 
 	if frappe.db.exists("Workflow", "Cong Tac Approval"):
 		return
@@ -59,8 +61,18 @@ def ensure_workflow():
 				{"state": "Nháp", "action": "Gửi duyệt", "next_state": "Chờ COO duyệt", "allowed": "HR User"},
 				{"state": "Chờ COO duyệt", "action": "Duyệt", "next_state": "COO đã duyệt", "allowed": "COO"},
 				{"state": "Chờ COO duyệt", "action": "Từ chối", "next_state": "Từ chối", "allowed": "COO"},
-				{"state": "COO đã duyệt", "action": "Ra QĐ", "next_state": "Đã ra QĐ", "allowed": "HR Manager"},
-				{"state": "Đã ra QĐ", "action": "Hoàn tất", "next_state": "Hoàn tất", "allowed": "HR Manager"},
+				{
+					"state": "COO đã duyệt",
+					"action": "Ra QĐ",
+					"next_state": "Đã ra QĐ",
+					"allowed": "HR Manager",
+				},
+				{
+					"state": "Đã ra QĐ",
+					"action": "Hoàn tất",
+					"next_state": "Hoàn tất",
+					"allowed": "HR Manager",
+				},
 			],
 		}
 	).insert(ignore_permissions=True)

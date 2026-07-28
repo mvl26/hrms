@@ -42,9 +42,7 @@ def make_skipped_checkin(employee, minutes_ago=1, log_type="IN", reason=None, li
 
 	if linked:
 		# only the set/not-set state matters to the selection logic
-		frappe.db.set_value(
-			"Employee Checkin", log.name, "attendance", "ATT-DUMMY", update_modified=False
-		)
+		frappe.db.set_value("Employee Checkin", log.name, "attendance", "ATT-DUMMY", update_modified=False)
 
 	return log
 
@@ -83,9 +81,7 @@ class TestSkipAttendanceDiag(FrappeTestCase):
 
 		reset_wrongly_skipped(employee=self.employee, require_no_existing_attendance=False)  # apply=False
 
-		self.assertEqual(
-			frappe.db.get_value("Employee Checkin", checkin.name, "skip_auto_attendance"), 1
-		)
+		self.assertEqual(frappe.db.get_value("Employee Checkin", checkin.name, "skip_auto_attendance"), 1)
 
 	def test_only_without_comment_targets_device_import_checkins(self):
 		with_comment = make_skipped_checkin(self.employee, minutes_ago=1, reason="Attendance already marked")

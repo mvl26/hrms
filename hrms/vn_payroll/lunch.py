@@ -3,9 +3,9 @@
 """Số ngày ăn trưa tại công ty — suy từ checkin, KHÁC số công.
 
 Quy tắc (khớp công thức HR): một ngày tính ăn trưa khi ngày đó là ngày công (Present / Half Day) VÀ
-dấu vào–ra phủ cả giờ nghỉ trưa — vào TRƯỚC giờ bắt đầu nghỉ trưa và ra TỪ giờ hết nghỉ trưa trở đi.
+dấu vào-ra phủ cả giờ nghỉ trưa — vào TRƯỚC giờ bắt đầu nghỉ trưa và ra TỪ giờ hết nghỉ trưa trở đi.
 Giờ nghỉ trưa lấy từ Shift Type của ngày đó (`custom_lunch_start`/`custom_lunch_end`); nếu ca không
-đặt thì dùng mặc định 12:00–13:30.
+đặt thì dùng mặc định 12:00-13:30.
 """
 
 import frappe
@@ -35,9 +35,9 @@ def _td_minutes(td) -> int | None:
 
 
 def shift_lunch_window(shift: str | None) -> tuple[int, int]:
-	"""(phút bắt đầu, phút kết thúc) giờ nghỉ trưa của ca; thiếu/không hợp lệ → mặc định 12:00–13:30.
+	"""(phút bắt đầu, phút kết thúc) giờ nghỉ trưa của ca; thiếu/không hợp lệ → mặc định 12:00-13:30.
 
-	Chỉ dùng cấu hình khi là một khung nghỉ trưa GIỮA NGÀY hợp lý (start < end, trong 10:00–16:00). Time
+	Chỉ dùng cấu hình khi là một khung nghỉ trưa GIỮA NGÀY hợp lý (start < end, trong 10:00-16:00). Time
 	field để trống có thể bị đặt = giờ hiện tại (không phải NULL) → khung rác (vd 23:26); khi đó về mặc định
 	để số buổi ăn trưa không bị 0 oan (an toàn cho ca mới quên cấu hình)."""
 	default = (DEFAULT_LUNCH_START, DEFAULT_LUNCH_END)
@@ -55,7 +55,7 @@ def shift_lunch_window(shift: str | None) -> tuple[int, int]:
 
 
 def checkins_cover_lunch(day_datetimes, window: tuple[int, int]) -> bool:
-	"""Dấu vào–ra của một ngày có phủ giờ nghỉ trưa không (vào < bắt đầu VÀ ra ≥ kết thúc)."""
+	"""Dấu vào-ra của một ngày có phủ giờ nghỉ trưa không (vào < bắt đầu VÀ ra ≥ kết thúc)."""
 	if not day_datetimes:
 		return False
 	lunch_start, lunch_end = window

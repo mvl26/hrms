@@ -33,7 +33,7 @@ class MVLInput:
 	worked_days: float  # H — công thực tế (payment_days)
 	bonus: float = 0.0  # tiền thưởng (HR tự điền) — cộng vào thu nhập chịu thuế + thực lĩnh
 	probation_worked_days: float = 0.0  # công thuộc giai đoạn THỬ VIỆC (hệ số 0.85) khi chuyển thử
-	# việc → chính thức giữa kỳ; phần còn lại (worked_days − này) tính theo hệ số loại hiện tại. 0 = không chuyển.
+	# việc → chính thức giữa kỳ; phần còn lại (worked_days - này) tính theo hệ số loại hiện tại. 0 = không chuyển.
 	is_resident: bool = True  # Bán thời gian: cư trú → khấu trừ 10% (O/0.9); không cư trú → 20% (O/0.8)
 
 
@@ -65,7 +65,7 @@ class MVLResult:
 
 
 def default_config() -> MVLConfig:
-	"""Tham số kỳ 06/2026 (doc mục 1 + biểu thuế/gross-up Bước 6–7). Nguồn sự thật khi chạy = Settings."""
+	"""Tham số kỳ 06/2026 (doc mục 1 + biểu thuế/gross-up Bước 6-7). Nguồn sự thật khi chạy = Settings."""
 	return MVLConfig(
 		personal_deduction=15_500_000,
 		dependent_deduction=6_200_000,
@@ -113,7 +113,7 @@ def _coefficient(salary_type: str, cfg: MVLConfig) -> float:
 
 
 def compute_mvl(inp: MVLInput, cfg: MVLConfig) -> MVLResult:
-	"""Chạy toàn bộ Bước 1–9 cho một nhân sự trong một kỳ. Trả mọi số trung gian để in + kiểm."""
+	"""Chạy toàn bộ Bước 1-9 cho một nhân sự trong một kỳ. Trả mọi số trung gian để in + kiểm."""
 	# GROSS chưa hiện thực (Bước 6.3.6 khác cấu trúc). Fail lớn tiếng thay vì ra phiếu sai âm thầm —
 	# nhánh này để trống sẽ cho P/Q = 0 mà hook vẫn trừ thuế/BHXH. Miyano trả toàn NET.
 	if inp.salary_type == "GROSS":
@@ -142,7 +142,7 @@ def compute_mvl(inp: MVLInput, cfg: MVLConfig) -> MVLResult:
 	) + cfg.dependent_deduction * inp.dependents
 	r.O = max(r.K - r.N - r.J, 0.0)
 
-	# Bước 6–7 — quy đổi + thuế, phân nhánh theo loại nhân sự
+	# Bước 6-7 — quy đổi + thuế, phân nhánh theo loại nhân sự
 	if is_net_fulltime:
 		r.P = _grossup(r.O, cfg.grossup_brackets)
 		r.Q = _progressive_tax(r.P, cfg.tax_brackets)

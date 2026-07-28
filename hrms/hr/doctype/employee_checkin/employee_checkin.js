@@ -94,7 +94,8 @@ async function overlay_geofence(frm, attempts = 0) {
 
 	// Show both the geofence and the check-in point.
 	const bounds = circle.getBounds();
-	if (frm.doc.latitude && frm.doc.longitude) bounds.extend([frm.doc.latitude, frm.doc.longitude]);
+	if (frm.doc.latitude && frm.doc.longitude)
+		bounds.extend([frm.doc.latitude, frm.doc.longitude]);
 	try {
 		map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 });
 	} catch (e) {
