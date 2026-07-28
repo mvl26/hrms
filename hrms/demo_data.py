@@ -49,19 +49,23 @@ def _ensure_employees():
 		if existing:
 			emps[key] = existing
 			continue
-		emps[key] = frappe.get_doc(
-			{
-				"doctype": "Employee",
-				"employee_name": name,
-				"first_name": name,
-				"company": COMPANY,
-				"gender": gender,
-				"date_of_birth": "1990-01-01",
-				"date_of_joining": "2025-01-01",
-				"status": "Active",
-				"default_shift": SHIFT,
-			}
-		).insert().name
+		emps[key] = (
+			frappe.get_doc(
+				{
+					"doctype": "Employee",
+					"employee_name": name,
+					"first_name": name,
+					"company": COMPANY,
+					"gender": gender,
+					"date_of_birth": "1990-01-01",
+					"date_of_joining": "2025-01-01",
+					"status": "Active",
+					"default_shift": SHIFT,
+				}
+			)
+			.insert()
+			.name
+		)
 	return emps
 
 
@@ -87,15 +91,27 @@ def _clear(emps):
 
 def _code(emp, day, code):
 	frappe.get_doc(
-		{"doctype": "Attendance", "employee": emp, "company": COMPANY, "attendance_date": _d(day),
-		 "custom_attendance_code": code}
+		{
+			"doctype": "Attendance",
+			"employee": emp,
+			"company": COMPANY,
+			"attendance_date": _d(day),
+			"custom_attendance_code": code,
+		}
 	).insert().submit()
 
 
 def _shift_att(emp, day, in_hm, out_hm):
 	frappe.get_doc(
-		{"doctype": "Attendance", "employee": emp, "company": COMPANY, "attendance_date": _d(day),
-		 "shift": SHIFT, "in_time": f"{_d(day)} {in_hm}:00", "out_time": f"{_d(day)} {out_hm}:00"}
+		{
+			"doctype": "Attendance",
+			"employee": emp,
+			"company": COMPANY,
+			"attendance_date": _d(day),
+			"shift": SHIFT,
+			"in_time": f"{_d(day)} {in_hm}:00",
+			"out_time": f"{_d(day)} {out_hm}:00",
+		}
 	).insert().submit()
 
 
@@ -104,8 +120,19 @@ def _attendance(emps, status):
 	# An — every manual code
 	for day in (3, 4, 5):
 		_code(an, day, "X")
-	plan = {7: "P", 8: "1/2P", 9: "Ô", 10: "Cô", 11: "N", 12: "NN", 14: "1/2K",
-			15: "V", 16: "K", 17: "NB", 18: "T"}
+	plan = {
+		7: "P",
+		8: "1/2P",
+		9: "Ô",
+		10: "Cô",
+		11: "KH",
+		12: "NN",
+		14: "1/2K",
+		15: "V",
+		16: "K",
+		17: "NB",
+		18: "T",
+	}
 	for day, code in plan.items():
 		_code(an, day, code)
 	for day in (21, 22, 23, 24, 25):
@@ -139,10 +166,12 @@ def _attendance(emps, status):
 
 	# Em — checkins + classifier attendance
 	for day in (3, 4, 5, 9, 10, 11):
-		frappe.get_doc({"doctype": "Employee Checkin", "employee": em, "log_type": "IN",
-						"time": f"{_d(day)} 08:00:00"}).insert()
-		frappe.get_doc({"doctype": "Employee Checkin", "employee": em, "log_type": "OUT",
-						"time": f"{_d(day)} 17:30:00"}).insert()
+		frappe.get_doc(
+			{"doctype": "Employee Checkin", "employee": em, "log_type": "IN", "time": f"{_d(day)} 08:00:00"}
+		).insert()
+		frappe.get_doc(
+			{"doctype": "Employee Checkin", "employee": em, "log_type": "OUT", "time": f"{_d(day)} 17:30:00"}
+		).insert()
 		_shift_att(em, day, "08:00", "17:30")
 	for day in (14, 15, 16, 17, 18, 19, 21, 22, 23, 24, 25):
 		_shift_att(em, day, "08:00", "17:30")
@@ -151,12 +180,28 @@ def _attendance(emps, status):
 
 def _leave_flow(emps, status):
 	dung = emps["dung"]
-	frappe.get_doc({"doctype": "Leave Allocation", "employee": dung, "leave_type": "Nghỉ ốm",
-					"from_date": f"{YEAR}-01-01", "to_date": f"{YEAR}-12-31",
-					"new_leaves_allocated": 30}).insert().submit()
-	la = frappe.get_doc({"doctype": "Leave Application", "employee": dung, "leave_type": "Nghỉ ốm",
-						 "from_date": _d(7), "to_date": _d(8), "leave_approver": "Administrator",
-						 "status": "Approved", "company": COMPANY})
+	frappe.get_doc(
+		{
+			"doctype": "Leave Allocation",
+			"employee": dung,
+			"leave_type": "Nghỉ ốm",
+			"from_date": f"{YEAR}-01-01",
+			"to_date": f"{YEAR}-12-31",
+			"new_leaves_allocated": 30,
+		}
+	).insert().submit()
+	la = frappe.get_doc(
+		{
+			"doctype": "Leave Application",
+			"employee": dung,
+			"leave_type": "Nghỉ ốm",
+			"from_date": _d(7),
+			"to_date": _d(8),
+			"leave_approver": "Administrator",
+			"status": "Approved",
+			"company": COMPANY,
+		}
+	)
 	la.insert()
 	la.submit()  # on_submit -> update_attendance -> Attendance On Leave -> reverse code 'Ô'
 	status["Leave Application -> auto Attendance"] = la.name
@@ -166,11 +211,19 @@ def _business_trip(emps, status):
 	from frappe.model.workflow import apply_workflow
 
 	binh, cuong = emps["binh"], emps["cuong"]
-	trip = frappe.get_doc({"doctype": "Business Trip", "company": COMPANY, "destination": "Hà Nội",
-						   "purpose": "Họp giao ban quý", "from_date": _d(10), "to_date": _d(12),
-						   "registered_by": cuong, "approver_coo": "Administrator",
-						   "travelers": [{"employee": binh, "is_registrant": 0},
-										 {"employee": cuong, "is_registrant": 1}]})
+	trip = frappe.get_doc(
+		{
+			"doctype": "Business Trip",
+			"company": COMPANY,
+			"destination": "Hà Nội",
+			"purpose": "Họp giao ban quý",
+			"from_date": _d(10),
+			"to_date": _d(12),
+			"registered_by": cuong,
+			"approver_coo": "Administrator",
+			"travelers": [{"employee": binh, "is_registrant": 0}, {"employee": cuong, "is_registrant": 1}],
+		}
+	)
 	trip.insert()
 	for action in ("Gửi duyệt", "Duyệt", "Ra QĐ"):
 		try:
@@ -183,8 +236,9 @@ def _business_trip(emps, status):
 
 
 def _sheet(status):
-	sheet = frappe.get_doc({"doctype": "Monthly Attendance Sheet", "company": COMPANY,
-							"month": str(MONTH), "year": YEAR})
+	sheet = frappe.get_doc(
+		{"doctype": "Monthly Attendance Sheet", "company": COMPANY, "month": str(MONTH), "year": YEAR}
+	)
 	sheet.insert()
 	sheet.populate_from_attendance()
 	sheet.save()
