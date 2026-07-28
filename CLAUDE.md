@@ -88,5 +88,5 @@ Execution style: the user drives with short prompts ("chạy tiếp", "hoàn thi
 ## Conventions
 
 - **Conventional Commits**, enforced by `commitlint.config.js`. Miyano commits scope with `(hr)`, e.g. `feat(hr): ...`.
-- **Stage only the files your change touches** (`git add <paths>`, never `git add -A`) — the working tree often carries unrelated in-progress work. `.claude/` is intentionally untracked (local tooling).
+- **Stage only the files your change touches** (`git add <paths>`, never `git add -A`) — the working tree often carries unrelated in-progress work. `.claude/` is tracked (local tooling config shared across machines).
 - **Schema change** = edit the doctype JSON → `bench --site miyano migrate`; a new patch needs an entry in `hrms/patches.txt`.
