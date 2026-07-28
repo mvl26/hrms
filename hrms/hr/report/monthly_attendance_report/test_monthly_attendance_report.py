@@ -50,23 +50,24 @@ class TestBangChamCongThang(FrappeTestCase):
 		columns, _ = execute({"month": self.month, "year": self.year})
 		return {c["label"]: c["fieldname"] for c in columns if c["fieldname"].startswith("cat_")}
 
-	def test_pivot_cells_and_category_totals(self):
+	def test_pivot_cells_and_tong_cong(self):
 		self._mk(5, custom_attendance_code="X")  # full work
-		self._mk(6, custom_attendance_code="P")  # full annual leave
+		self._mk(6, custom_attendance_code="P")  # full annual leave (paid)
 		self._mk(7, custom_morning_code="X", custom_afternoon_code="P")  # half work / half leave
 
 		columns, data = execute({"month": self.month, "year": self.year})
 		labels = {c["fieldname"]: c["label"] for c in columns}
-		self.assertEqual(labels["cat_0"], "Công")
-		self.assertEqual(labels["cat_1"], "Phép")
+		self.assertEqual(labels["tong_cong"], "Tổng công")
+		self.assertEqual(labels["cat_0"], "Phép năm")
 
 		row = next(r for r in data if r["employee"] == self.emp)
 		self.assertEqual(row["day_5"], "X")
 		self.assertEqual(row["day_6"], "P")
 		self.assertEqual(row["day_7"], "X/P")
-		# Công = X(1.0) + half X(0.5) = 1.5 ; Phép = P(1.0) + half P(0.5) = 1.5
+		# Tổng công (số ngày được trả lương) = X(1.0) + P(1.0, có lương) + X/P(0.5 làm + 0.5 phép) = 3.0
+		self.assertEqual(row["tong_cong"], 3.0)
+		# cột "Phép năm" = P(1.0) + nửa phép của X/P(0.5) = 1.5
 		self.assertEqual(row["cat_0"], 1.5)
-		self.assertEqual(row["cat_1"], 1.5)
 
 	def test_get_sheet_rows_semantic_shape(self):
 		# the shared derivation used by the Bảng Công Tháng DocType returns semantic rows
@@ -81,13 +82,29 @@ class TestBangChamCongThang(FrappeTestCase):
 		self.assertEqual(row["totals"]["Công"], 1.0)
 		self.assertEqual(row["totals"]["Phép"], 1.0)
 
-	def test_new_categories_present(self):
-		# all seeded categories must have a totals column, including the new ones
-		labels = self._cat_labels()
-		for cat in ("Công", "Phép", "Việc riêng", "Ốm", "Thai sản", "Tai nạn LĐ", "Nghỉ bù", "Không lương"):
-			self.assertIn(cat, labels, f"missing totals column for {cat}")
+	def test_report_columns_are_the_configured_set(self):
+		# cột tổng hợp đúng bộ đã cấu hình (gọn): Tổng công (đầu, in đậm) + Phép năm/Thai sản/Không
+		# lương/Tai nạn lao động/Nghỉ riêng. Ốm/chăm con ốm/nghỉ bù gộp Tổng công; Vắng/Nghỉ lễ chỉ ký hiệu.
+		columns, _ = execute({"month": self.month, "year": self.year})
+		summary = [
+			c["label"] for c in columns if c["fieldname"] == "tong_cong" or c["fieldname"].startswith("cat_")
+		]
+		self.assertEqual(
+			summary,
+			["Tổng công", "Phép năm", "Thai sản", "Không lương", "Tai nạn lao động", "Nghỉ riêng"],
+		)
+
+	def test_paid_leave_counts_in_tong_cong_unpaid_does_not(self):
+		# ốm / thai sản là nghỉ CÓ LƯƠNG → tính đủ công vào Tổng công; không lương (K) thì không.
+		self._mk(5, custom_attendance_code="Ô")
+		self._mk(6, custom_attendance_code="TS")
+		self._mk(7, custom_attendance_code="K")
+		row = self._row(self.emp)
+		self.assertEqual(row["tong_cong"], 2.0)  # Ô + TS được trả lương; K không
 
 	def test_single_half_day_code_totals(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
+
 		labels = self._cat_labels()
 		self._mk(10, custom_attendance_code="NN")  # worked half, paid
 		self._mk(11, custom_attendance_code="1/2P")  # half work + half annual leave
@@ -97,13 +114,16 @@ class TestBangChamCongThang(FrappeTestCase):
 		self.assertEqual(row["day_10"], "NN")
 		self.assertEqual(row["day_11"], "1/2P")
 		self.assertEqual(row["day_12"], "1/2K")
-		# Công (worked) = NN 0.5 + 1/2P 0.5 + 1/2K 0.5 = 1.5
-		self.assertEqual(row[labels["Công"]], 1.5)
-		# Phép leave-half of 1/2P = 0.5 ; Không lương leave-half of 1/2K = 0.5
-		self.assertEqual(row[labels["Phép"]], 0.5)
+		# Tổng công (được trả lương) = NN 0.5 + 1/2P 1.0 (làm+phép) + 1/2K 0.5 (làm) = 2.0
+		self.assertEqual(row["tong_cong"], 2.0)
+		# Phép năm leave-half of 1/2P = 0.5 ; Không lương leave-half of 1/2K = 0.5
+		self.assertEqual(row[labels["Phép năm"]], 0.5)
 		self.assertEqual(row[labels["Không lương"]], 0.5)
-		# NN chỉ nói "làm nửa ngày", không nói nửa kia nghỉ vì gì -> nửa kia là nghỉ không lý do
-		self.assertEqual(row[labels["Vắng"]], 0.5)
+		# NN nửa kia là nghỉ không lý do → Vắng (không còn cột; kiểm qua totals)
+		srow = next(
+			r for r in get_sheet_rows({"month": self.month, "year": self.year}) if r["employee"] == self.emp
+		)
+		self.assertEqual(srow["totals"].get("Vắng"), 0.5)
 
 	def test_a_half_day_code_still_accounts_for_the_whole_day(self):
 		"""Mỗi ngày có chấm công phải quy ra đủ 1 công trên bảng — không được bốc hơi nửa nào.
@@ -112,12 +132,19 @@ class TestBangChamCongThang(FrappeTestCase):
 		nghỉ (chỉ chạy khi category != "Công") bỏ sót nửa không làm: ngày đó chỉ vào sổ 0.5 công và
 		dòng bảng công không cân về số ngày công của tháng.
 		"""
-		labels = self._cat_labels()
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
+			TOTAL_PAID,
+			get_sheet_rows,
+		)
+
 		for day, code in ((10, "NN"), (11, "1/2P"), (12, "1/2K")):
 			self._mk(day, custom_attendance_code=code)
 
-		row = self._row(self.emp)
-		total = sum(row.get(field) or 0 for field in labels.values())
+		srow = next(
+			r for r in get_sheet_rows({"month": self.month, "year": self.year}) if r["employee"] == self.emp
+		)
+		# Công thực + phần nghỉ mỗi loại (KHÔNG gồm Tổng công — một aggregate khác) phải cân về 3 công
+		total = sum(v for k, v in srow["totals"].items() if k != TOTAL_PAID)
 		self.assertEqual(total, 3.0, "3 ngày nửa công phải quy ra đúng 3 công")
 
 	def test_calendar_markers_weekly_off_and_holiday(self):
@@ -154,13 +181,12 @@ class TestBangChamCongThang(FrappeTestCase):
 	def test_draft_attendance_excluded_from_snapshot(self):
 		# a frozen sheet must count only submitted Attendance, like payroll (docstatus==1);
 		# a still-draft day never becomes payroll reality, so it must not appear or count.
-		labels = self._cat_labels()
 		self._mk(20, custom_attendance_code="X")  # submitted
 		self._mk_draft(21, custom_attendance_code="X")  # draft — must be excluded
 		row = self._row(self.emp)
 		self.assertEqual(row["day_20"], "X")
 		self.assertNotEqual(row.get("day_21"), "X")
-		self.assertEqual(row[labels["Công"]], 1.0)  # only the submitted day counts
+		self.assertEqual(row["tong_cong"], 1.0)  # only the submitted day counts
 
 	def test_public_holiday_counted_in_nghi_le_total(self):
 		# a paid public holiday (NL) must count toward a "Nghỉ lễ" total (nghỉ lễ hưởng lương);
@@ -203,11 +229,16 @@ class TestBangChamCongThang(FrappeTestCase):
 		self.assertEqual(row["totals"].get("Nghỉ lễ"), 2.0)  # 2 paid holidays, weekly-off excluded
 
 	def test_absent_day_renders_v(self):
-		labels = self._cat_labels()
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
+
 		self._mk(15, status="Absent")  # ngày vắng (auto-attendance / checkin thiếu giờ), no code
 		row = self._row(self.emp)
 		self.assertEqual(row["day_15"], "V")
-		self.assertEqual(row[labels["Vắng"]], 1.0)
+		self.assertEqual(row["tong_cong"], 0.0)  # vắng KHÔNG được trả lương → không vào Tổng công
+		srow = next(
+			r for r in get_sheet_rows({"month": self.month, "year": self.year}) if r["employee"] == self.emp
+		)
+		self.assertEqual(srow["totals"].get("Vắng"), 1.0)
 
 	def test_terminated_marker_after_relieving(self):
 		emp = make_employee("bcct_terminated@codes.com")
@@ -272,7 +303,7 @@ class TestAttendanceColorState(FrappeTestCase):
 			"NB": c("Nghỉ bù", 0.0),
 			"K": c("Không lương", 0.0),
 			"V": c("Vắng", 0.0),
-			"N": c("Việc riêng", 0.0),
+			"KH": c("Việc riêng", 0.0),
 		}
 
 	def test_day_state_maps_every_code_and_marker(self):
@@ -289,7 +320,7 @@ class TestAttendanceColorState(FrappeTestCase):
 			"1/2K": "half",
 			# nghỉ cả ngày → theo category
 			"P": "leave",
-			"N": "leave",  # việc riêng (mặc định gộp phép/vàng)
+			"KH": "leave",  # việc riêng / kết hôn (mặc định gộp phép/vàng)
 			"Ô": "sick",
 			"Cô": "sick",
 			"TS": "sick",

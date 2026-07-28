@@ -74,7 +74,11 @@ class MonthlyAttendanceSheet(Document):
 
 		self.set("employees", [])
 		for r in get_sheet_rows(filters):
-			row = {"employee": r["employee"], "employee_name": r["employee_name"]}
+			row = {
+				"employee": r["employee"],
+				"employee_name": r["employee_name"],
+				"lunch_days": r.get("lunch_days", 0),  # số buổi ăn trưa (nguồn duy nhất: get_sheet_rows)
+			}
 			for day, sym in r["days"].items():
 				row[f"d{int(day):02d}"] = sym
 			for cat, val in r["totals"].items():

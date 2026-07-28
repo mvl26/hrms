@@ -140,17 +140,68 @@ class TestAttendanceCodeBridge(FrappeTestCase):
 		self.assertEqual(d.custom_attendance_code, "Ô")
 		self.assertEqual(d.custom_work_credit, 0)
 
-	def test_forward_personal_leave(self):
-		# N = nghỉ việc riêng có lương -> On Leave, leave_type Nghỉ việc riêng, no worked công
-		d = self._bridge(custom_attendance_code="N")
+	def test_reverse_pick_is_deterministic_for_shared_status(self):
+		# nhiều mã cùng maps_to_status → reverse chọn mã chính (X cho Present, CT cho Work From Home)
+		# thay vì phụ thuộc thứ tự DB. Đảm bảo an toàn khi W (làm nhà) cùng "Work From Home" với CT.
+		from hrms.hr.doctype.attendance.attendance import _pick_reverse_code
+
+		self.assertEqual(_pick_reverse_code("Present", ["X"]), "X")
+		self.assertEqual(_pick_reverse_code("Present", ["CV", "X"]), "X")
+		self.assertEqual(_pick_reverse_code("Work From Home", ["CT", "W"]), "CT")
+		self.assertEqual(_pick_reverse_code("Work From Home", ["W", "CT"]), "CT")
+		self.assertEqual(_pick_reverse_code("Absent", ["V"]), "V")
+		self.assertIsNone(_pick_reverse_code("Present", []))
+
+	def test_leave_backed_half_day_ignores_stale_work_code(self):
+		# nghỉ phép NỬA NGÀY (có leave_application) còn sót mã X từ lần chấm Present → KHÔNG được lật về
+		# Present; phải quy về 1/2P (nghỉ phép nửa ngày), công 0.5.
+		d = self._bridge(
+			status="Half Day",
+			leave_type="Nghỉ phép năm",
+			leave_application="HR-LAP-TEST",
+			custom_attendance_code="X",
+		)
+		self.assertEqual(d.status, "Half Day")
+		self.assertEqual(d.custom_attendance_code, "1/2P")
+		self.assertEqual(d.custom_work_credit, 0.5)
+
+	def test_leave_backed_full_day_ignores_stale_work_code(self):
+		# nghỉ phép CẢ NGÀY còn sót mã X → quy về P (nghỉ phép năm), công 0.
+		d = self._bridge(
+			status="On Leave",
+			leave_type="Nghỉ phép năm",
+			leave_application="HR-LAP-TEST",
+			custom_attendance_code="X",
+		)
 		self.assertEqual(d.status, "On Leave")
-		self.assertEqual(d.leave_type, "Nghỉ việc riêng")
+		self.assertEqual(d.custom_attendance_code, "P")
+		self.assertEqual(d.custom_work_credit, 0)
+
+	def test_leave_half_day_split_preserved(self):
+		# tách đúng buổi (morning là mã nghỉ P, afternoon X) trên ngày có đơn nghỉ → GIỮ nguyên, không xoá.
+		d = self._bridge(
+			status="Half Day",
+			leave_type="Nghỉ phép năm",
+			leave_application="HR-LAP-TEST",
+			custom_morning_code="P",
+			custom_afternoon_code="X",
+		)
+		self.assertEqual(d.status, "Half Day")
+		self.assertEqual(d.custom_morning_code, "P")
+		self.assertEqual(d.custom_afternoon_code, "X")
+		self.assertEqual(d.custom_work_credit, 0.5)
+
+	def test_forward_personal_leave(self):
+		# KH = nghỉ kết hôn có lương -> On Leave, leave_type Nghỉ kết hôn, no worked công
+		d = self._bridge(custom_attendance_code="KH")
+		self.assertEqual(d.status, "On Leave")
+		self.assertEqual(d.leave_type, "Nghỉ kết hôn")
 		self.assertEqual(d.custom_work_credit, 0)
 
 	def test_reverse_personal_leave(self):
-		# native On-Leave record of that leave type (no code) -> derive display code N
-		d = self._bridge(status="On Leave", leave_type="Nghỉ việc riêng")
-		self.assertEqual(d.custom_attendance_code, "N")
+		# native On-Leave record of that leave type (no code) -> derive display code KH
+		d = self._bridge(status="On Leave", leave_type="Nghỉ kết hôn")
+		self.assertEqual(d.custom_attendance_code, "KH")
 		self.assertEqual(d.custom_work_credit, 0)
 
 

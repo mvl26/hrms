@@ -1,6 +1,20 @@
 [
  {
   "category": "Công",
+  "code": "W",
+  "code_name": "Làm tại nhà (Work From Home)",
+  "color": null,
+  "docstatus": 0,
+  "doctype": "Attendance Code",
+  "is_paid": 1,
+  "leave_type": null,
+  "maps_to_status": "Work From Home",
+  "modified": "2026-07-25 00:00:00.000000",
+  "name": "W",
+  "work_fraction": 1.0
+ },
+ {
+  "category": "Công",
   "code": "X",
   "code_name": "Đi làm đủ công",
   "color": null,
@@ -183,16 +197,44 @@
  },
  {
   "category": "Việc riêng",
-  "code": "N",
-  "code_name": "Nghỉ việc riêng có lương",
+  "code": "KH",
+  "code_name": "Nghỉ kết hôn",
   "color": null,
   "docstatus": 0,
   "doctype": "Attendance Code",
   "is_paid": 1,
-  "leave_type": "Nghỉ việc riêng",
+  "leave_type": "Nghỉ kết hôn",
   "maps_to_status": "On Leave",
-  "modified": "2026-07-14 00:00:00.000000",
-  "name": "N",
+  "modified": "2026-07-28 00:00:00.000000",
+  "name": "KH",
+  "work_fraction": 0.0
+ },
+ {
+  "category": "Việc riêng",
+  "code": "R1",
+  "code_name": "Nghỉ con kết hôn",
+  "color": null,
+  "docstatus": 0,
+  "doctype": "Attendance Code",
+  "is_paid": 1,
+  "leave_type": "Nghỉ con kết hôn",
+  "maps_to_status": "On Leave",
+  "modified": "2026-07-28 00:00:00.000000",
+  "name": "R1",
+  "work_fraction": 0.0
+ },
+ {
+  "category": "Việc riêng",
+  "code": "R2",
+  "code_name": "Nghỉ tang",
+  "color": null,
+  "docstatus": 0,
+  "doctype": "Attendance Code",
+  "is_paid": 1,
+  "leave_type": "Nghỉ tang",
+  "maps_to_status": "On Leave",
+  "modified": "2026-07-28 00:00:00.000000",
+  "name": "R2",
   "work_fraction": 0.0
  }
 ]

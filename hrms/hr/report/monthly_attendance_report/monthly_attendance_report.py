@@ -36,6 +36,20 @@ CATEGORY_UNEXCUSED = "Vắng"
 # Nghỉ lễ hưởng lương — suy từ Holiday List (không phải Attendance Code), đếm riêng một cột
 CATEGORY_HOLIDAY = "Nghỉ lễ"
 
+# "Tổng công" = SỐ NGÀY ĐƯỢC TRẢ LƯƠNG (đi làm + mọi nghỉ có lương: P/Ô/Cô/TS/T/NB/N). Cột chủ đạo,
+# in đậm. KHÔNG gồm Vắng / Không lương (không lương) và Nghỉ lễ (đếm riêng nếu cần).
+TOTAL_PAID = "Tổng công"
+
+# Cột tổng hợp hiển thị trên report (theo yêu cầu — gọn). Ốm/chăm con ốm/nghỉ bù đã gộp vào Tổng công
+# nên không có cột riêng; Vắng/Nghỉ lễ chỉ còn ký hiệu trong lưới. (category nội bộ, nhãn hiển thị)
+REPORT_CATEGORIES = [
+	("Phép", "Phép năm"),
+	("Thai sản", "Thai sản"),
+	("Không lương", "Không lương"),
+	("Tai nạn LĐ", "Tai nạn lao động"),
+	("Việc riêng", "Nghỉ riêng"),
+]
+
 
 # ── Mã màu bảng công (THUẦN HIỂN THỊ) ────────────────────────────────────────────────────────
 # Một nguồn màu duy nhất: report on-screen (formatter JS) và print format (Jinja) đều suy màu từ đây.
@@ -183,42 +197,30 @@ def execute(filters: Filters | None = None) -> tuple:
 	days = monthrange(year, month)[1]
 
 	code_map = get_code_map()
-	categories = get_categories(code_map)
 	rows = get_sheet_rows(filters)
 
-	columns = get_columns(days, categories)
-	data = _rows_to_report_data(rows, days, categories, code_map)
+	columns = get_columns(days)
+	data = _rows_to_report_data(rows, days, code_map)
 	return columns, data
 
 
 def get_code_map() -> dict:
-	"""{code: {category, work_fraction, maps_to_status, leave_type}} for every Attendance Code."""
+	"""{code: {category, work_fraction, is_paid, maps_to_status, leave_type}} for every Attendance Code."""
 	rows = frappe.get_all(
 		"Attendance Code",
-		fields=["name", "category", "work_fraction", "maps_to_status", "leave_type"],
+		fields=["name", "category", "work_fraction", "is_paid", "maps_to_status", "leave_type"],
 	)
 	return {r.name: r for r in rows}
 
 
-def get_categories(code_map: dict) -> list[str]:
-	# stable, human order first; then any extra categories present in the data (incl. Nghỉ lễ,
-	# a calendar-derived category not backed by an Attendance Code — always shown, appended last)
-	preferred = [
-		"Công",
-		"Phép",
-		"Việc riêng",
-		"Ốm",
-		"Thai sản",
-		"Tai nạn LĐ",
-		"Nghỉ bù",
-		"Không lương",
-		"Vắng",
-	]
-	present = {r.category for r in code_map.values() if r.category}
-	present.add(CATEGORY_HOLIDAY)
-	ordered = [c for c in preferred if c in present]
-	ordered += sorted(present - set(preferred))
-	return ordered
+# Loại nghỉ CÓ LƯƠNG (đếm vào Tổng công): mọi mã is_paid=1 KHÔNG thuộc mấy loại này. "Công" chỉ tính
+# phần đi làm thực (work_fraction); "Không lương"/"Vắng" không lương → không vào Tổng công.
+NON_PAID_LEAVE_CATEGORIES = ("Công", "Không lương", "Vắng")
+
+
+def is_paid_leave(code) -> bool:
+	"""Mã nghỉ CÓ LƯƠNG (Phép/Ốm/Chăm con ốm/Thai sản/TNLĐ/Nghỉ bù/Việc riêng) → phần nghỉ tính đủ công."""
+	return bool(code and cint(code.is_paid) and code.category not in NON_PAID_LEAVE_CATEGORIES)
 
 
 def _company_filter(filters: Filters) -> list | None:
@@ -303,7 +305,7 @@ def get_holidays(employees: list, start, end) -> dict:
 	return result
 
 
-def get_columns(days: int, categories: list[str]) -> list:
+def get_columns(days: int) -> list:
 	columns = [
 		{
 			"fieldname": "employee",
@@ -316,10 +318,17 @@ def get_columns(days: int, categories: list[str]) -> list:
 	]
 	for day in range(1, days + 1):
 		columns.append({"fieldname": f"day_{day}", "label": str(day), "fieldtype": "Data", "width": 45})
-	for idx, cat in enumerate(categories):
+	# Cột chủ đạo: Tổng công = số ngày được trả lương (in đậm ở formatter JS + bản in)
+	columns.append(
+		{"fieldname": "tong_cong", "label": _(TOTAL_PAID), "fieldtype": "Float", "width": 90, "precision": 2}
+	)
+	for idx, (_cat, label) in enumerate(REPORT_CATEGORIES):
 		columns.append(
-			{"fieldname": f"cat_{idx}", "label": cat, "fieldtype": "Float", "width": 80, "precision": 2}
+			{"fieldname": f"cat_{idx}", "label": _(label), "fieldtype": "Float", "width": 85, "precision": 2}
 		)
+	columns.append(
+		{"fieldname": "lunch_days", "label": _("Số buổi ăn trưa"), "fieldtype": "Int", "width": 90}
+	)
 	return columns
 
 
@@ -367,6 +376,10 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 	attendances = get_attendances(filters, start, end)
 	holidays = get_holidays(employees, start, end)
 
+	from hrms.vn_payroll.lunch import lunch_days_map  # nguồn duy nhất; 1 truy vấn gộp cho cả bảng
+
+	lunch_by_emp = lunch_days_map([e.name for e in employees], start, end)
+
 	rows = []
 	for e in employees:
 		emp_att = attendances.get(e.name, {})
@@ -392,6 +405,7 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 						continue
 					wf = flt(c.work_fraction)
 					totals["Công"] = totals.get("Công", 0.0) + wf * 0.5  # công thực đi làm
+					totals[TOTAL_PAID] = totals.get(TOTAL_PAID, 0.0) + wf * 0.5  # phần đi làm luôn có lương
 					rest = (1 - wf) * 0.5  # phần không đi làm của nửa buổi này
 					if rest:
 						# Mã nghỉ (P, Ô, 1/2P…) ghi vào đúng loại của nó. Mã thuộc loại "Công" mà
@@ -400,6 +414,9 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 						# 0.5 công và dòng bảng công không cân về số ngày công của tháng.
 						bucket = c.category if c.category != "Công" else CATEGORY_UNEXCUSED
 						totals[bucket] = totals.get(bucket, 0.0) + rest
+						# Nghỉ CÓ LƯƠNG (P/Ô/Cô/TS/T/NB/N) tính vào Tổng công = số ngày được trả lương.
+						if is_paid_leave(c):
+							totals[TOTAL_PAID] = totals.get(TOTAL_PAID, 0.0) + rest
 			elif joining and d < joining:
 				# chưa vào làm → cùng dấu với ngày sau khi nghỉ việc. Để trống thì mơ hồ: HR không
 				# phân biệt được "chưa vào làm" với "quên chấm công", trong khi payroll đã loại các
@@ -414,31 +431,36 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 					totals[CATEGORY_HOLIDAY] = totals.get(CATEGORY_HOLIDAY, 0.0) + 1.0
 
 		rows.append(
-			{"employee": e.name, "employee_name": e.employee_name, "days": day_syms, "totals": totals}
+			{
+				"employee": e.name,
+				"employee_name": e.employee_name,
+				"days": day_syms,
+				"totals": totals,
+				"lunch_days": lunch_by_emp.get(e.name, 0),  # số buổi ăn trưa (nguồn duy nhất)
+			}
 		)
 	return rows
 
 
-def _rows_to_report_data(rows: list[dict], days: int, categories: list[str], code_map: dict) -> list:
-	"""Map the shared semantic rows onto this report's flat column layout (day_N / cat_i).
+def _rows_to_report_data(rows: list[dict], days: int, code_map: dict) -> list:
+	"""Map the shared semantic rows onto this report's flat column layout (day_N / tong_cong / cat_i).
 
 	Also stashes a hidden ``_state_<day>`` (màu state, thuần hiển thị) per day for the JS formatter —
 	not a rendered column, just metadata carried on the row so classification stays in Python."""
-	cat_index = {cat: idx for idx, cat in enumerate(categories)}
 	data = []
 	for r in rows:
+		totals = r["totals"]
 		row = {
 			"employee": r["employee"],
 			"employee_name": r["employee_name"],
-			**{f"cat_{i}": 0.0 for i in range(len(categories))},
+			"lunch_days": cint(r.get("lunch_days")),
+			"tong_cong": flt(totals.get(TOTAL_PAID)),
+			**{f"cat_{i}": flt(totals.get(cat)) for i, (cat, _label) in enumerate(REPORT_CATEGORIES)},
 		}
 		for day, sym in r["days"].items():
 			row[f"day_{day}"] = sym
 			state = day_state(sym, code_map)
 			if state:
 				row[f"_state_{day}"] = state
-		for cat, val in r["totals"].items():
-			if cat in cat_index:
-				row[f"cat_{cat_index[cat]}"] = flt(val)
 		data.append(row)
 	return data

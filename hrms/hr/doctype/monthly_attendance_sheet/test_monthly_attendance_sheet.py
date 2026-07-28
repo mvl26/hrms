@@ -81,7 +81,7 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 		if not emp:
 			self.skipTest("no employee in company")
 		Y, M = 2097, 2
-		self._seed_attendance(emp, Y, M, 7, custom_attendance_code="N")
+		self._seed_attendance(emp, Y, M, 7, custom_attendance_code="KH")
 
 		sheet = self._sheet(month=str(M), year=Y)
 		sheet.insert()
@@ -89,7 +89,7 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 
 		row = next((r for r in sheet.employees if r.employee == emp), None)
 		self.assertIsNotNone(row, "seeded employee missing from the sheet")
-		self.assertEqual(row.d07, "N")
+		self.assertEqual(row.d07, "KH")
 		self.assertEqual(row.personal_leave, 1.0)  # full-day personal leave = 1.0
 
 	def test_populate_all_leave_category_columns(self):
@@ -132,8 +132,15 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 		row = next((r for r in sheet.employees if r.employee == emp), None)
 		self.assertIsNotNone(row, "seeded employee missing from the sheet")
 		fields = (
-			"work_days", "annual_leave", "personal_leave", "sick_leave", "maternity_leave",
-			"work_accident_leave", "comp_off", "unpaid_leave", "absent",
+			"work_days",
+			"annual_leave",
+			"personal_leave",
+			"sick_leave",
+			"maternity_leave",
+			"work_accident_leave",
+			"comp_off",
+			"unpaid_leave",
+			"absent",
 		)
 		self.assertEqual(sum((row.get(f) or 0) for f in fields), 4.0)  # 4 attended days
 
@@ -174,8 +181,10 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 		Y, M = 2097, 10
 		self._seed_attendance(emp, Y, M, 3, custom_attendance_code="P")
 		att = frappe.db.get_value(
-			"Attendance", {"employee": emp, "attendance_date": f"{Y}-{M:02d}-03"},
-			["name", "status", "leave_type", "half_day_status"], as_dict=True,
+			"Attendance",
+			{"employee": emp, "attendance_date": f"{Y}-{M:02d}-03"},
+			["name", "status", "leave_type", "half_day_status"],
+			as_dict=True,
 		)
 		before_count = frappe.db.count("Attendance")
 
@@ -213,7 +222,9 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 		sheet.populate_from_attendance()
 		sheet.save()
 
-		html = frappe.get_print("Monthly Attendance Sheet", sheet.name, print_format="Monthly Attendance Sheet")
+		html = frappe.get_print(
+			"Monthly Attendance Sheet", sheet.name, print_format="Monthly Attendance Sheet"
+		)
 		self.assertIn("BẢNG CHẤM CÔNG THÁNG", html)
 		self.assertIn("NGƯỜI CHẤM CÔNG", html)  # sign box 1
 		self.assertIn("PHÒNG NHÂN SỰ", html)  # sign box 2

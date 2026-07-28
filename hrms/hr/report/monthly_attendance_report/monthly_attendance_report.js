@@ -69,6 +69,10 @@ frappe.query_reports["Monthly Attendance Report"] = {
 	formatter: function (value, row, column, data, default_formatter) {
 		const html = default_formatter(value, row, column, data);
 		const fieldname = (column && column.fieldname) || "";
+		// Cột chủ đạo "Tổng công" — in đậm cho dễ nhìn (thuần hiển thị)
+		if (fieldname === "tong_cong") {
+			return `<b>${html}</b>`;
+		}
 		if (!fieldname.startsWith("day_")) return html;
 
 		const day = fieldname.slice(4);

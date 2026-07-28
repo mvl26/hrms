@@ -47,7 +47,8 @@
   "comp_off",
   "unpaid_leave",
   "absent",
-  "public_holiday"
+  "public_holiday",
+  "lunch_days"
  ],
  "fields": [
   {
@@ -330,6 +331,14 @@
    "label": "Nghỉ lễ",
    "read_only": 1,
    "precision": "2",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "lunch_days",
+   "fieldtype": "Int",
+   "label": "Ăn trưa",
+   "read_only": 1,
    "in_list_view": 1,
    "columns": 1
   }

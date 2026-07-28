@@ -37,10 +37,44 @@ class OverlappingShiftAttendanceError(frappe.ValidationError):
 	pass
 
 
+# Khi NHIỀU mã công cùng maps_to_status (leave_type trống), reverse-derive (status→mã, thuần hiển thị)
+# phải chọn ĐỊNH DANH. Mã "chính" cho mỗi native status có thể trùng: Present có X (+CV cũ), Work From
+# Home có CT và W (làm nhà). W chỉ được đặt tường minh bởi hook Yêu cầu chấm công nên bản ghi WFH
+# không mã phải quy về CT. Các status khác phân biệt bằng leave_type nên không cần liệt kê.
+CANONICAL_REVERSE_CODE = {"Present": "X", "Work From Home": "CT"}
+
+
+def _pick_reverse_code(status, matches):
+	"""Chọn mã reverse xác định khi nhiều mã cùng khớp một status (thuần hiển thị)."""
+	if not matches:
+		return None
+	if len(matches) == 1:
+		return matches[0]
+	preferred = CANONICAL_REVERSE_CODE.get(status)
+	if preferred and preferred in matches:
+		return preferred
+	return sorted(matches)[0]  # ổn định (deterministic) khi không có mã ưu tiên
+
+
 class Attendance(Document):
 	def before_validate(self):
 		self.apply_vn_half_day_classifier()
 		self.apply_attendance_code_bridge()
+		self.set_lunch_flag()
+
+	def set_lunch_flag(self):
+		"""Miyano: ghi cờ ăn trưa (custom_lunch) từ checkin của ngày này — nguồn duy nhất cho số buổi
+		ăn trưa (report + Bảng Công Tháng + phiếu lương đều đếm từ cờ). Thuần dữ liệu, payroll đọc
+		riêng cho phụ cấp ăn trưa; không đụng status/leave_type/half_day_status."""
+		if not frappe.get_meta("Attendance").has_field("custom_lunch"):
+			return  # field chưa migrate
+		from hrms.vn_payroll.lunch import lunch_flag_for_attendance
+
+		self.custom_lunch = (
+			1
+			if lunch_flag_for_attendance(self.employee, self.attendance_date, self.status, self.shift)
+			else 0
+		)
 
 	def before_insert(self):
 		if self.half_day_status == "":
@@ -76,8 +110,10 @@ class Attendance(Document):
 		in/out present, no manual code, and status not On Leave."""
 		if not self.get("shift") or not self.get("in_time") or not self.get("out_time"):
 			return
-		if self.get("custom_attendance_code") or self.get("custom_morning_code") or self.get(
-			"custom_afternoon_code"
+		if (
+			self.get("custom_attendance_code")
+			or self.get("custom_morning_code")
+			or self.get("custom_afternoon_code")
 		):
 			return  # respect a manually entered code
 		if self.get("status") == "On Leave" or self.get("leave_type"):
@@ -127,13 +163,14 @@ class Attendance(Document):
 		self.working_hours = round(m_net + a_net, 2)
 		worked_m, worked_a = m_cov >= min_frac, a_cov >= min_frac
 		if worked_m and worked_a:
-			self.custom_morning_code = self.custom_afternoon_code = "X"
-		elif worked_m:
-			self.custom_morning_code, self.custom_afternoon_code = "X", "V"
-		elif worked_a:
-			self.custom_morning_code, self.custom_afternoon_code = "V", "X"
+			self.custom_attendance_code = "X"  # cả ngày đi làm → MỘT mã đơn (không lưu X/X thừa)
+		elif worked_m or worked_a:
+			# làm nửa buổi → nửa còn lại nghỉ KHÔNG LƯƠNG. Mã CHUẨN là token đơn "1/2K" (không tách X/K):
+			# vẫn ra Half Day + "Nghỉ không lương" (is_lwp=1) + half_day_status Present → trừ đúng 0.5,
+			# payroll BẤT BIẾN so với X/K. Không phân biệt sáng/chiều ở phần hiển thị (theo quy ước mã).
+			self.custom_attendance_code = "1/2K"
 		else:
-			self.custom_attendance_code = "V"
+			self.custom_attendance_code = "V"  # vắng cả ngày (không đi làm buổi nào) → không lương
 
 	def apply_attendance_code_bridge(self):
 		"""Two-way bridge between VN attendance codes (mã công) and the native status fields
@@ -148,6 +185,8 @@ class Attendance(Document):
 		if not frappe.get_meta("Attendance").has_field("custom_attendance_code"):
 			return  # custom-field fixtures not installed yet
 
+		self.clear_stale_work_code_on_leave()
+
 		morning = self.get("custom_morning_code") or self.get("custom_attendance_code")
 		afternoon = self.get("custom_afternoon_code") or self.get("custom_attendance_code")
 
@@ -155,6 +194,23 @@ class Attendance(Document):
 			self._apply_codes_forward(morning or afternoon, afternoon or morning)
 		else:
 			self._derive_attendance_code_reverse()
+
+	def clear_stale_work_code_on_leave(self):
+		"""Ngày do NGHỈ PHÉP dẫn dắt (có leave_application, status On Leave/Half Day) mà mã đang là mã ĐI
+		LÀM (category "Công": X/CT/NN…) là mã CŨ sót từ lần auto-attendance chấm Present TRƯỚC khi áp đơn
+		nghỉ. Giữ lại thì forward-bridge sẽ lật status về Present (mã X → Present) → mất nửa/cả ngày nghỉ.
+		Bỏ mã sót để reverse suy lại đúng từ leave_type (vd nghỉ phép nửa ngày → 1/2P). Mã nghỉ / tách đúng
+		(morning là mã nghỉ) được giữ nguyên."""
+		if not (self.get("leave_application") and self.get("status") in ("On Leave", "Half Day")):
+			return
+		code = self.get("custom_morning_code") or self.get("custom_attendance_code")
+		if not code:
+			return
+		c = self._get_attendance_code(code)
+		if c and c.category == "Công":
+			self.custom_attendance_code = None
+			self.custom_morning_code = None
+			self.custom_afternoon_code = None
 
 	def _get_attendance_code(self, name):
 		if not name:
@@ -202,7 +258,8 @@ class Attendance(Document):
 			return
 		# ["is","not set"] reliably matches NULL/'' Link values (unlike ["in", ["", None]])
 		filters = {"maps_to_status": self.status, "leave_type": self.leave_type or ["is", "not set"]}
-		code = frappe.db.get_value("Attendance Code", filters, "name")
+		matches = frappe.get_all("Attendance Code", filters=filters, pluck="name")
+		code = _pick_reverse_code(self.status, matches)
 		if not code:
 			return
 		self.custom_attendance_code = code

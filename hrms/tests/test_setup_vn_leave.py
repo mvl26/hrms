@@ -51,7 +51,9 @@ class TestAnnualLeaveEarnedFixture(FrappeTestCase):
 			"Nghỉ thai sản": (0, 0),
 			"Nghỉ tai nạn lao động": (0, 0),
 			"Nghỉ bù": (0, 0),
-			"Nghỉ việc riêng": (0, 0),
+			"Nghỉ kết hôn": (0, 0),
+			"Nghỉ con kết hôn": (0, 0),
+			"Nghỉ tang": (0, 0),
 			"Nghỉ không lương": (1, 0),
 		}
 		types = load_fixture_types()
@@ -81,9 +83,7 @@ class TestEntitlementAndLeavePeriod(FrappeTestCase):
 	def _emp(self, doj):
 		from erpnext.setup.doctype.employee.test_employee import make_employee
 
-		return make_employee(
-			f"vn_leave_{doj}@example.com", company=self.company, date_of_joining=doj
-		)
+		return make_employee(f"vn_leave_{doj}@example.com", company=self.company, date_of_joining=doj)
 
 	def test_entitlement_tiers(self):
 		from hrms.setup_vn_leave import entitlement_for
@@ -269,9 +269,8 @@ class TestAssignAnnualLeave(FrappeTestCase):
 
 	def test_sanity_checks_on_explicit_employee_list(self):
 		"""Company khác -> skipped_other_company; DOJ sau kỳ cấp -> skipped_doj_after_period."""
-		from hrms.tests.test_utils import create_company
-
 		from hrms.setup_vn_leave import assign_annual_leave
+		from hrms.tests.test_utils import create_company
 
 		other_co = create_company("_VN Other Co").name
 		emp_other = self._emp("vn_otherco@example.com", "2024-01-01")
@@ -323,9 +322,7 @@ class TestMonthlyAccrualAndCap(FrappeTestCase):
 			"Leave Allocation", {"employee": emp, "leave_type": ANNUAL_LEAVE, "docstatus": 1}, "name"
 		)
 		self.assertEqual(report[emp]["status"], "created")
-		self.assertEqual(
-			frappe.db.get_value("Leave Allocation", alloc_name, "total_leaves_allocated"), 5.0
-		)
+		self.assertEqual(frappe.db.get_value("Leave Allocation", alloc_name, "total_leaves_allocated"), 5.0)
 
 		# chạy scheduler tại cuối mỗi tháng còn lại -> +1.0/tháng, chạm đúng 12.0 cuối năm
 		for last_day in (
@@ -340,15 +337,11 @@ class TestMonthlyAccrualAndCap(FrappeTestCase):
 			frappe.flags.current_date = getdate(last_day)
 			allocate_earned_leaves()
 
-		self.assertEqual(
-			frappe.db.get_value("Leave Allocation", alloc_name, "total_leaves_allocated"), 12.0
-		)
+		self.assertEqual(frappe.db.get_value("Leave Allocation", alloc_name, "total_leaves_allocated"), 12.0)
 
 		# chạy thêm lần nữa -> không vượt định mức năm (cap upstream)
 		allocate_earned_leaves()
-		self.assertEqual(
-			frappe.db.get_value("Leave Allocation", alloc_name, "total_leaves_allocated"), 12.0
-		)
+		self.assertEqual(frappe.db.get_value("Leave Allocation", alloc_name, "total_leaves_allocated"), 12.0)
 
 	def test_seniority_tier_accrues_full_entitlement_by_year_end(self):
 		"""Điều 114: bậc 13 ngày phải nhận đủ 13 ngày sau 12 tháng cộng dồn.
@@ -359,9 +352,7 @@ class TestMonthlyAccrualAndCap(FrappeTestCase):
 		from hrms.setup_vn_leave import assign_annual_leave
 
 		frappe.flags.current_date = getdate("2026-01-15")
-		emp = make_employee(
-			"vn_accrual_t13@example.com", company=self.company, date_of_joining="2019-05-01"
-		)
+		emp = make_employee("vn_accrual_t13@example.com", company=self.company, date_of_joining="2019-05-01")
 		report = assign_annual_leave(2026, self.company, employees=[emp])
 		self.assertEqual(report[emp]["entitlement"], 13)
 		alloc_name = frappe.db.get_value(
@@ -369,8 +360,18 @@ class TestMonthlyAccrualAndCap(FrappeTestCase):
 		)
 
 		for month, day in (
-			(1, 31), (2, 28), (3, 31), (4, 30), (5, 31), (6, 30),
-			(7, 31), (8, 31), (9, 30), (10, 31), (11, 30), (12, 31),
+			(1, 31),
+			(2, 28),
+			(3, 31),
+			(4, 30),
+			(5, 31),
+			(6, 30),
+			(7, 31),
+			(8, 31),
+			(9, 30),
+			(10, 31),
+			(11, 30),
+			(12, 31),
 		):
 			frappe.flags.current_date = getdate(f"2026-{month:02d}-{day:02d}")
 			allocate_earned_leaves()
@@ -385,9 +386,7 @@ class TestMonthlyAccrualAndCap(FrappeTestCase):
 		from hrms.setup_vn_leave import assign_annual_leave
 
 		frappe.flags.current_date = getdate("2026-06-15")
-		emp = make_employee(
-			"vn_midyear@example.com", company=self.company, date_of_joining="2026-03-10"
-		)
+		emp = make_employee("vn_midyear@example.com", company=self.company, date_of_joining="2026-03-10")
 		report = assign_annual_leave(2026, self.company, employees=[emp])
 		self.assertEqual(report[emp]["status"], "created")
 		total = frappe.db.get_value(
@@ -447,6 +446,7 @@ class TestUnlockedLeaveFlows(FrappeTestCase):
 				"doctype": "Leave Application",
 				"employee": emp,
 				"leave_type": ANNUAL_LEAVE,
+				"custom_leave_reason": "Nghỉ phép năm",  # quỹ phép năm bắt buộc chọn Loại nghỉ (single-pool)
 				"from_date": leave_date,
 				"to_date": leave_date,
 				"description": "test unlock",

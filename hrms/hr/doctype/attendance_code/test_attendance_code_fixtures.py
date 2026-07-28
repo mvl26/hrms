@@ -16,7 +16,10 @@ VN_LEAVE_TYPES = {
 	"Nghỉ tai nạn lao động": {"is_lwp": 0, "is_compensatory": 0},
 	"Nghỉ bù": {"is_lwp": 0, "is_compensatory": 1},
 	"Nghỉ không lương": {"is_lwp": 1, "is_compensatory": 0},
-	"Nghỉ việc riêng": {"is_lwp": 0, "is_compensatory": 0},
+	# nghỉ việc riêng có lương (Điều 115 BLLĐ) tách 3 loại — có lương, không trừ phép năm
+	"Nghỉ kết hôn": {"is_lwp": 0, "is_compensatory": 0},
+	"Nghỉ con kết hôn": {"is_lwp": 0, "is_compensatory": 0},
+	"Nghỉ tang": {"is_lwp": 0, "is_compensatory": 0},
 }
 
 # Attendance Codes — code -> (category, work_fraction, is_paid, maps_to_status, leave_type).
@@ -35,7 +38,10 @@ VN_ATTENDANCE_CODES = {
 	"1/2K": ("Không lương", 0.5, 0, "Half Day", "Nghỉ không lương"),
 	"V": ("Vắng", 0.0, 0, "Absent", None),  # vắng không lý do — hiển thị cho ngày Absent
 	"CT": ("Công", 1.0, 1, "Work From Home", None),  # đi công tác — tính công, paid
-	"N": ("Việc riêng", 0.0, 1, "On Leave", "Nghỉ việc riêng"),  # nghỉ việc riêng có lương (cưới/tang)
+	# nghỉ việc riêng có lương (Điều 115) tách 3: kết hôn 3 ngày, con kết hôn 1 ngày, tang 3 ngày
+	"KH": ("Việc riêng", 0.0, 1, "On Leave", "Nghỉ kết hôn"),
+	"R1": ("Việc riêng", 0.0, 1, "On Leave", "Nghỉ con kết hôn"),
+	"R2": ("Việc riêng", 0.0, 1, "On Leave", "Nghỉ tang"),
 }
 
 
@@ -52,7 +58,12 @@ class TestAttendanceCodeFixtures(FrappeTestCase):
 		self.assertFalse(frappe.db.exists("Attendance Code", "KL"), "deprecated code 'KL' should be removed")
 
 	def test_attendance_custom_fields_exist(self):
-		for fn in ("custom_attendance_code", "custom_morning_code", "custom_afternoon_code", "custom_work_credit"):
+		for fn in (
+			"custom_attendance_code",
+			"custom_morning_code",
+			"custom_afternoon_code",
+			"custom_work_credit",
+		):
 			self.assertTrue(
 				frappe.db.exists("Custom Field", f"Attendance-{fn}"), f"Missing Custom Field: Attendance-{fn}"
 			)
@@ -76,7 +87,8 @@ class TestAttendanceCodeFixtures(FrappeTestCase):
 			if leave_type:
 				self.assertEqual(row.leave_type, leave_type, f"{code}.leave_type")
 				self.assertTrue(
-					frappe.db.exists("Leave Type", row.leave_type), f"{code} -> missing Leave Type {row.leave_type}"
+					frappe.db.exists("Leave Type", row.leave_type),
+					f"{code} -> missing Leave Type {row.leave_type}",
 				)
 			else:
 				self.assertIn(row.leave_type, (None, ""), f"{code} should have no leave_type")

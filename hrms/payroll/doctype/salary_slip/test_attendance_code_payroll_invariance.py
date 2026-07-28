@@ -6,7 +6,7 @@ native status directly. If this holds, the attendance-code layer is payroll-neut
 
 import frappe
 from frappe.tests.utils import FrappeTestCase, change_settings
-from frappe.utils import add_days
+from frappe.utils import add_days, flt
 
 import erpnext
 from erpnext.setup.doctype.employee.test_employee import make_employee
@@ -27,7 +27,7 @@ SCENARIOS = [
 	(3, "On Leave", "Nghỉ phép năm", "P"),  # paid leave
 	(4, "Absent", None, "V"),  # vắng không lý do
 	(5, "Work From Home", None, "CT"),  # đi công tác — paid, no deduction
-	(6, "On Leave", "Nghỉ việc riêng", "N"),  # nghỉ việc riêng có lương — paid, no deduction
+	(6, "On Leave", "Nghỉ kết hôn", "KH"),  # nghỉ kết hôn có lương — paid, no deduction
 ]
 
 
@@ -110,8 +110,9 @@ class TestAttendanceCodePayrollInvariance(FrappeTestCase):
 		"Payroll Settings", {"payroll_based_on": "Attendance", "daily_wages_fraction_for_half_day": 0.5}
 	)
 	def test_classifier_morning_only_matches_native_half_day(self):
-		"""A shift-classified morning-only day (in 08:00 / out 12:00) must yield the same payroll
-		as a native Half Day with half_day_status Absent."""
+		"""A shift-classified morning-only day (in 08:00 / out 12:00) → X/K: đi làm nửa buổi, nửa còn
+		lại NGHỈ KHÔNG LƯƠNG. NET PAY (payment_days) bằng hệt native Half Day docks 0.5; nhưng 0.5 đó nay
+		là leave-without-pay (không lương) thay vì vắng — cùng số tiền, đúng category (X/K không phải X/V)."""
 		first_sunday = get_first_sunday()
 		shift = "VN Split PR 08-1730"
 		if not frappe.db.exists("Shift Type", shift):
@@ -144,12 +145,15 @@ class TestAttendanceCodePayrollInvariance(FrappeTestCase):
 				"out_time": f"{date} 12:00:00",
 			}
 		)
-		att.insert()  # classifier -> morning X / afternoon V -> Half Day
+		att.insert()  # classifier -> token đơn 1/2K -> Half Day (Nghỉ không lương)
 		att.submit()
 		self.assertEqual(att.status, "Half Day")
+		self.assertEqual(att.custom_attendance_code, "1/2K")
 
 		ss_native = make_employee_salary_slip(emp_native, "Monthly", "Inv HD Native")
 		ss_class = make_employee_salary_slip(emp_class, "Monthly", "Inv HD Class")
+		# NET PAY BẤT BIẾN: cùng payment_days (0.5 bị trừ dù nửa kia là vắng hay không lương)
 		self.assertEqual(ss_class.payment_days, ss_native.payment_days)
-		self.assertEqual(ss_class.absent_days, ss_native.absent_days)
-		self.assertEqual(ss_class.leave_without_pay, ss_native.leave_without_pay)
+		# nhưng 0.5 đó nay là NGHỈ KHÔNG LƯƠNG (LWP), không phải Vắng — đúng ý X/K
+		self.assertEqual(flt(ss_class.leave_without_pay), 0.5)
+		self.assertEqual(flt(ss_class.absent_days), 0.0)

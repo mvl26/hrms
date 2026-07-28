@@ -1,7 +1,8 @@
 # Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
 # See license.txt
-"""Bậc 2 — gộp một quỹ phép năm: đơn rút "Nghỉ phép năm" **bắt buộc chọn Loại nghỉ** (tiếng Việt);
-hệ thống tự suy mã công (P/Ô/Cô) → bảng công hiện riêng. Nghỉ nửa ngày phải chọn buổi (Sáng/Chiều).
+"""Quỹ phép năm: đơn rút "Nghỉ phép năm" **bắt buộc chọn Loại nghỉ** — CHỈ còn "Nghỉ phép năm" → P.
+Nghỉ ốm / chăm con ốm KHÔNG rút quỹ phép năm (loại nghỉ riêng, có lương, đủ công). Nghỉ nửa ngày phải
+chọn buổi (Sáng/Chiều).
 
 Chạy qua harness rollback (KHÔNG bench run-tests trên miyano)."""
 
@@ -80,28 +81,33 @@ class TestLeaveSinglePool(FrappeTestCase):
 		self.assertEqual(att.leave_type, "Nghỉ phép năm")
 		self.assertEqual(att.custom_attendance_code, "P")
 
-	def test_sick_reason_from_annual_pool_shows_O_but_deducts_pool(self):
-		# "Nghỉ ốm" nộp qua quỹ phép năm: Attendance hiện "Ô" (bảng công), nhưng leave_type là quỹ chung
-		# và status không đổi (payroll-neutral).
+	def test_sick_and_child_sick_rejected_from_pool(self):
+		# Miyano: nghỉ ốm / chăm con ốm KHÔNG rút quỹ phép năm nữa → không còn là Loại nghỉ hợp lệ của quỹ.
 		self._alloc("Nghỉ phép năm", 12)
-		la = self._leave_app("Nghỉ phép năm", f"{self.year}-03-06", f"{self.year}-03-06", reason="Nghỉ ốm")
-		att = self._att(la)
-		self.assertEqual(att.custom_attendance_code, "Ô")  # hiện riêng trên bảng công
-		self.assertEqual(att.leave_type, "Nghỉ phép năm")  # rút một quỹ
-		self.assertEqual(att.status, "On Leave")  # lương không đổi
+		for reason in ("Nghỉ ốm", "Nghỉ chăm con ốm"):
+			with self.assertRaises(frappe.ValidationError):
+				self._leave_app("Nghỉ phép năm", f"{self.year}-03-06", f"{self.year}-03-06", reason=reason)
 
+	def test_sick_via_own_leave_type_does_not_touch_annual_pool(self):
+		# nghỉ ốm nộp bằng loại nghỉ riêng "Nghỉ ốm": KHÔNG giảm quỹ phép năm, có lương (is_lwp=0),
+		# bảng công vẫn hiện Ô (bridge reverse suy mã), và đếm vào Tổng công (đủ công).
+		from hrms.hr.doctype.leave_application.leave_application import get_leave_balance_on
 		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
 
+		self._alloc("Nghỉ phép năm", 12)
+		self._alloc("Nghỉ ốm", 30)
+		before = get_leave_balance_on(self.emp, "Nghỉ phép năm", f"{self.year}-03-06")
+		la = self._leave_app("Nghỉ ốm", f"{self.year}-03-06", f"{self.year}-03-06")
+		after = get_leave_balance_on(self.emp, "Nghỉ phép năm", f"{self.year}-03-06")
+		self.assertEqual(before, after)  # quỹ phép năm KHÔNG đổi
+		att = self._att(la)
+		self.assertEqual(att.leave_type, "Nghỉ ốm")
+		self.assertEqual(att.custom_attendance_code, "Ô")
+		self.assertEqual(frappe.db.get_value("Leave Type", "Nghỉ ốm", "is_lwp"), 0)  # có lương
+		# đủ công: ngày ốm tính vào Tổng công (số ngày được trả lương)
 		row = next(r for r in get_sheet_rows({"month": 3, "year": self.year}) if r["employee"] == self.emp)
 		self.assertEqual(row["days"][6], "Ô")
-		self.assertGreaterEqual(row["totals"].get("Ốm", 0), 1.0)
-
-	def test_child_sick_reason_maps_to_Co(self):
-		self._alloc("Nghỉ phép năm", 12)
-		la = self._leave_app(
-			"Nghỉ phép năm", f"{self.year}-03-09", f"{self.year}-03-09", reason="Nghỉ chăm con ốm"
-		)
-		self.assertEqual(self._att(la).custom_attendance_code, "Cô")
+		self.assertGreaterEqual(row["totals"].get("Tổng công", 0), 1.0)
 
 	def test_pool_requires_reason(self):
 		# đơn rút quỹ phép năm KHÔNG chọn Loại nghỉ → chặn (field bắt buộc).
@@ -125,19 +131,15 @@ class TestLeaveSinglePool(FrappeTestCase):
 				"Nghỉ phép năm", f"{self.year}-03-10", f"{self.year}-03-11", reason="Nghỉ phép năm"
 			)  # 2 > 1
 
-	def test_pool_display_code_is_payroll_neutral(self):
-		# "Nghỉ ốm" rút quỹ phép năm phải giống hệt một ngày phép năm về các field payroll đọc (status/
-		# leave_type/half_day_status) — chỉ khác custom_attendance_code (hiển thị). is_lwp của quỹ = 0.
+	def test_annual_pool_leave_is_paid(self):
+		# ngày rút quỹ phép năm là On Leave, có lương (is_lwp=0) → không trừ lương.
 		self._alloc("Nghỉ phép năm", 12)
 		p = self._att(
 			self._leave_app(
 				"Nghỉ phép năm", f"{self.year}-04-05", f"{self.year}-04-05", reason="Nghỉ phép năm"
 			)
 		)
-		o = self._att(
-			self._leave_app("Nghỉ phép năm", f"{self.year}-04-06", f"{self.year}-04-06", reason="Nghỉ ốm")
-		)
-		self.assertEqual((p.status, p.leave_type), (o.status, o.leave_type))  # payroll đọc giống nhau
+		self.assertEqual((p.status, p.leave_type), ("On Leave", "Nghỉ phép năm"))
 		self.assertEqual(frappe.db.get_value("Leave Type", "Nghỉ phép năm", "is_lwp"), 0)  # có lương
 
 	def test_exempt_leave_does_not_touch_annual_pool(self):
@@ -152,8 +154,8 @@ class TestLeaveSinglePool(FrappeTestCase):
 		self.assertEqual(before, after)  # quỹ phép năm không đổi
 		self.assertEqual(self._att(la).custom_attendance_code, "TS")  # hiện mã thai sản
 
-	def test_half_day_morning_leave_splits_codes(self):
-		# nghỉ nửa ngày buổi Sáng: bảng công morning=P (nghỉ), afternoon=X (đi làm); payroll = Half Day.
+	def test_half_day_morning_leave_uses_single_token(self):
+		# nghỉ nửa ngày buổi Sáng: mã CHUẨN là token đơn 1/2P (không tách P/X); payroll = Half Day.
 		self._alloc("Nghỉ phép năm", 12)
 		la = self._leave_app(
 			"Nghỉ phép năm",
@@ -165,10 +167,12 @@ class TestLeaveSinglePool(FrappeTestCase):
 		)
 		att = self._att(la)
 		self.assertEqual(att.status, "Half Day")  # payroll: nửa ngày
-		self.assertEqual(att.custom_morning_code, "P")  # nghỉ sáng
-		self.assertEqual(att.custom_afternoon_code, "X")  # làm chiều
+		self.assertEqual(att.custom_attendance_code, "1/2P")  # nghỉ phép nửa ngày + nửa ngày đi làm
+		self.assertIsNone(att.custom_morning_code)
+		self.assertIsNone(att.custom_afternoon_code)
 
-	def test_half_day_afternoon_leave_splits_codes(self):
+	def test_half_day_afternoon_leave_uses_single_token(self):
+		# nghỉ nửa ngày buổi Chiều → cùng token đơn 1/2P (không phân biệt sáng/chiều ở hiển thị).
 		self._alloc("Nghỉ phép năm", 12)
 		la = self._leave_app(
 			"Nghỉ phép năm",
@@ -180,23 +184,9 @@ class TestLeaveSinglePool(FrappeTestCase):
 		)
 		att = self._att(la)
 		self.assertEqual(att.status, "Half Day")
-		self.assertEqual(att.custom_morning_code, "X")  # làm sáng
-		self.assertEqual(att.custom_afternoon_code, "P")  # nghỉ chiều
-
-	def test_half_day_sick_morning_uses_reason_code(self):
-		# nửa ngày ốm buổi sáng: morning=Ô, afternoon=X.
-		self._alloc("Nghỉ phép năm", 12)
-		la = self._leave_app(
-			"Nghỉ phép năm",
-			f"{self.year}-07-03",
-			f"{self.year}-07-03",
-			reason="Nghỉ ốm",
-			half_day=1,
-			period="Sáng",
-		)
-		att = self._att(la)
-		self.assertEqual(att.custom_morning_code, "Ô")
-		self.assertEqual(att.custom_afternoon_code, "X")
+		self.assertEqual(att.custom_attendance_code, "1/2P")
+		self.assertIsNone(att.custom_morning_code)
+		self.assertIsNone(att.custom_afternoon_code)
 
 	def test_half_day_requires_period(self):
 		# nửa ngày mà không chọn buổi (Sáng/Chiều) → chặn.

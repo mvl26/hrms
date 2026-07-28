@@ -1,22 +1,24 @@
 # Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
 # License: GNU General Public License v3. See license.txt
-"""Miyano — gộp một quỹ phép năm.
+"""Miyano — quỹ phép năm.
 
-Nghỉ có lương thuộc nhóm "trừ quỹ" nộp qua Đơn xin nghỉ với ``leave_type = "Nghỉ phép năm"`` để cùng
-rút một số dư (Frappe tự chặn khi hết). Người dùng **bắt buộc chọn "Loại nghỉ"** (tiếng Việt) khi
-leave_type = quỹ phép năm — hệ thống tự suy ra **mã công** tương ứng (không nhập mã tay):
+CHỈ "Nghỉ phép năm" trừ vào quỹ phép năm (Frappe tự chặn khi hết). Đơn nghỉ ``leave_type =
+"Nghỉ phép năm"`` **bắt buộc chọn "Loại nghỉ"** — hiện chỉ còn một lựa chọn hợp lệ suy ra mã công:
 
-    Nghỉ phép năm → P · Nghỉ ốm → Ô · Nghỉ chăm con ốm → Cô
+    Nghỉ phép năm → P
 
-Đúng các loại trừ-quỹ ở VN, không thừa không thiếu (thai sản/việc riêng cưới-tang/TNLĐ là loại riêng
-hưởng lương KHÔNG trừ quỹ; nghỉ bù riêng; không lương riêng).
+**Nghỉ ốm / chăm con ốm KHÔNG trừ quỹ phép năm** (nghỉ CÓ LƯƠNG, ĐỦ CÔNG): nộp bằng loại nghỉ riêng
+(``Nghỉ ốm`` / ``Nghỉ chăm con ốm``, is_lwp=0) hoặc ghi thẳng mã công Ô/Cô — bridge reverse-derive tự
+đặt mã, payroll trả đủ. Thai sản/việc riêng cưới-tang/TNLĐ/nghỉ bù cũng là loại riêng hưởng lương
+KHÔNG trừ quỹ; K không lương.
 
-Sau khi duyệt sinh Attendance, hook ghi mã đó lên Attendance để bảng công hiện Ô/Cô/P riêng. Nghỉ
-**nửa ngày** phải chọn buổi (``custom_half_day_period`` = Sáng/Chiều): hook tách mã theo buổi
-(nghỉ sáng → morning=mã, afternoon=X; nghỉ chiều → morning=X, afternoon=mã).
+Sau khi duyệt sinh Attendance, hook ghi mã P lên Attendance để bảng công hiện đúng. Nghỉ **nửa ngày**
+phải chọn buổi (``custom_half_day_period`` = Sáng/Chiều) — buổi để đặt half_day_date của đơn — nhưng
+mã hiển thị là MỘT token đơn ``1/2P`` (nghỉ phép nửa ngày + nửa ngày đi làm đủ), KHÔNG tách P/X. Quy
+ước mã: dạng ``A/B`` chỉ khi hai nửa khác nhau mà không có token; nửa phép + nửa làm đã có token 1/2P.
 
 Thuần hiển thị: chỉ ghi mã/công qua ``db_set`` — không đổi status/leave_type/half_day_status →
-lương bất biến. TS/N/T miễn trừ (loại nghỉ riêng, bridge reverse-derive tự đặt mã); K không lương.
+lương bất biến.
 """
 
 import frappe
@@ -24,13 +26,16 @@ from frappe.utils import cint, getdate
 
 POOL_LEAVE_TYPE = "Nghỉ phép năm"
 # Loại nghỉ (nhãn tiếng Việt hiện trên đơn) → mã công. Khớp code_name trong
-# hrms/fixtures/attendance_code.json; đúng các loại TRỪ vào quỹ phép năm ở VN (không thừa không thiếu).
+# hrms/fixtures/attendance_code.json. Miyano: CHỈ "Nghỉ phép năm" trừ vào quỹ phép năm. Nghỉ ốm /
+# chăm con ốm là nghỉ CÓ LƯƠNG, ĐỦ CÔNG, KHÔNG trừ phép năm → nộp bằng loại nghỉ riêng (Nghỉ ốm /
+# Nghỉ chăm con ốm) hoặc ghi thẳng mã công Ô/Cô; bridge reverse-derive tự đặt mã, payroll trả đủ.
 POOL_REASONS = {
 	"Nghỉ phép năm": "P",
-	"Nghỉ ốm": "Ô",
-	"Nghỉ chăm con ốm": "Cô",
 }
-WORK_CODE = "X"  # buổi đi làm của ngày nghỉ nửa ngày
+# Mã NỬA ngày (token đơn) cho từng loại nghỉ rút quỹ — nghỉ nửa ngày = đi làm đủ nửa còn lại.
+HALF_DAY_CODE = {
+	"P": "1/2P",
+}
 
 
 def resolve_reason_code(doc):
@@ -71,12 +76,13 @@ def set_leave_attendance_code(doc, method=None):
 		fields=["name", "attendance_date"],
 	):
 		if is_half and getdate(att.attendance_date) == getdate(half_day_date):
-			# Sáng: nghỉ buổi sáng, đi làm buổi chiều; Chiều thì ngược lại.
-			if period == "Sáng":
-				vals = {"custom_morning_code": code, "custom_afternoon_code": WORK_CODE}
-			else:
-				vals = {"custom_morning_code": WORK_CODE, "custom_afternoon_code": code}
-			vals["custom_attendance_code"] = None
+			# nghỉ nửa ngày (làm nửa còn lại) → MỘT token đơn 1/2P, không tách P/X (theo quy ước mã).
+			# db_set thuần hiển thị nên không đụng status/leave_type/half_day_status → lương bất biến.
+			vals = {
+				"custom_attendance_code": HALF_DAY_CODE.get(code, code),
+				"custom_morning_code": None,
+				"custom_afternoon_code": None,
+			}
 		else:
 			vals = {
 				"custom_attendance_code": code,

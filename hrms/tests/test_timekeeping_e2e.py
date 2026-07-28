@@ -45,7 +45,7 @@ ALL_CODES = [
 	("T", "On Leave", "Nghỉ tai nạn lao động", 0.0, None),
 	("NB", "On Leave", "Nghỉ bù", 0.0, None),
 	("K", "On Leave", "Nghỉ không lương", 0.0, None),
-	("N", "On Leave", "Nghỉ việc riêng", 0.0, None),
+	("KH", "On Leave", "Nghỉ kết hôn", 0.0, None),
 	("V", "Absent", None, 0.0, None),
 	("NN", "Half Day", None, 0.5, "Absent"),  # worked half + unexcused half
 	("1/2P", "Half Day", "Nghỉ phép năm", 0.5, "Present"),  # worked half + paid-leave half
@@ -89,7 +89,7 @@ class TestPayrollDaysScenarios(FrappeTestCase):
 			1: "X",  # present        -> 0
 			2: "P",  # annual leave   -> 0 (paid, not in LWP map)
 			3: "Ô",  # sick leave     -> 0 (paid)
-			4: "N",  # personal leave -> 0 (paid)
+			4: "KH",  # personal leave (kết hôn) -> 0 (paid)
 			5: "CT",  # business trip  -> 0 (WFH, not read by payroll)
 			6: "K",  # unpaid leave   -> lwp 1.0
 			7: "V",  # absent         -> absent 1.0
@@ -159,7 +159,7 @@ class TestBangCongMonthEndToEnd(FrappeTestCase):
 			7: "NN",
 			8: "1/2P",
 			9: "1/2K",
-			10: "N",
+			10: "KH",
 			11: "TS",
 			12: "NB",
 			13: "T",
@@ -262,7 +262,7 @@ class TestCheckinAutoAttendanceE2E(FrappeTestCase):
 		emp = make_employee("e2e_checkin_half@codes.com", company="Miyano")
 		date = getdate()  # setup_shift_type's process window is anchored on today
 		self._assign(st.name, emp, date)
-		# only the morning window is covered -> classifier: morning X, afternoon V -> Half Day
+		# only the morning window is covered -> classifier: token đơn 1/2K (làm nửa + nửa không lương) -> Half Day
 		make_checkin(emp, datetime.combine(date, get_time("08:00:00")))
 		make_checkin(emp, datetime.combine(date, get_time("12:00:00")))
 
@@ -271,10 +271,9 @@ class TestCheckinAutoAttendanceE2E(FrappeTestCase):
 		att = frappe.db.get_value(
 			"Attendance",
 			{"employee": emp, "attendance_date": date, "docstatus": 1},
-			["status", "custom_morning_code", "custom_afternoon_code"],
+			["status", "custom_attendance_code"],
 			as_dict=True,
 		)
 		self.assertIsNotNone(att, "auto-attendance did not create an Attendance")
 		self.assertEqual(att.status, "Half Day")
-		self.assertEqual(att.custom_morning_code, "X")
-		self.assertEqual(att.custom_afternoon_code, "V")
+		self.assertEqual(att.custom_attendance_code, "1/2K")
