@@ -61,7 +61,8 @@ def capture_payroll_baseline(path: str, company: str | None = None) -> dict:
 	rows = get_payroll_rows(company)
 	snapshot = {"company": company, "count": len(rows), "checksum": checksum_rows(rows), "rows": rows}
 
-	with open(path, "w", encoding="utf-8") as f:
+	# đường dẫn do quản trị viên truyền khi chạy bench execute, không đến từ request
+	with open(path, "w", encoding="utf-8") as f:  # nosemgrep
 		json.dump(snapshot, f, ensure_ascii=False, indent=2, default=str)
 
 	result = {"path": path, "count": snapshot["count"], "checksum": snapshot["checksum"]}
@@ -98,7 +99,8 @@ def diff_payroll_rows(before: list[dict], after: list[dict]) -> dict:
 
 def compare_payroll_baseline(path: str, company: str | None = None) -> dict:
 	"""T1/T2: re-read the current slips and diff them against the snapshot saved at `path`."""
-	with open(path, encoding="utf-8") as f:
+	# đường dẫn do quản trị viên truyền khi chạy bench execute, không đến từ request
+	with open(path, encoding="utf-8") as f:  # nosemgrep
 		snapshot = json.load(f)
 
 	result = diff_payroll_rows(snapshot["rows"], get_payroll_rows(company or snapshot.get("company")))

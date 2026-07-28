@@ -59,5 +59,6 @@ def check_fixture_master_data() -> dict:
 
 def _fixture_names(fixture: str) -> list[str]:
 	path = frappe.get_app_path("hrms", "fixtures", f"{fixture}.json")
-	with open(path) as f:
+	# đường dẫn nội bộ của app (frappe.get_app_path), không đến từ request
+	with open(path) as f:  # nosemgrep
 		return [record["name"] for record in json.load(f) if record.get("name")]

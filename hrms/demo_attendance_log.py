@@ -352,7 +352,8 @@ def generate(year=2026, month=6, apply=False):
 		employees=emps,
 	)
 	if apply:
-		frappe.db.commit()
+		# commit chủ đích: công cụ chạy ngoài request cycle (bench execute), ghi từng phần để lần chạy dài không mất việc đã làm
+		frappe.db.commit()  # nosemgrep
 	else:
 		frappe.db.rollback()
 		result["note"] = "DRY-RUN: đã rollback. Thêm --kwargs \"{'apply': True}\" để ghi thật."

@@ -123,7 +123,7 @@ class BusinessTrip(Document):
 
 	# --- expense claim (per-traveler payment) ---
 	@frappe.whitelist()
-	def make_expense_claim(self, employee=None):
+	def make_expense_claim(self, employee: str | None = None):
 		"""Return a PREFILLED (unsaved) Expense Claim for one traveler — linked to this trip, with
 		the trip's COO as expense_approver. The traveler completes the expense rows and saves; the
 		claim links back via the Expense Claim hook. Defaults to the current user's employee."""

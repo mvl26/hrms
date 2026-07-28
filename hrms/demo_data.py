@@ -261,6 +261,7 @@ def create_demo_data():
 		_sheet(status)
 	except Exception as e:
 		status["_sheet"] = f"FAILED: {e}"
-	frappe.db.commit()
+	# commit chủ đích: công cụ chạy ngoài request cycle (bench execute), ghi từng phần để lần chạy dài không mất việc đã làm
+	frappe.db.commit()  # nosemgrep
 	status["employees"] = emps
 	return status

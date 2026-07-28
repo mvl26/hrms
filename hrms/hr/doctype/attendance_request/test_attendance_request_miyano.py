@@ -94,7 +94,7 @@ class TestAttendanceRequestFixtures(FrappeTestCase):
 			None,
 		)
 		self.assertIsNotNone(reason_ps, "thiếu Property Setter mở rộng options reason")
-		opts = set(filter(None, (reason_ps["value"] or "").split("\n")))
+		opts = {o for o in (reason_ps["value"] or "").split("\n") if o}
 		self.assertEqual(opts, EXPECTED_REASONS)
 
 	def test_reason_property_setter_in_hooks_fixtures(self):

@@ -233,7 +233,8 @@ def reset_wrongly_skipped(
 	frappe.db.set_value(
 		"Employee Checkin", {"name": ["in", names]}, "skip_auto_attendance", 0, update_modified=False
 	)
-	frappe.db.commit()
+	# commit chủ đích: công cụ chạy ngoài request cycle (bench execute), ghi từng phần để lần chạy dài không mất việc đã làm
+	frappe.db.commit()  # nosemgrep
 	print(f"  DONE — reset skip_auto_attendance=0 on {len(names)} checkins.")
 	print("  They will be reprocessed on the next hourly auto-attendance run,")
 	print("  or trigger now via Shift Type -> Mark Attendance / process_auto_attendance.")
@@ -253,7 +254,8 @@ def export_csv(path="/tmp/skipped_checkins.csv"):
 		order_by="time asc",
 	)
 	cmap = _skip_comment_map([r.name for r in rows])
-	with open(path, "w", newline="") as f:
+	# đường dẫn do quản trị viên truyền khi chạy bench execute, không đến từ request
+	with open(path, "w", newline="") as f:  # nosemgrep
 		w = csv.writer(f)
 		w.writerow(
 			[

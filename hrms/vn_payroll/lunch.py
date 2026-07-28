@@ -105,7 +105,7 @@ def compute_lunch_flags_for_period(month, year, company: str | None = None) -> d
 
 
 @frappe.whitelist()
-def recompute_lunch_flags(month, year, company: str | None = None) -> int:
+def recompute_lunch_flags(month: int | str, year: int | str, company: str | None = None) -> int:
 	"""Tính lại cờ ``custom_lunch`` cho Attendance trong kỳ từ checkin (chạy trước khi chốt lương để
 	bắt checkin về muộn). Trả số bản ghi thay đổi. Chỉ ghi field hiển thị (db_set, update_modified=False)
 	→ không đụng payroll status. No-op nếu field chưa migrate."""
@@ -140,7 +140,8 @@ def backfill_lunch_flags(dry_run: int = 1) -> dict:
 			if not dry:
 				frappe.db.set_value("Attendance", a.name, "custom_lunch", flag, update_modified=False)
 	if not dry:
-		frappe.db.commit()
+		# commit chủ đích: tác vụ bảo trì chạy dài trước kỳ chốt lương; chỉ ghi field hiển thị custom_lunch, không đụng payroll
+		frappe.db.commit()  # nosemgrep
 	return {"total": len(atts), "to_change": to_change, "written": 0 if dry else to_change, "dry_run": dry}
 
 

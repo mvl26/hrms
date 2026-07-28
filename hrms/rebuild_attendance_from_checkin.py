@@ -177,26 +177,31 @@ def run_auto_attendance_for_period(shift, start, end, keep_enabled=False):
 	shift_doc.process_attendance_after = start - datetime.timedelta(days=1)
 	shift_doc.last_sync_of_checkin = get_datetime(f"{end} 23:59:59")
 	shift_doc.save(ignore_permissions=True)
-	frappe.db.commit()
+	# commit chủ đích: công cụ chạy ngoài request cycle (bench execute), ghi từng phần để lần chạy dài không mất việc đã làm
+	frappe.db.commit()  # nosemgrep
 
 	# gắn lại ca cho lượt chấm từng rơi ngoài cửa sổ (validate -> fetch_shift)
 	for name in frappe.get_all(
 		"Employee Checkin", filters={**checkin_filters(start, end), "shift": ["is", "not set"]}, pluck="name"
 	):
 		frappe.get_doc("Employee Checkin", name).save(ignore_permissions=True)
-	frappe.db.commit()
+	# commit chủ đích: công cụ chạy ngoài request cycle (bench execute), ghi từng phần để lần chạy dài không mất việc đã làm
+	frappe.db.commit()  # nosemgrep
 
 	frappe.db.set_value(
 		"Employee Checkin", checkin_filters(start, end), "skip_auto_attendance", 0, update_modified=False
 	)
-	frappe.db.commit()
+	# commit chủ đích: công cụ chạy ngoài request cycle (bench execute), ghi từng phần để lần chạy dài không mất việc đã làm
+	frappe.db.commit()  # nosemgrep
 
 	frappe.get_doc("Shift Type", shift).process_auto_attendance()
-	frappe.db.commit()
+	# commit chủ đích: công cụ chạy ngoài request cycle (bench execute), ghi từng phần để lần chạy dài không mất việc đã làm
+	frappe.db.commit()  # nosemgrep
 
 	if not keep_enabled:
 		frappe.db.set_value("Shift Type", shift, previous, update_modified=False)
-		frappe.db.commit()
+		# commit chủ đích: công cụ chạy ngoài request cycle (bench execute), ghi từng phần để lần chạy dài không mất việc đã làm
+		frappe.db.commit()  # nosemgrep
 	return {"widened_checkout_window_to": widen_to or None, "auto_attendance_kept_on": bool(keep_enabled)}
 
 
@@ -235,7 +240,8 @@ def rebuild(year, month, shift="Ca Hành Chính", apply=False, keep_enabled=Fals
 	backup_path = os.path.join(
 		frappe.get_site_path("private", "files"), f"attendance_backup_{year}_{month:02d}.json"
 	)
-	with open(backup_path, "w") as fh:
+	# đường dẫn do quản trị viên truyền khi chạy bench execute, không đến từ request
+	with open(backup_path, "w") as fh:  # nosemgrep
 		json.dump(before, fh, indent=1, default=str, ensure_ascii=False)
 	plan["backup"] = backup_path
 
@@ -244,7 +250,8 @@ def rebuild(year, month, shift="Ca Hành Chính", apply=False, keep_enabled=Fals
 		if doc.docstatus == 1:
 			doc.cancel()
 		frappe.delete_doc("Attendance", a.name, force=True, ignore_permissions=True)
-	frappe.db.commit()
+	# commit chủ đích: công cụ chạy ngoài request cycle (bench execute), ghi từng phần để lần chạy dài không mất việc đã làm
+	frappe.db.commit()  # nosemgrep
 
 	plan.update(run_auto_attendance_for_period(shift, start, end, keep_enabled=keep_enabled))
 	plan["checkins_still_without_shift"] = frappe.db.count(

@@ -251,7 +251,7 @@ def _parse_card_filters(filters):
 
 
 @frappe.whitelist()
-def get_total_working_hours_card(filters=None):
+def get_total_working_hours_card(filters: str | list | dict | None = None) -> dict:
 	frappe.has_permission("Attendance", throw=True)
 	filters = _parse_card_filters(filters)
 	net_map = get_net_hours_map(filters)
@@ -260,7 +260,7 @@ def get_total_working_hours_card(filters=None):
 
 
 @frappe.whitelist()
-def get_avg_working_hours_card(filters=None):
+def get_avg_working_hours_card(filters: str | list | dict | None = None) -> dict:
 	frappe.has_permission("Attendance", throw=True)
 	filters = _parse_card_filters(filters)
 	headcount = get_active_employee_count(filters)
@@ -272,7 +272,7 @@ def get_avg_working_hours_card(filters=None):
 
 
 @frappe.whitelist()
-def get_under_target_count_card(filters=None):
+def get_under_target_count_card(filters: str | list | dict | None = None) -> dict:
 	frappe.has_permission("Attendance", throw=True)
 	filters = _parse_card_filters(filters)
 	# duyệt MỌI nhân sự Active — người vắng cả tháng (0 giờ) cũng là thiếu giờ

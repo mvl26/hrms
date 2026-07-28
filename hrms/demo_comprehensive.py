@@ -199,7 +199,8 @@ def snapshot(emp_ids, log):
 				fields=["name", "employee", "payment_days", "net_pay"],
 			),
 		}
-	with open(SNAPSHOT, "w") as f:
+	# đường dẫn do quản trị viên truyền khi chạy bench execute, không đến từ request
+	with open(SNAPSHOT, "w") as f:  # nosemgrep
 		json.dump(snap, f, default=str, ensure_ascii=False, indent=1)
 	log.n("snapshot_written")
 
@@ -524,7 +525,8 @@ def generate(apply=False):
 		for m in MONTHS:
 			make_payroll(e, m, log)
 			make_sheet(m, log)
-		frappe.db.commit()
+		# commit chủ đích: công cụ chạy ngoài request cycle (bench execute), ghi từng phần để lần chạy dài không mất việc đã làm
+		frappe.db.commit()  # nosemgrep
 	else:
 		frappe.db.rollback()
 

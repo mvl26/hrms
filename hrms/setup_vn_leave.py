@@ -17,6 +17,7 @@ Assignments is transactional HR data — run once per year, ask-first on product
 from dateutil.relativedelta import relativedelta
 
 import frappe
+from frappe import _
 from frappe.utils import getdate
 
 ANNUAL_LEAVE_TYPE = "Nghỉ phép năm"
@@ -94,9 +95,11 @@ def assign_annual_leave(year: int, company: str, employees=None, dry_run: bool =
 	)
 	if not (lt and lt.is_earned_leave and lt.earned_leave_frequency == "Monthly"):
 		frappe.throw(
-			f"Leave Type '{ANNUAL_LEAVE_TYPE}' is not a Monthly earned leave on this site yet"
-			" — run `bench migrate` (fixture sync) first, otherwise the whole year would be"
-			" granted upfront instead of accruing monthly."
+			_(
+				"Leave Type '{0}' is not a Monthly earned leave on this site yet — run `bench migrate`"
+				" (fixture sync) first, otherwise the whole year would be granted upfront instead"
+				" of accruing monthly."
+			).format(ANNUAL_LEAVE_TYPE)
 		)
 
 	if dry_run:

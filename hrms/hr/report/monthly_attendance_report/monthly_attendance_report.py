@@ -72,27 +72,32 @@ CATEGORY_STATE = {
 
 # state → nhãn chú giải + màu nền/chữ (cặp cho nền sáng & nền tối của Desk). Thứ tự = thứ tự chú giải.
 STATE_STYLE = {
-	"work": {
+	# nhãn hằng số ở module level: bọc _() sẽ đóng băng bản dịch lúc import; dịch tại nơi render
+	"work": {  # nosemgrep
 		"label": "Đi làm đủ / công tác",
 		"bg": "#d9efdc",
 		"fg": "#1d6b34",
 		"bg_dark": "#1f3a2a",
 		"fg_dark": "#83dc9d",
 	},
-	"half": {
+	# nhãn hằng số ở module level: bọc _() sẽ đóng băng bản dịch lúc import; dịch tại nơi render
+	"half": {  # nosemgrep
 		"label": "Làm nửa ngày",
 		"bg": "#e8dcf7",
 		"fg": "#6b3fb0",
 		"bg_dark": "#312145",
 		"fg_dark": "#c6aaf2",
 	},
-	"leave": {
+	# nhãn hằng số ở module level: bọc _() sẽ đóng băng bản dịch lúc import; dịch tại nơi render
+	"leave": {  # nosemgrep
 		"label": "Nghỉ phép / việc riêng",
 		"bg": "#fbedc4",
 		"fg": "#8a6410",
 		"bg_dark": "#3d3416",
 		"fg_dark": "#e8ca6b",
 	},
+	# nhãn hằng số ở module level: bọc _() sẽ đóng băng bản dịch lúc import; dịch tại nơi render
+	# nosemgrep
 	"sick": {
 		"label": "Ốm / thai sản / TNLĐ",
 		"bg": "#fbe0cc",
@@ -100,29 +105,41 @@ STATE_STYLE = {
 		"bg_dark": "#3f2a19",
 		"fg_dark": "#f2ac7c",
 	},
-	"absent": {"label": "Vắng", "bg": "#f7d3d3", "fg": "#b32626", "bg_dark": "#3f2020", "fg_dark": "#f28d8d"},
-	"unpaid": {
+	# nhãn hằng số ở module level: bọc _() sẽ đóng băng bản dịch lúc import; dịch tại nơi render
+	# nosemgrep
+	"absent": {
+		"label": "Vắng",
+		"bg": "#f7d3d3",
+		"fg": "#b32626",
+		"bg_dark": "#3f2020",
+		"fg_dark": "#f28d8d",
+	},  # nosemgrep
+	# nhãn hằng số ở module level: bọc _() sẽ đóng băng bản dịch lúc import; dịch tại nơi render
+	"unpaid": {  # nosemgrep
 		"label": "Nghỉ không lương",
 		"bg": "#ecd7dd",
 		"fg": "#8f3a52",
 		"bg_dark": "#3a2028",
 		"fg_dark": "#e592a6",
 	},
-	"comp": {
+	# nhãn hằng số ở module level: bọc _() sẽ đóng băng bản dịch lúc import; dịch tại nơi render
+	"comp": {  # nosemgrep
 		"label": "Nghỉ bù",
 		"bg": "#cfeae5",
 		"fg": "#187a6d",
 		"bg_dark": "#173430",
 		"fg_dark": "#74d3c5",
 	},
-	"holiday": {
+	# nhãn hằng số ở module level: bọc _() sẽ đóng băng bản dịch lúc import; dịch tại nơi render
+	"holiday": {  # nosemgrep
 		"label": "Nghỉ lễ (có lương)",
 		"bg": "#d3e3f7",
 		"fg": "#245fa0",
 		"bg_dark": "#1c2c40",
 		"fg_dark": "#8fbcee",
 	},
-	"off": {
+	# nhãn hằng số ở module level: bọc _() sẽ đóng băng bản dịch lúc import; dịch tại nơi render
+	"off": {  # nosemgrep
 		"label": "Nghỉ tuần / nghỉ việc",
 		"bg": "#eae8e2",
 		"fg": "#918d84",

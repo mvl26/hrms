@@ -32,6 +32,8 @@ def execute():
 		return
 	for old, new in RENAMES.items():
 		if _has_col(old) and _has_col(new):
+			# tên bảng/cột lấy từ hằng số RENAMES trong module, không đến từ request
+			# nosemgrep
 			frappe.db.sql(f"UPDATE `{TABLE}` SET `{new}` = `{old}` WHERE `{new}` = 0 OR `{new}` IS NULL")
 		if _has_col(old):
 			frappe.db.sql_ddl(f"ALTER TABLE `{TABLE}` DROP COLUMN `{old}`")

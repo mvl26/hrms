@@ -893,7 +893,7 @@ def notify_bulk_action_status(doctype: str, failure: list, success: list) -> Non
 
 
 @frappe.whitelist()
-def set_geolocation_from_coordinates(doc):
+def set_geolocation_from_coordinates(doc: Document):
 	if not frappe.db.get_single_value("HR Settings", "allow_geolocation_tracking"):
 		return
 

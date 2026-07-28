@@ -41,7 +41,7 @@ class WorkCalendarSettings(Document):
 
 
 @frappe.whitelist()
-def generate_holiday_list(year=None, company=None) -> str:
+def generate_holiday_list(year: int | str | None = None, company: str | None = None) -> str:
 	"""Sinh / cập nhật Holiday List của `year` theo đúng chính sách đang lưu. Trả tên list.
 
 	Idempotent: chạy lại không nhân đôi ngày. Đây là con đường DUY NHẤT nên dùng để tạo lịch,

@@ -40,12 +40,14 @@ def backfill(dry_run: bool = False) -> dict:
 			conds.append("(leave_type is null or leave_type = '')")
 		where = " and ".join(conds)
 
-		n = frappe.db.sql(f"select count(*) from `tabAttendance` where {where}", params)[0][0]
+		# chuỗi nội vào chỉ gồm hằng số trong module; mọi giá trị đều bind qua %(...)s
+		n = frappe.db.sql(f"select count(*) from `tabAttendance` where {where}", params)[0][0]  # nosemgrep
 		if not n:
 			continue
 		summary[c.name] = n
 		if not dry_run:
-			frappe.db.sql(
+			# chuỗi nội vào chỉ gồm hằng số trong module; mọi giá trị đều bind qua %(...)s
+			frappe.db.sql(  # nosemgrep
 				f"update `tabAttendance` set custom_attendance_code = %(code)s, custom_work_credit = %(cong)s where {where}",
 				params,
 			)
