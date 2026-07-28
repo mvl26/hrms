@@ -49,31 +49,35 @@ class TestMVLCore(unittest.TestCase):
 		r = compute_mvl(MVLInput("Chính thức", 20_000_000, 0, 0, False, 0, 22, 10), self.cfg)
 		self.assertEqual(r.I, 9_090_909)  # ROUND(20_000_000 / 22 * 10)
 
-	def test_parttime_cu_tru_10pct(self):
-		# doc 3.3: O = 10tr → P = 11.111.111 → Q = 1.111.111
-		r = compute_mvl(MVLInput("Parttime cư trú", 10_000_000, 0, 0, False, 0, 22, 22), self.cfg)
+	def test_ban_thoi_gian_cu_tru_10pct(self):
+		# doc §4.3: bán thời gian cư trú, O = 10tr → P = 11.111.111 → Q = 1.111.111 (10%)
+		r = compute_mvl(MVLInput("Bán thời gian", 10_000_000, 0, 0, False, 0, 22, 22), self.cfg)
 		self.assertEqual(r.O, 10_000_000)
 		self.assertEqual(r.J, 0)
 		self.assertEqual(r.P, 11_111_111)
 		self.assertEqual(r.Q, 1_111_111)
 		self.assertEqual(r.T, 10_000_000)
 
-	def test_parttime_nuoc_ngoai_20pct(self):
-		# doc 3.3: O = 3tr → P = 3.750.000 → Q = 750.000
-		r = compute_mvl(MVLInput("Parttime nước ngoài", 3_000_000, 0, 0, False, 0, 22, 22), self.cfg)
+	def test_ban_thoi_gian_khong_cu_tru_20pct(self):
+		# doc §4.3: bán thời gian người nước ngoài (không cư trú), O = 3tr → P = 3.750.000 → Q = 750.000 (20%)
+		r = compute_mvl(
+			MVLInput("Bán thời gian", 3_000_000, 0, 0, False, 0, 22, 22, is_resident=False), self.cfg
+		)
 		self.assertEqual(r.P, 3_750_000)
 		self.assertEqual(r.Q, 750_000)
 
-	def test_parttime_cam_ket_08_khong_thue(self):
-		r = compute_mvl(MVLInput("Parttime cam kết 08", 5_000_000, 0, 0, False, 0, 22, 22), self.cfg)
+	def test_khoan_khong_khau_tru_thue(self):
+		# doc §4.4: khoán trọn gói KHÔNG khấu trừ thuế; thực lĩnh = nguyên số khoán
+		r = compute_mvl(MVLInput("Khoán", 5_000_000, 0, 0, False, 0, 22, 22), self.cfg)
+		self.assertEqual(r.I, 5_000_000)
 		self.assertEqual(r.P, 0)
 		self.assertEqual(r.Q, 0)
 		self.assertEqual(r.T, 5_000_000)
 
-	def test_khoan_chuyen_gia(self):
-		# doc 3.4: khoán 30tr NET → P = 33.333.333 → Q = 3.333.333, không nhân theo công
-		r = compute_mvl(MVLInput("Khoán", 30_000_000, 0, 0, False, 0, 22, 10), self.cfg)
-		self.assertEqual(r.I, 30_000_000)  # KHÔNG bị nhân 10/22
+	def test_chuyen_gia_10pct(self):
+		# doc §4.5: chuyên gia thù lao 30tr NET trọn gói → P = 33.333.333 → Q = 3.333.333 (10%)
+		r = compute_mvl(MVLInput("Chuyên gia", 30_000_000, 0, 0, False, 0, 22, 10), self.cfg)
+		self.assertEqual(r.I, 30_000_000)  # trọn gói, KHÔNG nhân 10/22
 		self.assertEqual(r.P, 33_333_333)
 		self.assertEqual(r.Q, 3_333_333)
 
@@ -99,6 +103,31 @@ class TestMVLCore(unittest.TestCase):
 		r0 = compute_mvl(MVLInput("Chính thức", 25_000_000, 25_000_000, 1, True, 21, 22, 22), self.cfg)
 		self.assertEqual(r0.Q, 173_684)
 		self.assertGreater(r.Q, r0.Q)  # thưởng làm thuế tăng
+
+	def test_probation_to_official_mid_month_blends_coefficient(self):
+		# Thử việc đến hết ngày 15, chính thức từ 16: hệ số blend theo công mỗi giai đoạn.
+		# base 18tr, công chuẩn 22, làm đủ 22 (11 công thử việc @0.85 + 11 công chính thức @1.0).
+		r = compute_mvl(
+			MVLInput("Chính thức", 18_000_000, 0, 0, False, 0, 22, 22, probation_worked_days=11),
+			self.cfg,
+		)
+		# I = 18tr/22 × (0.85×11 + 1.0×11) = 18tr/22 × 20.35 = 16.650.000
+		self.assertEqual(r.I, _round(18_000_000 / 22 * (0.85 * 11 + 1.0 * 11)))
+		self.assertEqual(r.I, 16_650_000)
+
+	def test_probation_worked_zero_is_plain_official(self):
+		# không chuyển giữa kỳ (probation_worked_days=0) → hệ số 1.0 cho toàn bộ như chính thức thường
+		r = compute_mvl(MVLInput("Chính thức", 18_000_000, 0, 0, False, 0, 22, 22), self.cfg)
+		self.assertEqual(r.I, 18_000_000)
+
+	def test_probation_blend_capped_at_worked_days(self):
+		# probation_worked_days không được vượt số công thực (kẹp) — đi làm 10/22, cả 10 thuộc thử việc
+		r = compute_mvl(
+			MVLInput("Chính thức", 18_000_000, 0, 0, False, 0, 22, 10, probation_worked_days=15),
+			self.cfg,
+		)
+		# prob kẹp về 10 → I = 18tr/22 × 0.85×10
+		self.assertEqual(r.I, _round(18_000_000 / 22 * (0.85 * 10)))
 
 	def test_gross_type_raises_instead_of_silently_wrong(self):
 		# GROSS chưa hiện thực → phải nổ lỗi, KHÔNG được ra kết quả sai âm thầm (P/Q=0)

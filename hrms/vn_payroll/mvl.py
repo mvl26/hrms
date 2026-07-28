@@ -32,6 +32,9 @@ class MVLInput:
 	standard_days: float  # H7 — công chuẩn tháng
 	worked_days: float  # H — công thực tế (payment_days)
 	bonus: float = 0.0  # tiền thưởng (HR tự điền) — cộng vào thu nhập chịu thuế + thực lĩnh
+	probation_worked_days: float = 0.0  # công thuộc giai đoạn THỬ VIỆC (hệ số 0.85) khi chuyển thử
+	# việc → chính thức giữa kỳ; phần còn lại (worked_days − này) tính theo hệ số loại hiện tại. 0 = không chuyển.
+	is_resident: bool = True  # Bán thời gian: cư trú → khấu trừ 10% (O/0.9); không cư trú → 20% (O/0.8)
 
 
 @dataclass
@@ -119,11 +122,15 @@ def compute_mvl(inp: MVLInput, cfg: MVLConfig) -> MVLResult:
 	is_net_fulltime = inp.salary_type in NET_FULLTIME_TYPES
 	e = _coefficient(inp.salary_type, cfg)
 
-	# Bước 1 — lương theo công. Khoán/chuyên gia: trả trọn gói, không nhân theo công.
-	if inp.salary_type == "Khoán":
+	# Bước 1 — lương theo công. Khoán/Chuyên gia: trả trọn gói, không nhân theo công.
+	if inp.salary_type in ("Khoán", "Chuyên gia"):
 		r.I = _round(inp.base)
 	else:
-		r.I = _round(inp.base * e / inp.standard_days * inp.worked_days)
+		# Chuyển thử việc → chính thức GIỮA KỲ: công giai đoạn thử việc tính hệ số 0.85, phần còn lại
+		# theo hệ số loại hiện tại (chính thức 1.0). probation_worked_days = 0 → như thường (1 hệ số).
+		prob = min(max(inp.probation_worked_days, 0.0), inp.worked_days)
+		official = inp.worked_days - prob
+		r.I = _round(inp.base / inp.standard_days * (cfg.probation_coef * prob + e * official))
 
 	# Bước 2 — phụ cấp ăn (chỉ NET fulltime); Bước 3 — tổng thu nhập (+ tiền thưởng nếu có)
 	r.J = _round(inp.lunch_days * cfg.lunch_rate) if is_net_fulltime else 0.0
@@ -139,13 +146,20 @@ def compute_mvl(inp: MVLInput, cfg: MVLConfig) -> MVLResult:
 	if is_net_fulltime:
 		r.P = _grossup(r.O, cfg.grossup_brackets)
 		r.Q = _progressive_tax(r.P, cfg.tax_brackets)
-	elif inp.salary_type in ("Parttime cư trú", "Khoán"):
+	elif inp.salary_type == "Bán thời gian":
+		# cư trú → khấu trừ 10% (quy đổi /0,9); không cư trú (người nước ngoài) → 20% (quy đổi /0,8)
+		if inp.is_resident:
+			r.P = _round(r.O / 0.9)
+			r.Q = _round(r.P * 0.10)
+		else:
+			r.P = _round(r.O / 0.8)
+			r.Q = _round(r.P * 0.20)
+	elif inp.salary_type == "Chuyên gia":
+		# thù lao chuyên gia NET: quy đổi /0,9, khấu trừ 10% (doc §4.5)
 		r.P = _round(r.O / 0.9)
 		r.Q = _round(r.P * 0.10)
-	elif inp.salary_type == "Parttime nước ngoài":
-		r.P = _round(r.O / 0.8)
-		r.Q = _round(r.P * 0.20)
-	elif inp.salary_type == "Parttime cam kết 08":
+	elif inp.salary_type == "Khoán":
+		# khoán trọn gói: KHÔNG khấu trừ thuế (doc §4.4)
 		r.P = 0.0
 		r.Q = 0.0
 

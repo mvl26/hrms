@@ -10,7 +10,8 @@ import frappe
 from frappe.tests.utils import FrappeTestCase, change_settings
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
-from hrms.vn_payroll.setup_mvl import STRUCTURE, ensure_mvl_defaults
+
+from hrms.vn_payroll.setup_mvl import ensure_mvl_defaults, structure_for_type
 
 
 def ensure_fiscal_year_2099():
@@ -27,12 +28,13 @@ def ensure_fiscal_year_2099():
 
 
 def make_ssa(employee, **kw):
+	# mỗi loại lương một cấu trúc → cấu trúc suy từ custom_salary_type (mặc định Chính thức)
 	doc = frappe.get_doc(
 		{
 			"doctype": "Salary Structure Assignment",
 			"employee": employee,
 			"company": "Miyano",
-			"salary_structure": STRUCTURE,
+			"salary_structure": structure_for_type(kw.get("custom_salary_type", "Chính thức")),
 			"from_date": "2099-06-01",
 			**kw,
 		}
@@ -60,10 +62,10 @@ def mark_full_month(employee):
 			).insert()
 
 
-def make_slip(employee):
+def make_slip(employee, salary_type="Chính thức"):
 	ss = frappe.new_doc("Salary Slip")
 	ss.employee = employee
-	ss.salary_structure = STRUCTURE
+	ss.salary_structure = structure_for_type(salary_type)
 	ss.start_date = "2099-06-01"
 	ss.end_date = "2099-06-30"
 	ss.insert()  # validate → apply_mvl
@@ -94,7 +96,9 @@ class TestSalarySlipMVL(FrappeTestCase):
 		self.assertEqual(comp["Thuế TNCN (nộp thay)"], 173_684)
 		self.assertEqual(comp["BHXH - NLĐ (nộp thay)"], 2_625_000)  # 25tr × 10.5%
 		self.assertEqual(comp["BHXH - Công ty"], 5_375_000)  # R = 25tr × 21.5%
-		# NET: thuế + BHXH KHÔNG trừ vào net → net = K = I + J
+		# gương chi phí (hạch toán) = Q + S + R → Nợ 6421 của bút toán accrual; KHÔNG cộng net
+		self.assertEqual(comp["Chi phí thuế & BHXH DN nộp thay"], 173_684 + 2_625_000 + 5_375_000)
+		# NET: thuế + BHXH + gương KHÔNG trừ/cộng vào net → net = K = I + J
 		self.assertEqual(ss.net_pay, 25_000_000 + ss.payment_days * 35_000)
 		# mọi cột tiền là Salary Component trong lưới (không phải field): F, G, K, N, O, R, U…
 		self.assertEqual(comp["Lương ngày công"], 25_000_000)  # F
@@ -131,6 +135,24 @@ class TestSalarySlipMVL(FrappeTestCase):
 		# I = ROUND(22tr / 30 × 27) = 19.800.000
 		self.assertEqual(ss.payment_days, 27)
 		self.assertEqual(comp["Lương theo công"], 19_800_000)
+
+	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
+	def test_probation_to_official_mid_month_blends_salary(self):
+		# NV hết thử việc ngày 16 (Ngày chính thức = 2099-06-16) → hệ số blend theo công mỗi giai đoạn.
+		# NV giữ MỘT cấu trúc chính thức từ đầu kỳ (thoả ERPNext); phần thử việc suy từ ngày chính thức.
+		ensure_fiscal_year_2099()
+		ensure_mvl_defaults()
+		emp = make_employee("mvl_prob@codes.com", company="Miyano")
+		frappe.db.set_value("Employee", emp, "final_confirmation_date", "2099-06-16")
+		make_ssa(emp, base=18_000_000, custom_salary_type="Chính thức")  # from 2099-06-01
+		mark_full_month(emp)  # chấm đủ 30 ngày Present (không Holiday List → 30 công)
+		ss = make_slip(emp, salary_type="Chính thức")
+		comp = {r.salary_component: r.amount for r in ss.earnings}
+		# I blend = 18tr/30 × (0.85×15 công thử việc + 1.0×15 công chính thức) = 16.650.000
+		# KHÔNG phải 18tr (toàn chính thức) và KHÔNG phải 15.3tr (toàn thử việc)
+		self.assertEqual(comp["Lương theo công"], 16_650_000)
+		# hệ số E hiện trên phiếu là blend có trọng số: (0.85×15 + 1.0×15)/30 = 0.925
+		self.assertEqual(ss.custom_coefficient, 0.925)
 
 	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
 	def test_bonus_and_lunch_days_on_slip(self):

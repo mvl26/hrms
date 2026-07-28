@@ -2,8 +2,8 @@
 # For license information, please see license.txt
 """Bảng lương MVL — CỘT GIỐNG HỆT file Excel gốc (docs/Cong_thuc_tinh_luong_MVL.md).
 
-Đọc thẳng Salary Slip ĐÃ SUBMIT dùng cấu trúc "MVL Việt Nam" trong kỳ. Mỗi cột tiền là một Salary
-Component → chỉ gom theo hàng (nhân viên) × cột. Read-only, có dòng TỔNG CỘNG.
+Đọc thẳng Salary Slip ĐÃ SUBMIT dùng MỘT trong các cấu trúc MVL (mỗi loại lương một cấu trúc) trong kỳ.
+Mỗi cột tiền là một Salary Component → chỉ gom theo hàng (nhân viên) × cột. Read-only, có dòng TỔNG CỘNG.
 
 Thứ tự cột đúng như Excel: Mã NV (ID, không bỏ được) · Họ tên · Loại (Toàn/Bán thời gian) · NET/GROSS ·
 Hệ số E · Lương ngày công F · Lương đóng BHXH G · Số công H · Lương thực tế I · Phụ cấp ăn J ·
@@ -15,7 +15,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, get_first_day, get_last_day, getdate
 
-from hrms.vn_payroll.setup_mvl import STRUCTURE
+from hrms.vn_payroll.setup_mvl import STRUCTURE_NAMES
 
 # (fieldname, nhãn, kiểu, tên Salary Component | None, width). Thứ tự = thứ tự cột Excel.
 COLUMNS = [
@@ -58,7 +58,8 @@ def get_columns():
 
 
 def work_type(salary_type: str) -> str:
-	return "Bán thời gian" if (salary_type or "").startswith("Parttime") else "Toàn thời gian"
+	# hiện đúng loại lao động (Chính thức/Thử việc/Bán thời gian/Khoán/Chuyên gia); gộp 2 loại toàn thời gian.
+	return "Toàn thời gian" if salary_type in ("Chính thức", "Thử việc") else (salary_type or "")
 
 
 def pay_mode(salary_type: str) -> str:
@@ -73,7 +74,7 @@ def get_data(filters):
 
 	slip_filters = {
 		"docstatus": 1,
-		"salary_structure": STRUCTURE,
+		"salary_structure": ["in", list(STRUCTURE_NAMES)],
 		"start_date": [">=", start],
 		"end_date": ["<=", end],
 	}

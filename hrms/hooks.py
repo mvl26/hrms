@@ -98,7 +98,13 @@ jinja = {
 # ------------
 
 # before_install = "hrms.install.before_install"
-after_install = "hrms.install.after_install"
+after_install = [
+	"hrms.install.after_install",
+	# MVL payroll: đóng gói cấu hình lương (component + 6 cấu trúc theo loại + custom fields + tham số)
+	# sẵn NGAY khi cài app (không chờ migrate đầu). Idempotent; cấu trúc hoãn sang after_migrate nếu site
+	# chưa có Company (cài app trước setup wizard).
+	"hrms.vn_payroll.setup_mvl.ensure_mvl_defaults",
+]
 after_migrate = [
 	"hrms.setup.update_select_perm_after_install",
 	# Fork defaults: self-heal Công Tác workflow + COO role and verify fixture master data every migrate.
