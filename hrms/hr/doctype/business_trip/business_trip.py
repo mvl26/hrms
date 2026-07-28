@@ -87,8 +87,9 @@ class BusinessTrip(Document):
 		"""On approval, mark each traveler's working days in the trip window as 'CT' (đi công tác).
 		Skips holidays/weekends and days that already have an Attendance record. CT maps to native
 		Work From Home (a paid working day) via the attendance-code bridge — payroll-neutral."""
-		from erpnext.setup.doctype.employee.employee import is_holiday
 		from frappe.utils import add_days, getdate
+
+		from erpnext.setup.doctype.employee.employee import is_holiday
 
 		if not frappe.db.exists("Attendance Code", "CT"):
 			return
@@ -159,24 +160,3 @@ def link_claim_to_trip(doc, method=None):
 	row = frappe.db.get_value("Business Trip Traveler", {"parent": trip, "employee": doc.employee}, "name")
 	if row:
 		frappe.db.set_value("Business Trip Traveler", row, "expense_claim", doc.name, update_modified=False)
-
-
-def block_attendance_request(doc, method=None):
-	"""Attendance Request hook: Miyano chỉ xin đi công tác qua Công Tác (Business Trip).
-
-	Attendance Request không có field người duyệt, không workflow và không gửi thông báo — submit
-	là ghi thẳng ra Attendance — nên dùng nó là đi vòng qua bước duyệt COO của Công Tác. Chặn ở
-	`before_insert` để có tác dụng ở mọi kênh (Desk, PWA nhân viên, API).
-
-	Tha khi `frappe.flags.in_test`: hành vi của Attendance Request đã có 10 test upstream, chặn
-	cứng sẽ phá chúng (CLAUDE.md — không fork hành vi upstream đã test)."""
-	if frappe.flags.in_test:
-		return
-	frappe.throw(
-		_(
-			"Hệ thống này không dùng Đề nghị chấm công (Attendance Request). "
-			"Để xin đi công tác, vui lòng tạo phiếu <b>Công Tác</b> (Business Trip) — phiếu sẽ được "
-			"COO duyệt và tự động ghi mã công <b>CT</b> vào bảng chấm công."
-		),
-		title=_("Dùng Công Tác thay thế"),
-	)

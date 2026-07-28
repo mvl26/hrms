@@ -171,10 +171,15 @@ doc_events = {
 	"Expense Claim": {
 		"after_insert": "hrms.hr.doctype.business_trip.business_trip.link_claim_to_trip",
 	},
-	# Miyano: xin đi công tác phải qua Công Tác (có duyệt COO); Attendance Request submit thẳng
-	# ra Attendance nên bị khoá — xem block_attendance_request().
+	# Miyano: Yêu cầu chấm công (khác Đơn xin nghỉ) — ngày vẫn làm việc/tính có mặt (WFH, quên chấm
+	# công, on-duty, đi muộn/về sớm). Có DUYỆT bởi quản lý trực tiếp + ghi mã công riêng (payroll-
+	# neutral). Xem attendance_request_miyano.py. (Đi công tác có chi phí vẫn qua Công Tác/Business Trip.)
 	"Attendance Request": {
-		"before_insert": "hrms.hr.doctype.business_trip.business_trip.block_attendance_request",
+		"before_insert": "hrms.hr.doctype.attendance_request.attendance_request_miyano.set_default_approver",
+		"validate": "hrms.hr.doctype.attendance_request.attendance_request_miyano.set_default_approver",
+		"after_insert": "hrms.hr.doctype.attendance_request.attendance_request_miyano.assign_to_approver",
+		"before_submit": "hrms.hr.doctype.attendance_request.attendance_request_miyano.guard_submit",
+		"on_submit": "hrms.hr.doctype.attendance_request.attendance_request_miyano.set_attendance_request_code",
 	},
 	"User": {
 		"validate": [
@@ -442,5 +447,12 @@ fixtures = [
 				],
 			]
 		},
+	},
+	# Miyano: mở rộng options field `reason` của Attendance Request (thêm Quên chấm công / Đi muộn-về
+	# sớm bên cạnh Work From Home / On Duty). Lọc theo doc_type+field_name (không dùng `name in` nên
+	# test đồng bộ bỏ qua) → export đúng 1 property setter này.
+	{
+		"dt": "Property Setter",
+		"filters": {"doc_type": "Attendance Request", "field_name": "reason"},
 	},
 ]

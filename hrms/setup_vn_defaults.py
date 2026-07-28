@@ -25,6 +25,7 @@ FIXTURE_DOCTYPES = {
 	"Leave Type": "leave_type",
 	"Attendance Code": "attendance_code",
 	"Custom Field": "custom_field",
+	"Property Setter": "property_setter",
 }
 
 

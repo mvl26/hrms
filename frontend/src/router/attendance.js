@@ -1,7 +1,23 @@
 const routes = [
-	// Miyano: bỏ 3 route Attendance Request (list / new / detail) — xin đi công tác đi qua
-	// Công Tác (Business Trip) để có duyệt COO. Attendance Request bị khoá server-side ở
-	// business_trip.block_attendance_request, nên các màn hình này chỉ dẫn tới ngõ cụt.
+	// Miyano: Yêu cầu chấm công (mở lại) — WFH / quên chấm công / on-duty / đi muộn-về sớm, duyệt
+	// bởi quản lý trực tiếp (attendance_request_miyano.py). Khác Đơn xin nghỉ (nghỉ) và Công Tác (đi
+	// công tác có chi phí, duyệt COO).
+	{
+		name: "AttendanceRequestListView",
+		path: "/attendance-requests",
+		component: () => import("@/views/attendance/AttendanceRequestList.vue"),
+	},
+	{
+		name: "AttendanceRequestFormView",
+		path: "/attendance-requests/new",
+		component: () => import("@/views/attendance/AttendanceRequestForm.vue"),
+	},
+	{
+		name: "AttendanceRequestDetailView",
+		path: "/attendance-requests/:id",
+		props: true,
+		component: () => import("@/views/attendance/AttendanceRequestForm.vue"),
+	},
 	{
 		name: "ShiftRequestListView",
 		path: "/shift-requests",
