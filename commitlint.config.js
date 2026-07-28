@@ -14,6 +14,8 @@ module.exports = {
 				"docs",
 				"feat",
 				"fix",
+				// Miyano: lớp bản địa hóa VN có commit chỉ đụng bản dịch (hrms/translations/vi.csv)
+				"i18n",
 				"perf",
 				"refactor",
 				"revert",
