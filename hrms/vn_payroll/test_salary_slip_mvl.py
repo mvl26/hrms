@@ -46,6 +46,14 @@ def make_ssa(employee, **kw):
 
 def mark_full_month(employee):
 	for d in range(1, 31):
+		# checkin phủ cả buổi → ngày ăn trưa (số ngày ăn suy từ checkin, không phải số công).
+		# Phải tạo TRƯỚC Attendance: cờ custom_lunch được chốt trong validate của Attendance từ
+		# checkin của chính ngày đó (attendance.py: set_lunch_flag), tạo checkin sau thì cờ đã
+		# bằng 0 và phụ cấp ăn trưa trên phiếu lương ra 0. Ngoài đời checkin cũng có trước.
+		for hm in ("08:00:00", "17:30:00"):
+			frappe.get_doc(
+				{"doctype": "Employee Checkin", "employee": employee, "time": f"2099-06-{d:02d} {hm}"}
+			).insert()
 		att = frappe.get_doc(
 			{
 				"doctype": "Attendance",
@@ -56,11 +64,6 @@ def mark_full_month(employee):
 		)
 		att.insert()
 		att.submit()
-		# checkin phủ cả buổi → ngày ăn trưa (số ngày ăn suy từ checkin, không phải số công)
-		for hm in ("08:00:00", "17:30:00"):
-			frappe.get_doc(
-				{"doctype": "Employee Checkin", "employee": employee, "time": f"2099-06-{d:02d} {hm}"}
-			).insert()
 
 
 def make_slip(employee, salary_type="Chính thức"):

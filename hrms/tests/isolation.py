@@ -27,10 +27,15 @@ class PerTestRollback:
 	filesystem vẫn phải tự dọn.
 	"""
 
-	def setUp(self):
-		super().setUp()
+	def _callSetUp(self):
+		# Móc vào `_callSetUp` chứ KHÔNG phải `setUp`: rất nhiều test class ở đây tự định nghĩa
+		# `setUp` mà không gọi `super().setUp()` — móc vào `setUp` thì bản của mixin không bao giờ
+		# chạy và cô lập biến mất trong im lặng. `unittest.TestCase.run()` luôn đi qua `_callSetUp`
+		# (có từ Python 3.8), nên savepoint được mở kể cả khi lớp con ghi đè `setUp`.
 		frappe.db.savepoint(SAVEPOINT)
+		# đăng ký trước mọi cleanup của chính test → chạy sau cùng (LIFO), dọn nốt phần còn lại
 		self.addCleanup(self.rollback_to_savepoint)
+		super()._callSetUp()
 
 	def rollback_to_savepoint(self):
 		try:

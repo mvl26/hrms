@@ -8,6 +8,7 @@ Chạy qua harness rollback. Test cờ bằng thuộc tính in-memory (KHÔNG in
 
 import json
 import os
+from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -293,9 +294,14 @@ class TestLunchRecompute(PerTestRollback, FrappeTestCase):
 
 	def test_recompute_noop_before_migrate(self):
 		# field custom_lunch chưa lên site → recompute an toàn, trả 0 (không vỡ payroll).
+		# Giả lập tình huống đó thay vì trông vào trạng thái site: mọi site đã migrate (kể cả
+		# test_site của CI, nơi fixture sync sẵn custom field) đều có field, test sẽ không đo
+		# đúng thứ nó định đo.
 		from hrms.vn_payroll.lunch import recompute_lunch_flags
 
-		self.assertEqual(recompute_lunch_flags(5, 2099, self.company), 0)
+		with patch("frappe.get_meta") as get_meta:
+			get_meta.return_value.has_field.return_value = False
+			self.assertEqual(recompute_lunch_flags(5, 2099, self.company), 0)
 
 	def test_lunch_days_map_matches_per_employee(self):
 		# Round 3: truy vấn gộp cho báo cáo phải ra cùng số với hàm từng-NV.
@@ -310,9 +316,13 @@ class TestLunchRecompute(PerTestRollback, FrappeTestCase):
 
 	def test_backfill_dry_run_safe_before_migrate(self):
 		# L7: backfill an toàn khi field chưa migrate — không ghi gì.
+		# backfill_lunch_flags chỉ trả khoá "error" khi Attendance CHƯA có field custom_lunch;
+		# site đã migrate thì nó chạy thật và test đỏ. Giả lập trạng thái chưa migrate.
 		from hrms.vn_payroll.lunch import backfill_lunch_flags
 
-		r = backfill_lunch_flags(dry_run=1)
+		with patch("frappe.get_meta") as get_meta:
+			get_meta.return_value.has_field.return_value = False
+			r = backfill_lunch_flags(dry_run=1)
 		self.assertIn("error", r)
 		self.assertEqual(r["changed"], 0)
 
