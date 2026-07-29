@@ -18,6 +18,12 @@ env:
     # `type X = ...` → SyntaxError trên Python 3.10). App này là HRMS v15 (pyproject ghim
     # frappe/erpnext >=15.0.0,<16.0.0), vì vậy ghim cứng nhánh upstream ở version-15.
     HR_BRANCH: version-15
+    # erpnext phải là bản CỦA MIYANO, không phải của frappe: bench thật chạy mvl26/erpnext, nên nếu
+    # CI cài frappe/erpnext thì nó đang kiểm một tổ hợp không ai deploy — sinh lỗi giả (ví dụ erpnext
+    # của frappe thêm AssetMovement.validate_transaction_date mà bản Miyano chưa có). Dùng nhánh
+    # version-15 chứ không phải nhánh feature đang chạy, để CI không phụ thuộc mục tiêu di động.
+    ERPNEXT_REPO: https://github.com/mvl26/erpnext
+    ERPNEXT_BRANCH: version-15
 
 concurrency:
   group: develop-${{ github.event.number }}
@@ -115,6 +121,8 @@ jobs:
           bash ${GITHUB_WORKSPACE}/.github/helper/install.sh
         env:
           BRANCH_TO_CLONE: ${{ env.HR_BRANCH }}
+          ERPNEXT_REPO: ${{ env.ERPNEXT_REPO }}
+          ERPNEXT_BRANCH: ${{ env.ERPNEXT_BRANCH }}
 
       - name: Run Tests
         run: cd ~/frappe-bench/ && bench --site test_site run-parallel-tests --app hrms --total-builds 2 --build-number ${{ matrix.container }}

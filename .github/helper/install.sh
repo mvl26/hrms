@@ -41,7 +41,9 @@ sed -i 's/socketio:/# socketio:/g' Procfile
 sed -i 's/redis_socketio:/# redis_socketio:/g' Procfile
 
 bench get-app payments --branch ${BRANCH_TO_CLONE%"-hotfix"}
-bench get-app https://github.com/frappe/erpnext --branch "$BRANCH_TO_CLONE" --resolve-deps
+# erpnext: mac dinh van la cua frappe de script chay duoc ngoai CI; workflow ghi de bang
+# ERPNEXT_REPO/ERPNEXT_BRANCH de kiem dung ban erpnext Miyano deploy.
+bench get-app "${ERPNEXT_REPO:-https://github.com/frappe/erpnext}" --branch "${ERPNEXT_BRANCH:-$BRANCH_TO_CLONE}" --resolve-deps
 bench get-app https://github.com/frappe/lending --branch ${BRANCH_TO_CLONE%"-hotfix"}
 bench get-app hrms "${GITHUB_WORKSPACE}"
 bench setup requirements --dev
