@@ -3,6 +3,11 @@
 Spec `spec/flex-shift-and-timekeeping-pipeline.md`. Nhánh `feat/skip-attendance-diag`.
 Thứ tự: T1→T12. Mỗi task kết thúc bằng một commit.
 
+**Tiến độ 2026-07-29: T1–T12 ✅ XONG — 134 test xanh** qua harness rollback. Fixtures đã sync lên
+site (mã `1/2X`, bỏ `NN`, 3 field ca); Ca Hành Chính đã bật ca trượt ±3h + nới cửa sổ chấm 180′.
+Cổng lương còn TẮT (site config `hrms_enforce_sheet_gate`) vì đang chặn đúng 2 phiếu lệch thật —
+xem spec §7. **App chưa restart nên code mới chưa hiệu lực trên web/scheduler.**
+
 **Goal:** ca trượt theo giờ vào + luật đủ-giờ (`X` / `1/2X` / `V`), và bổ sung 3 mắt xích còn thiếu
 của tuyến — soát công, chốt công có khoá kỳ, cổng đối soát lương.
 
@@ -44,13 +49,13 @@ chốt và đối soát số công bằng máy.
   Dùng bởi T2.
 - Bỏ: `Shift Type-custom_half_day_min_fraction`, `Shift Type-custom_half_day_grace_minutes`.
 
-- [ ] **B1: Sửa test fixtures cho trạng thái mong muốn (đỏ)** — trong `test_attendance_code_fixtures.py`
+- [x] **B1: Sửa test fixtures cho trạng thái mong muốn (đỏ)** — trong `test_attendance_code_fixtures.py`
   đổi dict mã: bỏ khoá `"NN"`, thêm `"1/2X": {"category": "Công", "work_fraction": 0.5, "is_paid": 1,
   "maps_to_status": "Half Day", "leave_type": None}`.
-- [ ] **B2: Chạy → phải đỏ.** `bash run_test.sh "hrms.hr.doctype.attendance_code.test_attendance_code_fixtures"`
-- [ ] **B3: Sửa 2 file fixtures + `hooks.py`** theo đúng bảng trên.
-- [ ] **B4: Chạy lại → xanh**, kèm `hrms.tests.test_setup_vn_defaults` (bắt JSON ↔ hooks khớp nhau).
-- [ ] **B5: Commit** `feat(hr): them ma cong 1/2X, bo NN, them field ca linh hoat`
+- [x] **B2: Chạy → phải đỏ.** `bash run_test.sh "hrms.hr.doctype.attendance_code.test_attendance_code_fixtures"`
+- [x] **B3: Sửa 2 file fixtures + `hooks.py`** theo đúng bảng trên.
+- [x] **B4: Chạy lại → xanh**, kèm `hrms.tests.test_setup_vn_defaults` (bắt JSON ↔ hooks khớp nhau).
+- [x] **B5: Commit** `feat(hr): them ma cong 1/2X, bo NN, them field ca linh hoat`
 
 ### T2: Bộ phân loại — ca trượt + luật đủ giờ + chốt ngày nghỉ
 
@@ -92,7 +97,7 @@ else:
 Hằng số lớp: bỏ `VN_DEFAULT_MIN_FRACTION` / `VN_DEFAULT_GRACE_MINUTES`, thêm
 `VN_DEFAULT_FLEX_BAND_MINUTES = 180`, `VN_DEFAULT_MIN_WORK_HOURS = 8.0`.
 
-- [ ] **B1: Viết lại test (đỏ)** trong `test_vn_half_day_classifier.py`:
+- [x] **B1: Viết lại test (đỏ)** trong `test_vn_half_day_classifier.py`:
   - `test_flex_late_in_late_out_is_full_day` — vào 11:00 ra 20:30 → `working_hours == 8.0`, mã `X`
   - `test_flex_late_in_short_by_an_hour_is_half` — vào 11:00 ra 19:30 → `7.0`, mã `1/2X`
     *(chính ca của user: giờ ghi nhận 7h chứ không phải 5h)*
@@ -112,13 +117,13 @@ Hằng số lớp: bỏ `VN_DEFAULT_MIN_FRACTION` / `VN_DEFAULT_GRACE_MINUTES`, 
     `test_a_full_day_of_leave_is_never_reclassified_from_the_clock`,
     `test_half_day_leave_plus_worked_half_keeps_leave_type`
   - Sửa `test_shift_type_config_fields_exist` sang 3 field mới
-- [ ] **B2: Chạy → đỏ** (`hrms.hr.doctype.attendance.test_vn_half_day_classifier`)
-- [ ] **B3: Cài đặt** theo khối code trên; import `is_holiday`, `get_holiday_list_for_employee`.
+- [x] **B2: Chạy → đỏ** (`hrms.hr.doctype.attendance.test_vn_half_day_classifier`)
+- [x] **B3: Cài đặt** theo khối code trên; import `is_holiday`, `get_holiday_list_for_employee`.
   Kèm `ShiftType.validate`: bật `custom_split_half_day` mà `custom_min_work_hours` ≤ 0 → throw
   (spec §4.1) — thêm test `test_split_shift_requires_min_work_hours` vào
   `hrms/hr/doctype/shift_type/test_shift_type.py`.
-- [ ] **B4: Chạy → xanh** (cả `hrms.hr.doctype.shift_type.test_shift_type`).
-- [ ] **B5: Commit** `feat(hr): ca truot theo gio vao + luat du gio X/1-2X/V, bo qua ngay nghi`
+- [x] **B4: Chạy → xanh** (cả `hrms.hr.doctype.shift_type.test_shift_type`).
+- [x] **B5: Commit** `feat(hr): ca truot theo gio vao + luat du gio X/1-2X/V, bo qua ngay nghi`
 
 ### T3: Report + Bảng Công Tháng theo mã mới
 
@@ -130,13 +135,13 @@ Hằng số lớp: bỏ `VN_DEFAULT_MIN_FRACTION` / `VN_DEFAULT_GRACE_MINUTES`, 
 **Interfaces — Consumes:** mã `1/2X` từ T1. **Produces:** `get_sheet_rows` trả `1/2X` với
 `totals["Công"] += 0.5`, `totals[TOTAL_PAID] += 0.5`, `totals["Vắng"] += 0.5`. Dùng bởi T6, T12.
 
-- [ ] **B1: Đổi test** `_mk(10, custom_attendance_code="NN")` → `"1/2X"`, kỳ vọng `day_10 == "1/2X"`,
+- [x] **B1: Đổi test** `_mk(10, custom_attendance_code="NN")` → `"1/2X"`, kỳ vọng `day_10 == "1/2X"`,
   các tổng giữ nguyên con số cũ (0,5 Công + 0,5 Vắng) → chạy phải **đỏ** vì `NN` đã bị gỡ ở T1.
-- [ ] **B2: Chạy → đỏ.**
-- [ ] **B3: Sửa chú thích trong report; kiểm tra `day_state` vẫn trả `"half"` cho `work_fraction` 0,5.**
-- [ ] **B4: Chạy → xanh** cả `test_monthly_attendance_report` lẫn
+- [x] **B2: Chạy → đỏ.**
+- [x] **B3: Sửa chú thích trong report; kiểm tra `day_state` vẫn trả `"half"` cho `work_fraction` 0,5.**
+- [x] **B4: Chạy → xanh** cả `test_monthly_attendance_report` lẫn
   `hrms.hr.doctype.monthly_attendance_sheet.test_monthly_attendance_sheet` (nếu có).
-- [ ] **B5: Commit** `fix(hr): report/bang cong dung ma 1/2X thay NN`
+- [x] **B5: Commit** `fix(hr): report/bang cong dung ma 1/2X thay NN`
 
 ### T4: Cổng bất biến lương GĐ1 *(CỔNG KÝ)*
 
@@ -145,7 +150,7 @@ Hằng số lớp: bỏ `VN_DEFAULT_MIN_FRACTION` / `VN_DEFAULT_GRACE_MINUTES`, 
 
 **Interfaces — Consumes:** T2, T3.
 
-- [ ] **B1: Viết test cổng** trên **dữ liệu thật T6/T7 của site** (chỉ đọc, chạy trong harness):
+- [x] **B1: Viết test cổng** trên **dữ liệu thật T6/T7 của site** (chỉ đọc, chạy trong harness):
   - Nạp mọi Attendance có in/out của T6+T7, chạy lại `apply_vn_half_day_classifier` **trên bản sao
     trong bộ nhớ** (không lưu), so `status` / `leave_type` / `half_day_status` trước–sau.
   - Kỳ vọng: 206 ngày Present giữ nguyên `Present`; 6 ngày `1/2K` (4,0h) → `1/2X` nhưng vẫn
@@ -153,8 +158,8 @@ Hằng số lớp: bỏ `VN_DEFAULT_MIN_FRACTION` / `VN_DEFAULT_GRACE_MINUTES`, 
     `Present`→`Absent` — **cùng mức trừ 0,5**, một bên qua LWP, một bên qua half-absent).
   - Tính lại `payment_days` / `absent_days` / `leave_without_pay` của **12 phiếu lương T6/T7 đang
     submit** và khẳng định **bằng đúng giá trị đang lưu**.
-- [ ] **B2: Chạy → phải xanh ngay** (nếu đỏ: luật mới đang ăn mất công của ai đó → dừng, báo user).
-- [ ] **B3: Commit** `test(hr): cong bat bien luong cho ca truot + 1/2X tren du lieu that`
+- [x] **B2: Chạy → phải xanh ngay** (nếu đỏ: luật mới đang ăn mất công của ai đó → dừng, báo user).
+- [x] **B3: Commit** `test(hr): cong bat bien luong cho ca truot + 1/2X tren du lieu that`
 
 ---
 
@@ -171,10 +176,10 @@ Hằng số lớp: bỏ `VN_DEFAULT_MIN_FRACTION` / `VN_DEFAULT_GRACE_MINUTES`, 
 `old_leave_type`/`new_leave_type` (Data), `reason` (Small Text, reqd), `corrected_by` (Link User),
 `corrected_on` (Datetime). Dùng bởi T7.
 
-- [ ] **B1: Test (đỏ)** — tạo log thiếu `reason` → `frappe.exceptions.MandatoryError`; tạo đủ → đọc lại
+- [x] **B1: Test (đỏ)** — tạo log thiếu `reason` → `frappe.exceptions.MandatoryError`; tạo đủ → đọc lại
   đúng giá trị; sửa log đã tạo → chặn.
-- [ ] **B2: Chạy → đỏ.** **B3: Tạo doctype.** **B4: Chạy → xanh.**
-- [ ] **B5: Commit** `feat(hr): doctype nhat ky dieu chinh cong`
+- [x] **B2: Chạy → đỏ.** **B3: Tạo doctype.** **B4: Chạy → xanh.**
+- [x] **B5: Commit** `feat(hr): doctype nhat ky dieu chinh cong`
 
 ### T6: Cờ bất thường + lưới soát
 
@@ -188,10 +193,10 @@ Hằng số lớp: bỏ `VN_DEFAULT_MIN_FRACTION` / `VN_DEFAULT_GRACE_MINUTES`, 
 - `get_review_grid(filters) -> {"rows": [...], "flags": {employee: {day: [flag]}}}` — dựng trên
   `get_sheet_rows(filters)`, **không** dựng logic suy diễn thứ hai. Dùng bởi T8.
 
-- [ ] **B1: Test (đỏ)** cho từng cờ, mỗi cờ một test; và `get_review_grid` trả đúng số hàng bằng
+- [x] **B1: Test (đỏ)** cho từng cờ, mỗi cờ một test; và `get_review_grid` trả đúng số hàng bằng
   `get_sheet_rows`.
-- [ ] **B2: Chạy → đỏ.** **B3: Cài đặt.** **B4: Chạy → xanh.**
-- [ ] **B5: Commit** `feat(hr): co bat thuong + luoi soat cong`
+- [x] **B2: Chạy → đỏ.** **B3: Cài đặt.** **B4: Chạy → xanh.**
+- [x] **B5: Commit** `feat(hr): co bat thuong + luoi soat cong`
 
 ### T7: `apply_correction` — cửa ghi duy nhất
 
@@ -204,21 +209,21 @@ Hằng số lớp: bỏ `VN_DEFAULT_MIN_FRACTION` / `VN_DEFAULT_GRACE_MINUTES`, 
 Manager): nạp doc → đặt `custom_attendance_code` → chạy `apply_attendance_code_bridge()` →
 `db_set` các field phái sinh → ghi `Attendance Correction Log`. `apply_corrections_bulk(rows)`.
 
-- [ ] **B1: Test (đỏ)**: sửa `V` → `X` thì `status` thành `Present` và log ghi đủ cũ/mới; thiếu
+- [x] **B1: Test (đỏ)**: sửa `V` → `X` thì `status` thành `Present` và log ghi đủ cũ/mới; thiếu
   `reason` → throw; mã không tồn tại → throw; user không quyền → `PermissionError`;
   **payroll field đổi đúng theo mã** (bảng tham số hoá cho `X` / `1/2X` / `P`).
-- [ ] **B2: Chạy → đỏ.** **B3: Cài đặt.** **B4: Chạy → xanh.**
-- [ ] **B5: Commit** `feat(hr): api dieu chinh cong mot cua co ghi vet`
+- [x] **B2: Chạy → đỏ.** **B3: Cài đặt.** **B4: Chạy → xanh.**
+- [x] **B5: Commit** `feat(hr): api dieu chinh cong mot cua co ghi vet`
 
 ### T8: Trang soát công (desk page)
 
 **Files:**
 - Create: `hrms/hr/page/attendance_review/` (`.json`, `.js`)
 
-- [ ] **B1: Dựng page** — bộ lọc tháng/năm/công ty/phòng ban; lưới NV × ngày; ô có cờ tô đỏ kèm
+- [x] **B1: Dựng page** — bộ lọc tháng/năm/công ty/phòng ban; lưới NV × ngày; ô có cờ tô đỏ kèm
   tooltip tên cờ; click ô → chọn mã + nhập lý do; nút "Lưu tất cả" gọi `apply_corrections_bulk`.
-- [ ] **B2: `bench build --app hrms`**, tự kiểm bằng ảnh chụp màn hình trên `http://miyano:8080`.
-- [ ] **B3: Commit** `feat(hr): trang soat cong thang`
+- [x] **B2: `bench build --app hrms`**, tự kiểm bằng ảnh chụp màn hình trên `http://miyano:8080`.
+- [x] **B3: Commit** `feat(hr): trang soat cong thang`
 
 ---
 
@@ -234,11 +239,11 @@ Manager): nạp doc → đặt `custom_attendance_code` → chạy `apply_attend
 **Interfaces — Produces:** `is_period_locked(employee, date) -> str | None` (trả tên bảng chốt);
 `guard_period_not_locked(doc, method=None)` — throw nếu bị khoá.
 
-- [ ] **B1: Test (đỏ)**: có bảng chốt phủ ngày → sửa/huỷ Attendance bị chặn; huỷ bảng chốt → cho
+- [x] **B1: Test (đỏ)**: có bảng chốt phủ ngày → sửa/huỷ Attendance bị chặn; huỷ bảng chốt → cho
   phép lại; bảng nháp (docstatus 0) → không khoá; ngày ngoài kỳ → không khoá; `apply_correction`
   trong kỳ khoá → throw.
-- [ ] **B2: Chạy → đỏ.** **B3: Cài đặt + nối `doc_events`.** **B4: Chạy → xanh.**
-- [ ] **B5: Commit** `feat(hr): chot cong khoa ky sua chua cham cong`
+- [x] **B2: Chạy → đỏ.** **B3: Cài đặt + nối `doc_events`.** **B4: Chạy → xanh.**
+- [x] **B5: Commit** `feat(hr): chot cong khoa ky sua chua cham cong`
 
 ### T10: Bảng Công Tháng cảnh báo cờ tồn đọng
 
@@ -246,9 +251,9 @@ Manager): nạp doc → đặt `custom_attendance_code` → chạy `apply_attend
 - Modify: `hrms/hr/doctype/monthly_attendance_sheet/monthly_attendance_sheet.py`
 - Test: `hrms/hr/doctype/monthly_attendance_sheet/test_monthly_attendance_sheet.py`
 
-- [ ] **B1: Test (đỏ)**: submit khi còn ô `NO_RECORD`/`ABSENT` → có `msgprint` cảnh báo, vẫn cho chốt.
-- [ ] **B2–B4: đỏ → cài đặt → xanh.**
-- [ ] **B5: Commit** `feat(hr): canh bao co bat thuong ton dong khi chot cong`
+- [x] **B1: Test (đỏ)**: submit khi còn ô `NO_RECORD`/`ABSENT` → có `msgprint` cảnh báo, vẫn cho chốt.
+- [x] **B2–B4: đỏ → cài đặt → xanh.**
+- [x] **B5: Commit** `feat(hr): canh bao co bat thuong ton dong khi chot cong`
 
 ---
 
@@ -263,9 +268,9 @@ Manager): nạp doc → đặt `custom_attendance_code` → chạy `apply_attend
 
 **Interfaces — Produces:** `require_submitted_sheet(doc, method=None)`.
 
-- [ ] **B1: Test (đỏ)**: kỳ chưa có bảng chốt → tạo Salary Slip bị throw; có bảng chốt phủ đủ → qua.
-- [ ] **B2–B4: đỏ → cài đặt → xanh.**
-- [ ] **B5: Commit** `feat(hr): chan phieu luong khi ky cham cong chua chot`
+- [x] **B1: Test (đỏ)**: kỳ chưa có bảng chốt → tạo Salary Slip bị throw; có bảng chốt phủ đủ → qua.
+- [x] **B2–B4: đỏ → cài đặt → xanh.**
+- [x] **B5: Commit** `feat(hr): chan phieu luong khi ky cham cong chua chot`
 
 ### T12: Đối soát bảng chốt ↔ phiếu lương *(CỔNG KÝ)*
 
@@ -276,12 +281,12 @@ Manager): nạp doc → đặt `custom_attendance_code` → chạy `apply_attend
 **Interfaces — Produces:** `reconcile_with_sheet(doc, method=None)` — so số công của NV trong bảng
 chốt với `payment_days` / `absent_days`; lệch → throw kèm bảng so sánh.
 
-- [ ] **B1: Cố định công thức bằng dữ liệu thật** — viết test chạy trên **12 phiếu lương T6/T7 đang
+- [x] **B1: Cố định công thức bằng dữ liệu thật** — viết test chạy trên **12 phiếu lương T6/T7 đang
   submit** + 2 bảng chốt tương ứng; suy ra ánh xạ (`work_days` + phần có lương của các loại nghỉ ↔
   `payment_days`) sao cho **cả 12 phiếu khớp tuyệt đối**. Ghi công thức chốt được vào docstring.
-- [ ] **B2: Test lệch**: sửa một ô trong bảng chốt (bản sao trong bộ nhớ) → đối soát phải throw.
-- [ ] **B3: Chạy → xanh.**
-- [ ] **B4: Commit** `feat(hr): doi soat phieu luong voi bang cong da chot`
+- [x] **B2: Test lệch**: sửa một ô trong bảng chốt (bản sao trong bộ nhớ) → đối soát phải throw.
+- [x] **B3: Chạy → xanh.**
+- [x] **B4: Commit** `feat(hr): doi soat phieu luong voi bang cong da chot`
 
 ---
 

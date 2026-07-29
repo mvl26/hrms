@@ -231,7 +231,13 @@ ngày đó cho công ty (và phòng ban, nếu bảng có phòng ban) của nhâ
 Gắn vào `doc_events["Attendance"]`: chặn `on_update_after_submit`, `on_cancel`, và chặn ngay trong
 `apply_correction`. Muốn sửa kỳ đã chốt → phải **huỷ bảng chốt**, việc huỷ để lại vết qua `docstatus`.
 
-Bảng Công Tháng `on_submit`: cảnh báo nếu vẫn còn ô mang cờ bất thường chưa xử lý.
+Bảng Công Tháng `before_submit`: cảnh báo (không chặn) nếu vẫn còn ô mang cờ bất thường chưa xử lý.
+
+**Auto-attendance phải BỎ QUA kỳ đã chốt, không được ném lỗi.** Phát hiện khi build: bảng T7/2026
+được chốt giữa tháng trong khi tháng chưa hết, nên chốt chặn ở `before_insert` làm
+`process_auto_attendance` ném lỗi và **giết cả job cho mọi nhân viên còn lại**. Vì vậy
+`ShiftType.should_mark_attendance` và `get_dates_for_attendance` đều hỏi `is_period_locked` và bỏ
+qua trong im lặng — khoá nghĩa là "không đụng nữa", không phải "hỏng".
 
 ## 7. GĐ4 — Nối lương với bảng đã chốt
 
@@ -244,9 +250,27 @@ bảng ⇒ bảng là bản quyền lực, Attendance là kho đông lạnh củ
 2. **Đối soát bằng máy** — lấy số công của nhân viên từ bảng đã chốt, so với `payment_days` /
    `absent_days` mà controller vừa tính từ Attendance; lệch → `throw` kèm bảng so sánh hai bên.
 
-Ánh xạ chính xác giữa cột tổng của bảng (`work_days`, `unpaid_leave`, `absent`, …) và
-`payment_days`/`absent_days` **sẽ được chốt bằng test** chạy trên **12 phiếu lương thật T6/T7 đang
-submit** — chúng hiện khớp bảng, nên là mốc chuẩn để cố định công thức đối soát.
+**Công thức đối soát — đã chốt bằng dữ liệu thật (2026-07-29):**
+
+```
+payment_days  ==  cột "Tổng công" của nhân viên trong bảng đã chốt
+```
+
+Đo trên 12 phiếu lương thật T6+T7/2026: **10/12 khớp tuyệt đối**. Hai phiếu còn lại
+(HR-EMP-00002, cả hai tháng) lệch **đúng 0,5** — và đó là **lệch thật, không phải sai công thức**:
+
+> Ngày 05/06 mã `1/2P` (nghỉ phép năm nửa ngày, **có lương**, có Leave Application đã duyệt) lại
+> mang `half_day_status = "Absent"`, nên `get_half_absent_days` trừ 0,5 của **nửa ngày phép có
+> lương**. Bảng công đã ký ghi 20,5 công, phiếu lương đã trả 20,0. Nhân viên vừa bị trừ quỹ phép
+> vừa bị trừ nửa ngày lương cho cùng một nửa ngày.
+
+`restore_code_driven_half_day_status` hiện chỉ chữa trường hợp mã công **không** có đơn nghỉ; ngày
+đi qua đường Leave Application (đường bình thường) vẫn bị. Cổng đối soát **chặn đúng 2 phiếu này**
+và test khoá hiện trạng lại, để khi sửa lỗi đó thì con số về 0 một cách có chủ đích.
+**Việc sửa nằm ngoài phạm vi spec này** — nó đụng cầu nối payroll nên cần cổng ký riêng.
+
+Cổng **TẮT mặc định**; bật bằng site config `hrms_enforce_sheet_gate: 1` sau khi 2 phiếu lệch trên
+được xử lý — bật khi còn phiếu lệch thì không ai lập được lương.
 
 ## 8. Bất biến & rủi ro
 
