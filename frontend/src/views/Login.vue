@@ -54,7 +54,7 @@
 
 			<Dialog v-model="resetPassword.showDialog">
 				<template #body-title>
-					<h2 class="text-lg font-bold">{{ __("Reset Password") }} </h2>
+					<h2 class="text-lg font-bold">{{ __("Reset Password") }}</h2>
 				</template>
 				<template #body-content>
 					<p>
@@ -129,7 +129,7 @@ const otp = reactive({
 const session = inject("$session")
 const __ = inject("$translate")
 
-async function submit(e) {
+async function submit() {
 	try {
 		let response
 		if (otp.showDialog) {

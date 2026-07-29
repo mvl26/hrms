@@ -1,0 +1,107 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-07-24 10:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "intro_html",
+  "company",
+  "weekly_off_section",
+  "weekly_off_days",
+  "lunar_section",
+  "lunar_holidays",
+  "generate_section",
+  "generate_for_year",
+  "generate_button"
+ ],
+ "fields": [
+  {
+   "fieldname": "intro_html",
+   "fieldtype": "HTML",
+   "options": "<p>Đây là <b>nguồn sự thật</b> cho lịch làm việc. Holiday List là kết quả <i>sinh ra</i> từ đây — đừng sửa tay Holiday List, sửa ở đây rồi bấm sinh lại.</p><p>Ba loại ngày: <b>ngày làm việc</b> (không nằm trong Holiday List) · <b>nghỉ cuối tuần</b> (weekly_off=1, bảng công hiện <code>-</code>) · <b>nghỉ lễ</b> (weekly_off=0, hiện <code>NL</code>).</p>"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Công ty",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "weekly_off_section",
+   "fieldtype": "Section Break",
+   "label": "Ngày nghỉ hàng tuần"
+  },
+  {
+   "description": "Những thứ trong tuần công ty KHÔNG làm việc. Bỏ trống = làm cả tuần.",
+   "fieldname": "weekly_off_days",
+   "fieldtype": "Table",
+   "label": "Nghỉ vào các thứ",
+   "options": "Assignment Rule Day"
+  },
+  {
+   "fieldname": "lunar_section",
+   "fieldtype": "Section Break",
+   "label": "Ngày lễ âm lịch (nhập tay từng năm)"
+  },
+  {
+   "description": "Lễ dương (1/1, 30/4, 1/5, 1/9, 2/9) tự sinh theo Điều 112 — không cần nhập. Chỉ nhập lễ ÂM: Tết Nguyên Đán, Giỗ Tổ. Lễ rơi vào ngày nghỉ tuần sẽ tự sinh nghỉ bù.",
+   "fieldname": "lunar_holidays",
+   "fieldtype": "Table",
+   "label": "Ngày lễ âm lịch",
+   "options": "Lunar Holiday"
+  },
+  {
+   "fieldname": "generate_section",
+   "fieldtype": "Section Break",
+   "label": "Sinh Holiday List"
+  },
+  {
+   "description": "Năm cần sinh / cập nhật lịch.",
+   "fieldname": "generate_for_year",
+   "fieldtype": "Int",
+   "label": "Sinh cho năm"
+  },
+  {
+   "fieldname": "generate_button",
+   "fieldtype": "Button",
+   "label": "Sinh / Cập nhật Holiday List"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-07-24 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "HR",
+ "name": "Work Calendar Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "HR Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

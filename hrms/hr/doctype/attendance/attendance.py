@@ -2,13 +2,17 @@
 # License: GNU General Public License v3. See license.txt
 
 
+from datetime import datetime, timedelta
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from frappe.query_builder.functions import Date
 from frappe.utils import (
 	add_days,
 	cint,
 	cstr,
+	flt,
 	format_date,
 	get_datetime,
 	get_link_to_form,
@@ -33,10 +37,234 @@ class OverlappingShiftAttendanceError(frappe.ValidationError):
 	pass
 
 
+# Khi NHIỀU mã công cùng maps_to_status (leave_type trống), reverse-derive (status→mã, thuần hiển thị)
+# phải chọn ĐỊNH DANH. Mã "chính" cho mỗi native status có thể trùng: Present có X (+CV cũ), Work From
+# Home có CT và W (làm nhà). W chỉ được đặt tường minh bởi hook Yêu cầu chấm công nên bản ghi WFH
+# không mã phải quy về CT. Các status khác phân biệt bằng leave_type nên không cần liệt kê.
+CANONICAL_REVERSE_CODE = {"Present": "X", "Work From Home": "CT"}
+
+
+def _pick_reverse_code(status, matches):
+	"""Chọn mã reverse xác định khi nhiều mã cùng khớp một status (thuần hiển thị)."""
+	if not matches:
+		return None
+	if len(matches) == 1:
+		return matches[0]
+	preferred = CANONICAL_REVERSE_CODE.get(status)
+	if preferred and preferred in matches:
+		return preferred
+	return sorted(matches)[0]  # ổn định (deterministic) khi không có mã ưu tiên
+
+
 class Attendance(Document):
+	def before_validate(self):
+		self.apply_vn_half_day_classifier()
+		self.apply_attendance_code_bridge()
+		self.set_lunch_flag()
+
+	def set_lunch_flag(self):
+		"""Miyano: ghi cờ ăn trưa (custom_lunch) từ checkin của ngày này — nguồn duy nhất cho số buổi
+		ăn trưa (report + Bảng Công Tháng + phiếu lương đều đếm từ cờ). Thuần dữ liệu, payroll đọc
+		riêng cho phụ cấp ăn trưa; không đụng status/leave_type/half_day_status."""
+		if not frappe.get_meta("Attendance").has_field("custom_lunch"):
+			return  # field chưa migrate
+		from hrms.vn_payroll.lunch import lunch_flag_for_attendance
+
+		self.custom_lunch = (
+			1
+			if lunch_flag_for_attendance(self.employee, self.attendance_date, self.status, self.shift)
+			else 0
+		)
+
 	def before_insert(self):
 		if self.half_day_status == "":
 			self.half_day_status = None
+
+	def restore_code_driven_half_day_status(self):
+		"""A half-day *leave* entered via mã công (1/2P, 1/2K, or a worked+leave split like X|P)
+		has no backing Leave Application, so check_leave_record forces half_day_status="Absent".
+		That is wrong here: the worked half IS present and the leave half's pay effect is already
+		carried by leave_type (paid leaves aren't in payroll's LWP map; unpaid ones dock via it).
+		Forcing Absent makes get_half_absent_days dock an extra 0.5 — over-deducting a paid half
+		(1/2P) and double-deducting an unpaid half (1/2K). When a code drove this Half Day and set
+		a leave_type, restore the worked half to Present. NN (no leave_type) is left Absent so it
+		still docks 0.5 exactly like a native Half Day."""
+		code_driven = (
+			self.get("custom_attendance_code")
+			or self.get("custom_morning_code")
+			or self.get("custom_afternoon_code")
+		)
+		if code_driven and self.status == "Half Day" and self.leave_type and not self.leave_application:
+			self.half_day_status = "Present"
+
+	# module-level fallbacks for shifts that enable the split but leave a config field blank
+	VN_DEFAULT_LUNCH_START = timedelta(hours=12)
+	VN_DEFAULT_LUNCH_END = timedelta(hours=13, minutes=30)
+	VN_DEFAULT_MIN_FRACTION = 0.5
+	VN_DEFAULT_GRACE_MINUTES = 15
+
+	def apply_vn_half_day_classifier(self):
+		"""For a shift that opts into VN split-half-day, derive morning/afternoon codes + a
+		lunch-excluded net working_hours from the day's in/out, so the code bridge produces the
+		correct status/công. Gated + a no-op unless: shift set with custom_split_half_day=1,
+		in/out present, no manual code, and status not On Leave."""
+		if not self.get("shift") or not self.get("in_time") or not self.get("out_time"):
+			return
+		if (
+			self.get("custom_attendance_code")
+			or self.get("custom_morning_code")
+			or self.get("custom_afternoon_code")
+		):
+			return  # respect a manually entered code
+		if self.get("status") == "On Leave" or self.get("leave_type"):
+			# A day already attributed to a leave — full day, or a half-day leave whose other half
+			# was worked — must keep that attribution. Re-deriving both halves from the clock would
+			# rewrite leave_type from the leave-less "V" code and silently drop the employee's leave.
+			return
+
+		cfg = frappe.db.get_value(
+			"Shift Type",
+			self.shift,
+			[
+				"start_time",
+				"end_time",
+				"custom_split_half_day",
+				"custom_lunch_start",
+				"custom_lunch_end",
+				"custom_half_day_min_fraction",
+				"custom_half_day_grace_minutes",
+			],
+			as_dict=True,
+		)
+		if not cfg or not cint(cfg.custom_split_half_day) or not (cfg.start_time and cfg.end_time):
+			return
+
+		midnight = datetime.combine(getdate(self.attendance_date), datetime.min.time())
+		lunch_start = cfg.custom_lunch_start or self.VN_DEFAULT_LUNCH_START
+		lunch_end = cfg.custom_lunch_end or self.VN_DEFAULT_LUNCH_END
+		m_start, m_end = midnight + cfg.start_time, midnight + lunch_start
+		a_start, a_end = midnight + lunch_end, midnight + cfg.end_time
+		in_t, out_t = get_datetime(self.in_time), get_datetime(self.out_time)
+		grace = timedelta(minutes=cint(cfg.custom_half_day_grace_minutes) or self.VN_DEFAULT_GRACE_MINUTES)
+		min_frac = flt(cfg.custom_half_day_min_fraction) or self.VN_DEFAULT_MIN_FRACTION
+
+		def overlap_hours(lo, hi, w_lo, w_hi):
+			start, end = max(lo, w_lo), min(hi, w_hi)
+			return max(0.0, (end - start).total_seconds() / 3600.0)
+
+		m_net = overlap_hours(in_t, out_t, m_start, m_end)
+		a_net = overlap_hours(in_t, out_t, a_start, a_end)
+		m_dur = (m_end - m_start).total_seconds() / 3600.0
+		a_dur = (a_end - a_start).total_seconds() / 3600.0
+		# coverage uses a grace-expanded interval (tolerate small late-in / early-out); net hours do not
+		m_cov = (overlap_hours(in_t - grace, out_t + grace, m_start, m_end) / m_dur) if m_dur else 0.0
+		a_cov = (overlap_hours(in_t - grace, out_t + grace, a_start, a_end) / a_dur) if a_dur else 0.0
+
+		self.working_hours = round(m_net + a_net, 2)
+		worked_m, worked_a = m_cov >= min_frac, a_cov >= min_frac
+		if worked_m and worked_a:
+			self.custom_attendance_code = "X"  # cả ngày đi làm → MỘT mã đơn (không lưu X/X thừa)
+		elif worked_m or worked_a:
+			# làm nửa buổi → nửa còn lại nghỉ KHÔNG LƯƠNG. Mã CHUẨN là token đơn "1/2K" (không tách X/K):
+			# vẫn ra Half Day + "Nghỉ không lương" (is_lwp=1) + half_day_status Present → trừ đúng 0.5,
+			# payroll BẤT BIẾN so với X/K. Không phân biệt sáng/chiều ở phần hiển thị (theo quy ước mã).
+			self.custom_attendance_code = "1/2K"
+		else:
+			self.custom_attendance_code = "V"  # vắng cả ngày (không đi làm buổi nào) → không lương
+
+	def apply_attendance_code_bridge(self):
+		"""Two-way bridge between VN attendance codes (mã công) and the native status fields
+		that payroll reads (status / leave_type / half_day_status). It never touches the
+		skip logic and only sets fields native entry would set, so payroll stays invariant.
+
+		Forward (user entered code(s)): morning/afternoon (or a single day code) -> native fields
+		+ custom_work_credit (Σ work_fraction of Công-category halves).
+		Reverse (record has a status but no code, e.g. from auto-attendance / leave): derive
+		custom_attendance_code for display only, without changing native fields.
+		"""
+		if not frappe.get_meta("Attendance").has_field("custom_attendance_code"):
+			return  # custom-field fixtures not installed yet
+
+		self.clear_stale_work_code_on_leave()
+
+		morning = self.get("custom_morning_code") or self.get("custom_attendance_code")
+		afternoon = self.get("custom_afternoon_code") or self.get("custom_attendance_code")
+
+		if morning or afternoon:
+			self._apply_codes_forward(morning or afternoon, afternoon or morning)
+		else:
+			self._derive_attendance_code_reverse()
+
+	def clear_stale_work_code_on_leave(self):
+		"""Ngày do NGHỈ PHÉP dẫn dắt (có leave_application, status On Leave/Half Day) mà mã đang là mã ĐI
+		LÀM (category "Công": X/CT/NN…) là mã CŨ sót từ lần auto-attendance chấm Present TRƯỚC khi áp đơn
+		nghỉ. Giữ lại thì forward-bridge sẽ lật status về Present (mã X → Present) → mất nửa/cả ngày nghỉ.
+		Bỏ mã sót để reverse suy lại đúng từ leave_type (vd nghỉ phép nửa ngày → 1/2P). Mã nghỉ / tách đúng
+		(morning là mã nghỉ) được giữ nguyên."""
+		if not (self.get("leave_application") and self.get("status") in ("On Leave", "Half Day")):
+			return
+		code = self.get("custom_morning_code") or self.get("custom_attendance_code")
+		if not code:
+			return
+		c = self._get_attendance_code(code)
+		if c and c.category == "Công":
+			self.custom_attendance_code = None
+			self.custom_morning_code = None
+			self.custom_afternoon_code = None
+
+	def _get_attendance_code(self, name):
+		if not name:
+			return None
+		return frappe.db.get_value(
+			"Attendance Code",
+			name,
+			["category", "work_fraction", "is_paid", "maps_to_status", "leave_type"],
+			as_dict=True,
+		)
+
+	def _apply_codes_forward(self, morning, afternoon):
+		m = self._get_attendance_code(morning)
+		a = self._get_attendance_code(afternoon)
+		if not (m and a):
+			return
+
+		# công đi làm thực tế = Σ work_fraction (worked-công fraction) of each half x 0.5.
+		# work_fraction already excludes non-working codes (P/Ô/K = 0), so no category filter needed;
+		# this also lets a single half-day code (NN/1/2P/1/2K, work_fraction 0.5) count its worked half.
+		self.custom_work_credit = sum(flt(c.work_fraction) * 0.5 for c in (m, a))
+		# single display code only when the whole day is one code
+		self.custom_attendance_code = morning if morning == afternoon else None
+
+		if m.maps_to_status == a.maps_to_status:
+			self.status = m.maps_to_status
+			self.leave_type = m.leave_type if m.maps_to_status in ("On Leave", "Half Day") else None
+			if m.maps_to_status == "Half Day":
+				# a single Half-Day code (NN/1/2P/1/2K): worked half is present, the other half is
+				# leave (if leave_type set) or unpaid absence (NN). Mirrors native Half-Day entry.
+				self.half_day_status = "Present"
+			else:
+				# non-Half-Day status: half_day_status is meaningless -> clear any stale value the
+				# threshold path (auto-attendance) may have pre-set before the code reclassified it.
+				self.half_day_status = None
+		else:
+			# one working half + one non-working half -> Half Day; the non-working half sets leave_type
+			self.status = "Half Day"
+			leave_half = m if m.maps_to_status not in ("Present", "Work From Home") else a
+			self.leave_type = leave_half.leave_type
+			self.half_day_status = "Present" if leave_half.maps_to_status == "On Leave" else "Absent"
+
+	def _derive_attendance_code_reverse(self):
+		if self.get("custom_attendance_code") or not self.status:
+			return
+		# ["is","not set"] reliably matches NULL/'' Link values (unlike ["in", ["", None]])
+		filters = {"maps_to_status": self.status, "leave_type": self.leave_type or ["is", "not set"]}
+		matches = frappe.get_all("Attendance Code", filters=filters, pluck="name")
+		code = _pick_reverse_code(self.status, matches)
+		if not code:
+			return
+		self.custom_attendance_code = code
+		c = self._get_attendance_code(code)
+		self.custom_work_credit = flt(c.work_fraction) if c else 0
 
 	def validate(self):
 		from erpnext.controllers.status_updater import validate_status
@@ -48,9 +276,31 @@ class Attendance(Document):
 		self.validate_overlapping_shift_attendance()
 		self.validate_employee_status()
 		self.check_leave_record()
+		# check_leave_record forces half_day_status="Absent" when no Leave Application backs the day;
+		# undo that for mã-công half-day leaves (the worked half is present). Runs on every save path.
+		self.restore_code_driven_half_day_status()
 
 	def on_cancel(self):
 		self.unlink_attendance_from_checkins()
+		self.reset_skipped_checkins()
+
+	def reset_skipped_checkins(self):
+		"""Re-enable auto attendance for check-ins that were auto-skipped (and are still
+		unlinked) for this employee & date, so the next `process_auto_attendance` run can
+		reprocess them. This Attendance may have been the record that blocked them (e.g. a
+		duplicate/overlapping-shift attendance), so cancelling it should un-stick them
+		instead of leaving `skip_auto_attendance` set forever."""
+		EmployeeCheckin = frappe.qb.DocType("Employee Checkin")
+		(
+			frappe.qb.update(EmployeeCheckin)
+			.set(EmployeeCheckin.skip_auto_attendance, 0)
+			.where(
+				(EmployeeCheckin.employee == self.employee)
+				& (EmployeeCheckin.skip_auto_attendance == 1)
+				& (EmployeeCheckin.attendance.isnull() | (EmployeeCheckin.attendance == ""))
+				& (Date(EmployeeCheckin.shift_start) == self.attendance_date)
+			)
+		).run()
 
 	def validate_attendance_date(self):
 		date_of_joining = frappe.db.get_value("Employee", self.employee, "date_of_joining")
@@ -242,6 +492,9 @@ class Attendance(Document):
 
 	def after_delete(self):
 		self.publish_update()
+		# a deleted draft Attendance can also have been the record blocking auto attendance
+		# (duplicate check uses docstatus < 2); un-stick those check-ins too
+		self.reset_skipped_checkins()
 
 	def publish_update(self):
 		employee_user = frappe.db.get_value("Employee", self.employee, "user_id", cache=True)

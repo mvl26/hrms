@@ -5,7 +5,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import cint, get_datetime
+from frappe.utils import cint, get_datetime, today
 
 from hrms.hr.doctype.shift_assignment.shift_assignment import get_actual_start_end_datetime_of_shift
 from hrms.hr.utils import (
@@ -125,6 +125,46 @@ class EmployeeCheckin(Document):
 				_("You must be within {0} meters of your shift location to check in.").format(checkin_radius),
 				exc=CheckinRadiusExceededError,
 			)
+
+
+@frappe.whitelist()
+def get_checkin_geofence(employee: str) -> dict | None:
+	"""Return the geofence circle for the employee's current Shift Location, or None.
+
+	Read-only helper used by the Employee Checkin map to overlay the allowed area around a
+	check-in. Returns ``{location_name, latitude, longitude, checkin_radius}`` for the employee's
+	active, submitted Shift Assignment that has a Shift Location, when geolocation tracking is on
+	and the location has a positive radius; otherwise ``None``.
+	"""
+	if not frappe.db.get_single_value("HR Settings", "allow_geolocation_tracking"):
+		return None
+
+	as_of = today()
+	assignment_locations = frappe.get_all(
+		"Shift Assignment",
+		filters={
+			"employee": employee,
+			"start_date": ["<=", as_of],
+			"shift_location": ["is", "set"],
+			"docstatus": 1,
+			"status": "Active",
+		},
+		or_filters=[["end_date", ">=", as_of], ["end_date", "is", "not set"]],
+		pluck="shift_location",
+	)
+	if not assignment_locations:
+		return None
+
+	location = frappe.db.get_value(
+		"Shift Location",
+		assignment_locations[0],
+		["location_name", "latitude", "longitude", "checkin_radius"],
+		as_dict=True,
+	)
+	if not location or not location.checkin_radius or location.checkin_radius <= 0:
+		return None
+
+	return location
 
 
 @frappe.whitelist()

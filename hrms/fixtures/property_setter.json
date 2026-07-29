@@ -1,0 +1,17 @@
+[
+ {
+  "default_value": null,
+  "doc_type": "Attendance Request",
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "reason",
+  "is_system_generated": 0,
+  "modified": "2026-07-25 00:00:00.000000",
+  "module": null,
+  "name": "Attendance Request-reason-options",
+  "property": "options",
+  "property_type": "Text",
+  "row_name": null,
+  "value": "Work From Home\nOn Duty\nQuên chấm công\nĐi muộn/về sớm"
+ }
+]

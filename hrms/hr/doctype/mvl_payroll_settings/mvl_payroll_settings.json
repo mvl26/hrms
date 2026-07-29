@@ -1,0 +1,157 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-07-24 11:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "intro_html",
+  "deductions_section",
+  "personal_deduction",
+  "dependent_deduction",
+  "column_break_ded",
+  "lunch_rate_per_day",
+  "probation_coefficient",
+  "insurance_section",
+  "insurance_company_rate",
+  "column_break_ins",
+  "insurance_employee_rate",
+  "tax_section",
+  "tax_brackets",
+  "grossup_section",
+  "grossup_brackets"
+ ],
+ "fields": [
+  {
+   "fieldname": "intro_html",
+   "fieldtype": "HTML",
+   "options": "<p>Tham số chuẩn tính lương MVL (theo <code>docs/Cong_thuc_tinh_luong_MVL.md</code>). Đóng gói sẵn khi cài app, sửa được tại đây khi luật thay đổi. Số liệu riêng từng nhân viên nằm ở <b>Salary Structure Assignment</b>.</p>"
+  },
+  {
+   "fieldname": "deductions_section",
+   "fieldtype": "Section Break",
+   "label": "Giảm trừ & phụ cấp"
+  },
+  {
+   "default": "15500000",
+   "description": "Giảm trừ gia cảnh bản thân/tháng.",
+   "fieldname": "personal_deduction",
+   "fieldtype": "Currency",
+   "label": "Giảm trừ bản thân",
+   "reqd": 1
+  },
+  {
+   "default": "6200000",
+   "description": "Giảm trừ mỗi người phụ thuộc/tháng.",
+   "fieldname": "dependent_deduction",
+   "fieldtype": "Currency",
+   "label": "Giảm trừ người phụ thuộc",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_ded",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "35000",
+   "description": "Phụ cấp ăn trưa/ngày công (miễn thuế TNCN).",
+   "fieldname": "lunch_rate_per_day",
+   "fieldtype": "Currency",
+   "label": "Phụ cấp ăn trưa/ngày",
+   "reqd": 1
+  },
+  {
+   "default": "0.85",
+   "description": "Hệ số lương thời gian thử việc (85%).",
+   "fieldname": "probation_coefficient",
+   "fieldtype": "Float",
+   "label": "Hệ số lương thử việc",
+   "precision": "2",
+   "reqd": 1
+  },
+  {
+   "fieldname": "insurance_section",
+   "fieldtype": "Section Break",
+   "label": "Bảo hiểm bắt buộc"
+  },
+  {
+   "default": "0.215",
+   "description": "Tỷ lệ công ty đóng (21,5%).",
+   "fieldname": "insurance_company_rate",
+   "fieldtype": "Float",
+   "label": "BH - Công ty (%)",
+   "precision": "3",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_ins",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0.105",
+   "description": "Tỷ lệ người lao động đóng (10,5%).",
+   "fieldname": "insurance_employee_rate",
+   "fieldtype": "Float",
+   "label": "BH - NLĐ (%)",
+   "precision": "3",
+   "reqd": 1
+  },
+  {
+   "fieldname": "tax_section",
+   "fieldtype": "Section Break",
+   "label": "Biểu thuế TNCN lũy tiến từng phần"
+  },
+  {
+   "fieldname": "tax_brackets",
+   "fieldtype": "Table",
+   "label": "Bậc thuế",
+   "options": "Mvl Tax Bracket"
+  },
+  {
+   "fieldname": "grossup_section",
+   "fieldtype": "Section Break",
+   "label": "Biểu quy đổi NET → thu nhập tính thuế"
+  },
+  {
+   "fieldname": "grossup_brackets",
+   "fieldtype": "Table",
+   "label": "Bậc quy đổi",
+   "options": "Mvl Grossup Bracket"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-07-24 11:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "HR",
+ "name": "MVL Payroll Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "HR Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

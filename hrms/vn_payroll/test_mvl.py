@@ -1,0 +1,143 @@
+# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
+# See license.txt
+"""Test engine lương MVL — oracle là ví dụ số thật trong docs/Cong_thuc_tinh_luong_MVL.md.
+
+Engine thuần nên test là plain unittest, chạy được cả ngoài Frappe. Vẫn nạp qua harness rollback.
+"""
+
+import unittest
+
+from hrms.vn_payroll.mvl import (
+	MVLInput,
+	_progressive_tax,
+	_round,
+	compute_mvl,
+	default_config,
+)
+
+
+class TestMVLCore(unittest.TestCase):
+	def setUp(self):
+		self.cfg = default_config()
+
+	def test_chinh_thuc_ta_truong_xuan(self):
+		# doc 3.1: F=25tr, 22/22 công, ăn 21 ngày, 1 phụ thuộc, có đăng ký giảm trừ
+		r = compute_mvl(MVLInput("Chính thức", 25_000_000, 25_000_000, 1, True, 21, 22, 22), self.cfg)
+		self.assertEqual(r.I, 25_000_000)
+		self.assertEqual(r.J, 735_000)
+		self.assertEqual(r.K, 25_735_000)
+		self.assertEqual(r.N, 21_700_000)
+		self.assertEqual(r.O, 3_300_000)
+		self.assertEqual(r.Q, 173_684)  # ROUND(3_473_684 * 5%)
+		self.assertEqual(r.R, 5_375_000)
+		self.assertEqual(r.S, 2_625_000)
+		self.assertEqual(r.T, 25_735_000)
+
+	def test_thu_viec_nguyen_yen_chi(self):
+		# doc 3.2: F=13.5tr, hệ số 0.85, 11.5/22 công, ăn 9 ngày, có đăng ký giảm trừ, không BHXH
+		r = compute_mvl(MVLInput("Thử việc", 13_500_000, 0, 0, True, 9, 22, 11.5), self.cfg)
+		self.assertEqual(r.I, 5_998_295)
+		self.assertEqual(r.K, 6_313_295)
+		self.assertEqual(r.O, 0)  # sau giảm trừ 15.5tr → 0
+		self.assertEqual(r.Q, 0)
+		self.assertEqual(r.R, 0)
+		self.assertEqual(r.S, 0)
+		self.assertEqual(r.T, 6_313_295)
+
+	def test_nghi_khong_luong_giam_cong(self):
+		# doc 3: Phạm Thị Yến lương 20tr, đi làm 10/22 công → I = 20tr x 10/22
+		r = compute_mvl(MVLInput("Chính thức", 20_000_000, 0, 0, False, 0, 22, 10), self.cfg)
+		self.assertEqual(r.I, 9_090_909)  # ROUND(20_000_000 / 22 * 10)
+
+	def test_ban_thoi_gian_cu_tru_10pct(self):
+		# doc §4.3: bán thời gian cư trú, O = 10tr → P = 11.111.111 → Q = 1.111.111 (10%)
+		r = compute_mvl(MVLInput("Bán thời gian", 10_000_000, 0, 0, False, 0, 22, 22), self.cfg)
+		self.assertEqual(r.O, 10_000_000)
+		self.assertEqual(r.J, 0)
+		self.assertEqual(r.P, 11_111_111)
+		self.assertEqual(r.Q, 1_111_111)
+		self.assertEqual(r.T, 10_000_000)
+
+	def test_ban_thoi_gian_khong_cu_tru_20pct(self):
+		# doc §4.3: bán thời gian người nước ngoài (không cư trú), O = 3tr → P = 3.750.000 → Q = 750.000 (20%)
+		r = compute_mvl(
+			MVLInput("Bán thời gian", 3_000_000, 0, 0, False, 0, 22, 22, is_resident=False), self.cfg
+		)
+		self.assertEqual(r.P, 3_750_000)
+		self.assertEqual(r.Q, 750_000)
+
+	def test_khoan_khong_khau_tru_thue(self):
+		# doc §4.4: khoán trọn gói KHÔNG khấu trừ thuế; thực lĩnh = nguyên số khoán
+		r = compute_mvl(MVLInput("Khoán", 5_000_000, 0, 0, False, 0, 22, 22), self.cfg)
+		self.assertEqual(r.I, 5_000_000)
+		self.assertEqual(r.P, 0)
+		self.assertEqual(r.Q, 0)
+		self.assertEqual(r.T, 5_000_000)
+
+	def test_chuyen_gia_10pct(self):
+		# doc §4.5: chuyên gia thù lao 30tr NET trọn gói → P = 33.333.333 → Q = 3.333.333 (10%)
+		r = compute_mvl(MVLInput("Chuyên gia", 30_000_000, 0, 0, False, 0, 22, 10), self.cfg)
+		self.assertEqual(r.I, 30_000_000)  # trọn gói, KHÔNG nhân 10/22
+		self.assertEqual(r.P, 33_333_333)
+		self.assertEqual(r.Q, 3_333_333)
+
+	def test_tax_bracket_boundaries(self):
+		b = self.cfg.tax_brackets
+		self.assertEqual(_progressive_tax(9_999_999, b), _round(9_999_999 * 0.05))
+		self.assertEqual(_progressive_tax(10_000_000, b), _round(10_000_000 * 0.10 - 500_000))
+		self.assertEqual(_progressive_tax(29_999_999, b), _round(29_999_999 * 0.10 - 500_000))
+		self.assertEqual(_progressive_tax(30_000_000, b), _round(30_000_000 * 0.20 - 3_500_000))
+		self.assertEqual(_progressive_tax(60_000_000, b), _round(60_000_000 * 0.30 - 9_500_000))
+		self.assertEqual(_progressive_tax(100_000_000, b), _round(100_000_000 * 0.35 - 14_500_000))
+		self.assertEqual(_progressive_tax(-1, b), 0)
+
+	def test_bonus_added_to_income_and_taxed(self):
+		# Chính thức 25M, 22/22, ăn 21, 1 phụ thuộc + thưởng 5M (HR tự điền)
+		r = compute_mvl(
+			MVLInput("Chính thức", 25_000_000, 25_000_000, 1, True, 21, 22, 22, bonus=5_000_000), self.cfg
+		)
+		self.assertEqual(r.K, 25_735_000 + 5_000_000)  # K = I + J + thưởng
+		self.assertEqual(r.O, 8_300_000)  # O = K - N - J → thưởng chịu thuế
+		self.assertEqual(r.T, 30_735_000)  # thực lĩnh gồm cả thưởng
+		# không thưởng → như cũ
+		r0 = compute_mvl(MVLInput("Chính thức", 25_000_000, 25_000_000, 1, True, 21, 22, 22), self.cfg)
+		self.assertEqual(r0.Q, 173_684)
+		self.assertGreater(r.Q, r0.Q)  # thưởng làm thuế tăng
+
+	def test_probation_to_official_mid_month_blends_coefficient(self):
+		# Thử việc đến hết ngày 15, chính thức từ 16: hệ số blend theo công mỗi giai đoạn.
+		# base 18tr, công chuẩn 22, làm đủ 22 (11 công thử việc @0.85 + 11 công chính thức @1.0).
+		r = compute_mvl(
+			MVLInput("Chính thức", 18_000_000, 0, 0, False, 0, 22, 22, probation_worked_days=11),
+			self.cfg,
+		)
+		# I = 18tr/22 x (0.85x11 + 1.0x11) = 18tr/22 x 20.35 = 16.650.000
+		self.assertEqual(r.I, _round(18_000_000 / 22 * (0.85 * 11 + 1.0 * 11)))
+		self.assertEqual(r.I, 16_650_000)
+
+	def test_probation_worked_zero_is_plain_official(self):
+		# không chuyển giữa kỳ (probation_worked_days=0) → hệ số 1.0 cho toàn bộ như chính thức thường
+		r = compute_mvl(MVLInput("Chính thức", 18_000_000, 0, 0, False, 0, 22, 22), self.cfg)
+		self.assertEqual(r.I, 18_000_000)
+
+	def test_probation_blend_capped_at_worked_days(self):
+		# probation_worked_days không được vượt số công thực (kẹp) — đi làm 10/22, cả 10 thuộc thử việc
+		r = compute_mvl(
+			MVLInput("Chính thức", 18_000_000, 0, 0, False, 0, 22, 10, probation_worked_days=15),
+			self.cfg,
+		)
+		# prob kẹp về 10 → I = 18tr/22 x 0.85x10
+		self.assertEqual(r.I, _round(18_000_000 / 22 * (0.85 * 10)))
+
+	def test_gross_type_raises_instead_of_silently_wrong(self):
+		# GROSS chưa hiện thực → phải nổ lỗi, KHÔNG được ra kết quả sai âm thầm (P/Q=0)
+		inp = MVLInput("GROSS", 30_000_000, 30_000_000, 0, True, 22, 22, 22)
+		with self.assertRaises(ValueError):
+			compute_mvl(inp, self.cfg)
+
+	def test_grossup_bracket_boundaries(self):
+		# O đúng ngưỡng 9.5tr thuộc bậc 1 (/0.95); vượt lên bậc 2 ((O-500k)/0.9)
+		r1 = compute_mvl(MVLInput("Chính thức", 9_500_000, 0, 0, False, 0, 22, 22), self.cfg)
+		self.assertEqual(r1.P, _round(9_500_000 / 0.95))
+		r2 = compute_mvl(MVLInput("Chính thức", 9_500_001, 0, 0, False, 0, 22, 22), self.cfg)
+		self.assertEqual(r2.P, _round((9_500_001 - 500_000) / 0.9))

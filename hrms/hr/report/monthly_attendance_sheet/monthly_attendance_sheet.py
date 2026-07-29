@@ -12,6 +12,8 @@ from frappe.query_builder.functions import Count, Extract, Sum
 from frappe.utils import cint, cstr, getdate
 from frappe.utils.nestedset import get_descendants_of
 
+from hrms.hr.working_hours import compute_net_hours, get_standard_hours, get_week_buckets
+
 Filters = frappe._dict
 
 status_map = {
@@ -42,13 +44,13 @@ def execute(filters: Filters | None = None) -> tuple:
 		if filters.include_company_descendants:
 			filters.companies.extend(get_descendants_of("Company", filters.company))
 
-	attendance_map = get_attendance_map(filters)
+	attendance_map, net_hours_map = get_attendance_map(filters)
 	if not attendance_map:
 		frappe.msgprint(_("No attendance records found."), alert=True, indicator="orange")
 		return [], [], None, None
 
 	columns = get_columns(filters)
-	data = get_data(filters, attendance_map)
+	data = get_data(filters, attendance_map, net_hours_map)
 
 	if not data:
 		frappe.msgprint(_("No attendance records found for this criteria."), alert=True, indicator="orange")
@@ -165,6 +167,41 @@ def get_columns(filters: Filters) -> list[dict]:
 		columns.append({"label": _("Shift"), "fieldname": "shift", "fieldtype": "Data", "width": 120})
 		columns.extend(get_columns_for_days(filters))
 
+	columns.extend(get_working_hours_columns(filters))
+
+	return columns
+
+
+def get_working_hours_columns(filters: Filters) -> list[dict]:
+	columns = []
+	if filters.get("working_hours_period") == "Week":
+		week_buckets = get_week_buckets(filters.year, filters.month)
+		for idx in range(1, len(week_buckets) + 1):
+			columns.append(
+				{"label": f"{_('Week')} {idx}", "fieldname": f"week_{idx}", "fieldtype": "Float", "width": 90}
+			)
+		columns.append(
+			{
+				"label": _("Total (Month)"),
+				"fieldname": "total_working_hours",
+				"fieldtype": "Float",
+				"width": 110,
+			}
+		)
+	else:
+		columns.append(
+			{
+				"label": _("Total Working Hours"),
+				"fieldname": "total_working_hours",
+				"fieldtype": "Float",
+				"width": 130,
+			}
+		)
+
+	columns.append(
+		{"label": _("Standard Hours"), "fieldname": "standard_hours", "fieldtype": "Float", "width": 110}
+	)
+	columns.append({"label": _("Variance"), "fieldname": "variance", "fieldtype": "Float", "width": 100})
 	return columns
 
 
@@ -198,7 +235,7 @@ def get_total_days_in_month(filters: Filters) -> int:
 	return monthrange(cint(filters.year), cint(filters.month))[1]
 
 
-def get_data(filters: Filters, attendance_map: dict) -> list[dict]:
+def get_data(filters: Filters, attendance_map: dict, net_hours_map: dict) -> list[dict]:
 	employee_details, group_by_param_values = get_employee_related_details(filters)
 	holiday_map = get_holiday_map(filters)
 	data = []
@@ -210,13 +247,13 @@ def get_data(filters: Filters, attendance_map: dict) -> list[dict]:
 			if not value:
 				continue
 
-			records = get_rows(employee_details[value], filters, holiday_map, attendance_map)
+			records = get_rows(employee_details[value], filters, holiday_map, attendance_map, net_hours_map)
 
 			if records:
 				data.append({group_by_column: value})
 				data.extend(records)
 	else:
-		data = get_rows(employee_details, filters, holiday_map, attendance_map)
+		data = get_rows(employee_details, filters, holiday_map, attendance_map, net_hours_map)
 
 	return data
 
@@ -239,9 +276,16 @@ def get_attendance_map(filters: Filters) -> dict:
 	"""
 	attendance_list = get_attendance_records(filters)
 	attendance_map = {}
+	net_hours_map = {}
 	leave_map = {}
 
 	for d in attendance_list:
+		# giờ làm net dựng từ chính lượt quét này (tránh quét Attendance lần 2)
+		shift_key = d.shift or ""
+		net_hours_map.setdefault(d.employee, {}).setdefault(shift_key, {})[d.day_of_month] = (
+			compute_net_hours(d.raw_status, d.in_time, d.out_time, d.working_hours)
+		)
+
 		if d.status == "On Leave":
 			leave_map.setdefault(d.employee, {}).setdefault(d.shift, []).append(d.day_of_month)
 			continue
@@ -263,7 +307,7 @@ def get_attendance_map(filters: Filters) -> dict:
 				for shift in attendance_map[employee].keys():
 					attendance_map[employee][shift][day] = "On Leave"
 
-	return attendance_map
+	return attendance_map, net_hours_map
 
 
 def get_attendance_records(filters: Filters) -> list[dict]:
@@ -286,7 +330,11 @@ def get_attendance_records(filters: Filters) -> list[dict]:
 			Attendance.employee,
 			Extract("day", Attendance.attendance_date).as_("day_of_month"),
 			(status).as_("status"),
+			Attendance.status.as_("raw_status"),
 			Attendance.shift,
+			Attendance.in_time,
+			Attendance.out_time,
+			Attendance.working_hours,
 		)
 		.where(
 			(Attendance.docstatus == 1)
@@ -403,13 +451,25 @@ def get_holiday_map(filters: Filters) -> dict[str, list[dict]]:
 	return holiday_map
 
 
-def get_rows(employee_details: dict, filters: Filters, holiday_map: dict, attendance_map: dict) -> list[dict]:
+def get_rows(
+	employee_details: dict, filters: Filters, holiday_map: dict, attendance_map: dict, net_hours_map: dict
+) -> list[dict]:
 	records = []
 	default_holiday_list = frappe.get_cached_value("Company", filters.company, "default_holiday_list")
+	week_buckets = (
+		get_week_buckets(filters.year, filters.month)
+		if filters.get("working_hours_period") == "Week"
+		else None
+	)
+	total_days = get_total_days_in_month(filters)
+	# tính cột một lần (tránh dựng lại week buckets mỗi dòng ở summarized view)
+	summarized_columns = get_columns(filters) if filters.summarized_view else None
 
 	for employee, details in employee_details.items():
 		emp_holiday_list = details.holiday_list or default_holiday_list
 		holidays = holiday_map.get(emp_holiday_list)
+		# giờ làm là tổng theo NHÂN SỰ (gộp mọi shift) để định mức/chênh lệch nhất quán
+		emp_day_hours = _flatten_employee_hours(net_hours_map.get(employee, {}))
 
 		if filters.summarized_view:
 			attendance = get_attendance_status_for_summarized_view(
@@ -422,10 +482,13 @@ def get_rows(employee_details: dict, filters: Filters, holiday_map: dict, attend
 			entry_exits_summary = get_entry_exits_summary(employee, filters)
 
 			row = {"employee": employee, "employee_name": details.employee_name}
-			set_defaults_for_summarized_view(filters, row)
+			set_defaults_for_summarized_view(summarized_columns, row)
 			row.update(attendance)
 			row.update(leave_summary)
 			row.update(entry_exits_summary)
+
+			set_working_hours_on_row(row, emp_day_hours, filters, week_buckets)
+			set_standard_and_variance(row, total_days, holidays)
 
 			records.append(row)
 		else:
@@ -436,8 +499,9 @@ def get_rows(employee_details: dict, filters: Filters, holiday_map: dict, attend
 			attendance_for_employee = get_attendance_status_for_detailed_view(
 				employee, filters, employee_attendance, holidays
 			)
-			# set employee details in the first row
 			for record in attendance_for_employee:
+				set_working_hours_on_row(record, emp_day_hours, filters, week_buckets)
+				set_standard_and_variance(record, total_days, holidays)
 				record.update({"employee": employee, "employee_name": details.employee_name})
 
 			records.extend(attendance_for_employee)
@@ -445,8 +509,34 @@ def get_rows(employee_details: dict, filters: Filters, holiday_map: dict, attend
 	return records
 
 
-def set_defaults_for_summarized_view(filters, row):
-	for entry in get_columns(filters):
+def _flatten_employee_hours(shift_hours: dict) -> dict:
+	day_hours = {}
+	for days in shift_hours.values():
+		for day, net in days.items():
+			day_hours[day] = day_hours.get(day, 0.0) + net
+	return day_hours
+
+
+def set_working_hours_on_row(row: dict, day_hours: dict, filters: Filters, week_buckets) -> None:
+	if filters.get("working_hours_period") == "Week" and week_buckets:
+		total = 0.0
+		for idx, bucket in enumerate(week_buckets, start=1):
+			week_total = round(sum(day_hours.get(day, 0.0) for day in bucket["days"]), 2)
+			row[f"week_{idx}"] = week_total
+			total += week_total
+		row["total_working_hours"] = round(total, 2)
+	else:
+		row["total_working_hours"] = round(sum(day_hours.values()), 2)
+
+
+def set_standard_and_variance(row: dict, total_days: int, holidays) -> None:
+	standard = get_standard_hours(total_days, len(holidays or []))
+	row["standard_hours"] = standard
+	row["variance"] = round(row.get("total_working_hours", 0.0) - standard, 2)
+
+
+def set_defaults_for_summarized_view(columns, row):
+	for entry in columns:
 		if entry.get("fieldtype") == "Float":
 			row[entry.get("fieldname")] = 0.0
 

@@ -1,0 +1,358 @@
+{
+ "actions": [],
+ "creation": "2026-07-08 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "employee",
+  "employee_name",
+  "d01",
+  "d02",
+  "d03",
+  "d04",
+  "d05",
+  "d06",
+  "d07",
+  "d08",
+  "d09",
+  "d10",
+  "d11",
+  "d12",
+  "d13",
+  "d14",
+  "d15",
+  "d16",
+  "d17",
+  "d18",
+  "d19",
+  "d20",
+  "d21",
+  "d22",
+  "d23",
+  "d24",
+  "d25",
+  "d26",
+  "d27",
+  "d28",
+  "d29",
+  "d30",
+  "d31",
+  "work_days",
+  "annual_leave",
+  "personal_leave",
+  "sick_leave",
+  "maternity_leave",
+  "work_accident_leave",
+  "comp_off",
+  "unpaid_leave",
+  "absent",
+  "public_holiday",
+  "lunch_days"
+ ],
+ "fields": [
+  {
+   "fieldname": "employee",
+   "fieldtype": "Link",
+   "options": "Employee",
+   "label": "Nhân viên",
+   "in_list_view": 1,
+   "reqd": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "employee_name",
+   "fieldtype": "Data",
+   "label": "Họ tên",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "d01",
+   "fieldtype": "Data",
+   "label": "1",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d02",
+   "fieldtype": "Data",
+   "label": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d03",
+   "fieldtype": "Data",
+   "label": "3",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d04",
+   "fieldtype": "Data",
+   "label": "4",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d05",
+   "fieldtype": "Data",
+   "label": "5",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d06",
+   "fieldtype": "Data",
+   "label": "6",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d07",
+   "fieldtype": "Data",
+   "label": "7",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d08",
+   "fieldtype": "Data",
+   "label": "8",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d09",
+   "fieldtype": "Data",
+   "label": "9",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d10",
+   "fieldtype": "Data",
+   "label": "10",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d11",
+   "fieldtype": "Data",
+   "label": "11",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d12",
+   "fieldtype": "Data",
+   "label": "12",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d13",
+   "fieldtype": "Data",
+   "label": "13",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d14",
+   "fieldtype": "Data",
+   "label": "14",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d15",
+   "fieldtype": "Data",
+   "label": "15",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d16",
+   "fieldtype": "Data",
+   "label": "16",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d17",
+   "fieldtype": "Data",
+   "label": "17",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d18",
+   "fieldtype": "Data",
+   "label": "18",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d19",
+   "fieldtype": "Data",
+   "label": "19",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d20",
+   "fieldtype": "Data",
+   "label": "20",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d21",
+   "fieldtype": "Data",
+   "label": "21",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d22",
+   "fieldtype": "Data",
+   "label": "22",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d23",
+   "fieldtype": "Data",
+   "label": "23",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d24",
+   "fieldtype": "Data",
+   "label": "24",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d25",
+   "fieldtype": "Data",
+   "label": "25",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d26",
+   "fieldtype": "Data",
+   "label": "26",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d27",
+   "fieldtype": "Data",
+   "label": "27",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d28",
+   "fieldtype": "Data",
+   "label": "28",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d29",
+   "fieldtype": "Data",
+   "label": "29",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d30",
+   "fieldtype": "Data",
+   "label": "30",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d31",
+   "fieldtype": "Data",
+   "label": "31",
+   "read_only": 1
+  },
+  {
+   "fieldname": "work_days",
+   "fieldtype": "Float",
+   "label": "Công",
+   "read_only": 1,
+   "precision": "2",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "annual_leave",
+   "fieldtype": "Float",
+   "label": "Phép",
+   "read_only": 1,
+   "precision": "2",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "personal_leave",
+   "fieldtype": "Float",
+   "label": "Việc riêng",
+   "read_only": 1,
+   "precision": "2"
+  },
+  {
+   "fieldname": "sick_leave",
+   "fieldtype": "Float",
+   "label": "Ốm",
+   "read_only": 1,
+   "precision": "2"
+  },
+  {
+   "fieldname": "maternity_leave",
+   "fieldtype": "Float",
+   "label": "Thai sản",
+   "read_only": 1,
+   "precision": "2"
+  },
+  {
+   "fieldname": "work_accident_leave",
+   "fieldtype": "Float",
+   "label": "Tai nạn LĐ",
+   "read_only": 1,
+   "precision": "2"
+  },
+  {
+   "fieldname": "comp_off",
+   "fieldtype": "Float",
+   "label": "Nghỉ bù",
+   "read_only": 1,
+   "precision": "2"
+  },
+  {
+   "fieldname": "unpaid_leave",
+   "fieldtype": "Float",
+   "label": "Không lương",
+   "read_only": 1,
+   "precision": "2",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "absent",
+   "fieldtype": "Float",
+   "label": "Vắng",
+   "read_only": 1,
+   "precision": "2",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "public_holiday",
+   "fieldtype": "Float",
+   "label": "Nghỉ lễ",
+   "read_only": 1,
+   "precision": "2",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "lunch_days",
+   "fieldtype": "Int",
+   "label": "Ăn trưa",
+   "read_only": 1,
+   "in_list_view": 1,
+   "columns": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "HR",
+ "name": "Monthly Attendance Sheet Detail",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

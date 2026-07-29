@@ -66,6 +66,111 @@ class TestMonthlyAttendanceSheet(FrappeTestCase):
 		self.assertEqual(leaves[2], 1)
 
 	@set_holiday_list("Salary Slip Test Holiday List", "_Test Company")
+	def test_total_working_hours_month_mode(self):
+		first = get_first_day_for_prev_month()
+
+		n0 = mark_attendance(self.employee, first, "Present")
+		frappe.db.set_value(
+			"Attendance",
+			n0,
+			{"in_time": f"{first} 08:00:00", "out_time": f"{first} 17:30:00"},
+		)  # 9.5 - 1.5 = 8.0
+		second = first + relativedelta(days=1)
+		n1 = mark_attendance(self.employee, second, "Present")
+		frappe.db.set_value(
+			"Attendance",
+			n1,
+			{"in_time": f"{second} 08:00:00", "out_time": f"{second} 16:00:00"},
+		)  # 8.0 - 1.5 = 6.5
+
+		filters = frappe._dict(
+			month=first.month,
+			year=first.year,
+			company=self.company,
+			working_hours_period="Month",
+		)
+		report = execute(filters=filters)
+		row = next(r for r in report[1] if r.get("employee") == self.employee)
+		self.assertEqual(row["total_working_hours"], 14.5)
+
+	@set_holiday_list("Salary Slip Test Holiday List", "_Test Company")
+	def test_standard_and_variance_columns(self):
+		first = get_first_day_for_prev_month()
+		n0 = mark_attendance(self.employee, first, "Present")
+		frappe.db.set_value(
+			"Attendance",
+			n0,
+			{"in_time": f"{first} 08:00:00", "out_time": f"{first} 17:30:00"},
+		)  # net 8.0
+
+		filters = frappe._dict(
+			month=first.month,
+			year=first.year,
+			company=self.company,
+			working_hours_period="Month",
+		)
+		report = execute(filters=filters)
+		fieldnames = [c["fieldname"] for c in report[0]]
+		self.assertIn("standard_hours", fieldnames)
+		self.assertIn("variance", fieldnames)
+
+		row = next(r for r in report[1] if r.get("employee") == self.employee)
+		self.assertGreater(row["standard_hours"], 0)
+		self.assertEqual(row["variance"], round(row["total_working_hours"] - row["standard_hours"], 2))
+
+	@set_holiday_list("Salary Slip Test Holiday List", "_Test Company")
+	def test_multi_shift_detailed_consistent_variance(self):
+		first = get_first_day_for_prev_month()
+		if not frappe.db.exists("Shift Type", "Night Shift"):
+			setup_shift_type(shift_type="Night Shift")
+
+		n0 = mark_attendance(self.employee, first, "Present", "Day Shift")
+		frappe.db.set_value(
+			"Attendance", n0, {"in_time": f"{first} 08:00:00", "out_time": f"{first} 17:30:00"}
+		)  # 8.0
+		second = first + relativedelta(days=1)
+		n1 = mark_attendance(self.employee, second, "Present", "Night Shift")
+		frappe.db.set_value(
+			"Attendance", n1, {"in_time": f"{second} 08:00:00", "out_time": f"{second} 16:00:00"}
+		)  # 6.5
+
+		filters = frappe._dict(
+			month=first.month, year=first.year, company=self.company, working_hours_period="Month"
+		)
+		report = execute(filters=filters)
+		rows = [r for r in report[1] if r.get("employee") == self.employee]
+		# 2 dòng (2 shift); mỗi dòng phải là TỔNG của nhân sự (14.5), variance nhất quán với total của dòng
+		self.assertGreaterEqual(len(rows), 2)
+		for r in rows:
+			self.assertEqual(r["total_working_hours"], 14.5)
+			self.assertEqual(r["variance"], round(14.5 - r["standard_hours"], 2))
+
+	@set_holiday_list("Salary Slip Test Holiday List", "_Test Company")
+	def test_working_hours_week_mode_columns(self):
+		first = get_first_day_for_prev_month()
+		n0 = mark_attendance(self.employee, first, "Present")
+		frappe.db.set_value(
+			"Attendance",
+			n0,
+			{"in_time": f"{first} 08:00:00", "out_time": f"{first} 17:30:00"},
+		)
+
+		filters = frappe._dict(
+			month=first.month,
+			year=first.year,
+			company=self.company,
+			working_hours_period="Week",
+		)
+		report = execute(filters=filters)
+		fieldnames = [c["fieldname"] for c in report[0]]
+		self.assertIn("total_working_hours", fieldnames)
+		self.assertTrue(any(fn.startswith("week_") for fn in fieldnames))
+
+		row = next(r for r in report[1] if r.get("employee") == self.employee)
+		week_total = sum(v for k, v in row.items() if k.startswith("week_"))
+		self.assertEqual(round(week_total, 2), row["total_working_hours"])
+
+	@set_holiday_list("Salary Slip Test Holiday List", "_Test Company")
 	def test_detailed_view(self):
 		previous_month_first = get_first_day_for_prev_month()
 

@@ -893,12 +893,20 @@ def notify_bulk_action_status(doctype: str, failure: list, success: list) -> Non
 
 
 @frappe.whitelist()
-def set_geolocation_from_coordinates(doc):
+def set_geolocation_from_coordinates(doc: Document):
 	if not frappe.db.get_single_value("HR Settings", "allow_geolocation_tracking"):
 		return
 
 	if not (doc.latitude and doc.longitude):
 		return
+
+	# For a Shift Location with a positive checkin radius, render the point as a circle of that
+	# radius so Frappe's Geolocation control (which draws features with point_type == "circle" as
+	# an L.circle) shows the geofence area. Other docs (e.g. Employee Checkin) stay a plain point.
+	properties = {}
+	checkin_radius = getattr(doc, "checkin_radius", 0)
+	if checkin_radius and checkin_radius > 0:
+		properties = {"point_type": "circle", "radius": checkin_radius}
 
 	doc.geolocation = frappe.json.dumps(
 		{
@@ -906,7 +914,7 @@ def set_geolocation_from_coordinates(doc):
 			"features": [
 				{
 					"type": "Feature",
-					"properties": {},
+					"properties": properties,
 					# geojson needs coordinates in reverse order: long, lat instead of lat, long
 					"geometry": {"type": "Point", "coordinates": [doc.longitude, doc.latitude]},
 				}

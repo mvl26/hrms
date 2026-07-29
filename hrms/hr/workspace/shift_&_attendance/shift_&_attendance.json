@@ -203,7 +203,7 @@
    "is_query_report": 1,
    "label": "B\u1ea3ng ch\u1ea5m c\u00f4ng th\u00e1ng",
    "link_count": 0,
-   "link_to": "Monthly Attendance Sheet",
+   "link_to": "Monthly Attendance Report",
    "link_type": "Report",
    "onboard": 0,
    "type": "Link"
@@ -249,8 +249,8 @@
    "type": "Link"
   }
  ],
- "modified": "2026-03-12 17:24:11.735444",
- "modified_by": "quanghuy020901@gmail.com",
+ "modified": "2026-07-24 08:59:47.529182",
+ "modified_by": "Administrator",
  "module": "HR",
  "name": "Shift & Attendance",
  "number_cards": [],

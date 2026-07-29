@@ -8,6 +8,11 @@ def after_install():
 		print("Setting up Frappe HR...")
 		setup()
 
+		# Fork defaults: Công Tác workflow + COO role + fixture master-data integrity check.
+		from hrms.setup_vn_defaults import ensure_defaults
+
+		ensure_defaults()
+
 		click.secho("Thank you for installing Frappe HR!", fg="green")
 
 	except Exception as e:

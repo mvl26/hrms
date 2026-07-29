@@ -1,4 +1,7 @@
 const routes = [
+	// Miyano: Yêu cầu chấm công (mở lại) — WFH / quên chấm công / on-duty / đi muộn-về sớm, duyệt
+	// bởi quản lý trực tiếp (attendance_request_miyano.py). Khác Đơn xin nghỉ (nghỉ) và Công Tác (đi
+	// công tác có chi phí, duyệt COO).
 	{
 		name: "AttendanceRequestListView",
 		path: "/attendance-requests",

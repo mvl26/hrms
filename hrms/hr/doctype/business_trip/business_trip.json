@@ -1,0 +1,235 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-07-08 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "destination",
+  "purpose",
+  "from_date",
+  "to_date",
+  "col_break_1",
+  "company",
+  "department",
+  "registered_by",
+  "transport",
+  "estimated_cost",
+  "sec_travelers",
+  "travelers",
+  "sec_approval",
+  "approver_coo",
+  "workflow_state",
+  "col_break_2",
+  "decision_no",
+  "decision_date",
+  "sec_more",
+  "remarks",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "CT-.YYYY.-.#####",
+   "default": "CT-.YYYY.-.#####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "destination",
+   "fieldtype": "Data",
+   "label": "Nơi đến",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "purpose",
+   "fieldtype": "Small Text",
+   "label": "Mục đích công tác"
+  },
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "Từ ngày",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "Đến ngày",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "col_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "options": "Company",
+   "label": "Công ty"
+  },
+  {
+   "fieldname": "department",
+   "fieldtype": "Link",
+   "options": "Department",
+   "label": "Phòng ban / Đơn vị"
+  },
+  {
+   "fieldname": "registered_by",
+   "fieldtype": "Link",
+   "options": "Employee",
+   "label": "Người đăng ký"
+  },
+  {
+   "fieldname": "transport",
+   "fieldtype": "Data",
+   "label": "Phương tiện"
+  },
+  {
+   "fieldname": "estimated_cost",
+   "fieldtype": "Currency",
+   "label": "Dự trù kinh phí"
+  },
+  {
+   "fieldname": "sec_travelers",
+   "fieldtype": "Section Break",
+   "label": "Người đi công tác"
+  },
+  {
+   "fieldname": "travelers",
+   "fieldtype": "Table",
+   "options": "Business Trip Traveler",
+   "label": "Người đi"
+  },
+  {
+   "fieldname": "sec_approval",
+   "fieldtype": "Section Break",
+   "label": "Duyệt"
+  },
+  {
+   "fieldname": "approver_coo",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Người duyệt (COO)"
+  },
+  {
+   "fieldname": "workflow_state",
+   "fieldtype": "Select",
+   "label": "Trạng thái",
+   "options": "\nNháp\nChờ COO duyệt\nCOO đã duyệt\nĐã ra QĐ\nHoàn tất\nTừ chối",
+   "default": "Nháp",
+   "read_only": 1,
+   "allow_on_submit": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "col_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "decision_no",
+   "fieldtype": "Data",
+   "label": "Số QĐ",
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "decision_date",
+   "fieldtype": "Date",
+   "label": "Ngày QĐ",
+   "allow_on_submit": 1
+  },
+  {
+   "fieldname": "sec_more",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Ghi chú"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "options": "Business Trip",
+   "label": "Amended From",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-07-08 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "HR",
+ "name": "Business Trip",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "delete": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "HR Manager",
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "delete": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "HR User",
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "delete": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "COO",
+   "read": 1,
+   "write": 1,
+   "submit": 1,
+   "cancel": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "destination",
+ "track_changes": 1
+}

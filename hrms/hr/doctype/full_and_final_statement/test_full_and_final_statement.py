@@ -3,7 +3,7 @@
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils import add_days, today
+from frappe.utils import add_days, now_datetime, today
 
 from erpnext.assets.doctype.asset.test_asset import create_asset_data
 from erpnext.setup.doctype.employee.test_employee import make_employee
@@ -85,7 +85,11 @@ def create_asset_movement(employee):
 	movement = frappe.new_doc("Asset Movement")
 	movement.company = "_Test Company"
 	movement.purpose = "Issue"
-	movement.transaction_date = today()
+	# KHONG dung today(): Asset sinh tu Purchase Receipt duoc erpnext tu tao san mot Asset
+	# Movement voi transaction_date = posting_date + posting_time (co gio, vd 07:48:06), con
+	# today() la nua dem. validate_transaction_date cua erpnext version-15 chan moc som hon
+	# moc truoc do, nen test do o moi vong CI khong chay dung 00:00:00 UTC.
+	movement.transaction_date = now_datetime()
 
 	movement.append("assets", {"asset": asset_name, "to_employee": employee})
 

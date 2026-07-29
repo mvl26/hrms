@@ -70,6 +70,13 @@ frappe.query_reports["Monthly Attendance Sheet"] = {
 			fieldtype: "Check",
 			default: 0,
 		},
+		{
+			fieldname: "working_hours_period",
+			label: __("Working Hours By"),
+			fieldtype: "Select",
+			options: ["Month", "Week"],
+			default: "Month",
+		},
 	],
 	onload: function () {
 		return frappe.call({

@@ -1,7 +1,7 @@
 [project]
 name = "hrms"
 authors = [
-    { name = "Frappe Technologies Pvt Ltd", email = "developers@frappe.io" },
+    { name = "Miyano Việt Nam", email = "info@miyano.com.vn" },
 ]
 description = "Open Source HR & Payroll Software"
 requires-python = ">=3.10"

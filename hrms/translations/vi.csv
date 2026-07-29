@@ -422,6 +422,7 @@ Declared Amount,Số tiền đã khai báo
 Employee Tax Exemption Proof Submission,Nộp minh chứng miễn giảm thuế của nhân viên
 Submission Date,Ngày nộp
 Tax Exemption Proofs,Chứng từ miễn giảm thuế
+Tax ID,Mã số thuế
 Total Actual Amount,Tổng số tiền thực tế
 Employee Tax Exemption Proof Submission Detail,Chi tiết nộp minh chứng miễn giảm thuế của nhân viên
 Maximum Exemption Amount,Mức miễn giảm tối đa
@@ -757,7 +758,6 @@ Bank Remittance,Chuyển khoản ngân hàng
 Daily Work Summary Replies,Phản hồi báo cáo công việc hằng ngày
 Employee Advance Summary,Tổng hợp tạm ứng nhân viên
 Employees working on a holiday,Nhân viên làm việc vào ngày lễ
-Monthly Attendance Sheet,Bảng chấm công tháng
 Salary Register,Sổ lương
 Unpaid Expense Claim,Yêu cầu hoàn chi phí chưa thanh toán
 Payment Account is mandatory,Tài khoản thanh toán là bắt buộc
@@ -846,3 +846,20 @@ Attendance report,Báo cáo chấm công
 Half Day/Other Half Absent,Nửa ngày/Phần còn lại vắng mặt
 Half Day/Other Half Present,Nửa ngày/Phần còn lại có mặt
 Shift & Attendance,Ca làm việc & Chấm công
+Working Hours By,Giờ làm theo
+Total Working Hours,Tổng giờ làm
+Total (Month),Tổng tháng
+Week,Tuần
+Working Hours,Giờ làm
+Standard Hours,Định mức (giờ)
+Variance,Chênh lệch
+Total Working Hours (This Month),Tổng giờ làm (tháng này)
+Average Working Hours per Employee,Giờ làm TB mỗi nhân sự
+Employees Under Target,Số nhân sự thiếu giờ
+Working Hours by Week,Giờ làm theo tuần
+Working Hours by Department,Giờ làm theo phòng ban
+Monthly Attendance Sheet,Bảng Công Tháng
+Monthly Attendance Sheet Detail,Chi tiết Bảng Công Tháng
+Business Trip,Công Tác
+Business Trip Traveler,Người đi công tác
+Monthly Attendance Report,Bảng chấm công tháng

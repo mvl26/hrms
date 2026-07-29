@@ -12,7 +12,12 @@ on:
     # Run everday at midnight UTC / 5:30 IST
     - cron: "0 0 * * *"
 env:
-    HR_BRANCH: ${{ github.base_ref || github.ref_name }}
+    # Fork Miyano: tên nhánh của repo này (develop, version-15, feat/*) KHÔNG dùng để chọn
+    # nhánh upstream nữa. install.sh truyền biến này thẳng vào `git clone frappe --branch`,
+    # nên khi PR nhắm vào `develop` thì CI clone nhầm frappe develop (v16, cú pháp PEP 695
+    # `type X = ...` → SyntaxError trên Python 3.10). App này là HRMS v15 (pyproject ghim
+    # frappe/erpnext >=15.0.0,<16.0.0), vì vậy ghim cứng nhánh upstream ở version-15.
+    HR_BRANCH: version-15
 
 concurrency:
   group: develop-${{ github.event.number }}
@@ -50,7 +55,10 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.10'
+          # 3.12 nằm trong khoảng cho phép của frappe v15 (>=3.10,<3.15), erpnext v15 và hrms (>=3.10).
+          # Đánh đổi: bước compileall bên dưới không còn canh mốc 3.10 nữa, nên cú pháp chỉ chạy
+          # được từ 3.11+ có thể lọt vào dù pyproject vẫn khai requires-python ">=3.10".
+          python-version: '3.12'
 
       - name: Check for valid Python & Merge Conflicts
         run: |

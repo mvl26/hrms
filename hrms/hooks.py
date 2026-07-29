@@ -88,6 +88,9 @@ website_route_rules = [
 jinja = {
 	"methods": [
 		"hrms.utils.get_country",
+		# màu ô + chú giải cho print format bảng chấm công (thuần hiển thị)
+		"hrms.hr.report.monthly_attendance_report.monthly_attendance_report.attendance_cell_style",
+		"hrms.hr.report.monthly_attendance_report.monthly_attendance_report.attendance_state_styles",
 	],
 }
 
@@ -95,8 +98,21 @@ jinja = {
 # ------------
 
 # before_install = "hrms.install.before_install"
-after_install = "hrms.install.after_install"
-after_migrate = "hrms.setup.update_select_perm_after_install"
+after_install = [
+	"hrms.install.after_install",
+	# MVL payroll: đóng gói cấu hình lương (component + 6 cấu trúc theo loại + custom fields + tham số)
+	# sẵn NGAY khi cài app (không chờ migrate đầu). Idempotent; cấu trúc hoãn sang after_migrate nếu site
+	# chưa có Company (cài app trước setup wizard).
+	"hrms.vn_payroll.setup_mvl.ensure_mvl_defaults",
+]
+after_migrate = [
+	"hrms.setup.update_select_perm_after_install",
+	# Fork defaults: self-heal Công Tác workflow + COO role and verify fixture master data every migrate.
+	"hrms.setup_vn_defaults.ensure_defaults",
+	# MVL payroll: đóng gói cấu hình lương (component + structure + custom fields + tham số) vào app,
+	# self-heal mỗi migrate, không ghi đè giá trị HR đã sửa.
+	"hrms.vn_payroll.setup_mvl.ensure_mvl_defaults",
+]
 
 setup_wizard_complete = "hrms.subscription_utils.update_erpnext_access"
 
@@ -158,6 +174,19 @@ override_doctype_class = {
 # Hook on document methods and events
 
 doc_events = {
+	"Expense Claim": {
+		"after_insert": "hrms.hr.doctype.business_trip.business_trip.link_claim_to_trip",
+	},
+	# Miyano: Yêu cầu chấm công (khác Đơn xin nghỉ) — ngày vẫn làm việc/tính có mặt (WFH, quên chấm
+	# công, on-duty, đi muộn/về sớm). Có DUYỆT bởi quản lý trực tiếp + ghi mã công riêng (payroll-
+	# neutral). Xem attendance_request_miyano.py. (Đi công tác có chi phí vẫn qua Công Tác/Business Trip.)
+	"Attendance Request": {
+		"before_insert": "hrms.hr.doctype.attendance_request.attendance_request_miyano.set_default_approver",
+		"validate": "hrms.hr.doctype.attendance_request.attendance_request_miyano.set_default_approver",
+		"after_insert": "hrms.hr.doctype.attendance_request.attendance_request_miyano.assign_to_approver",
+		"before_submit": "hrms.hr.doctype.attendance_request.attendance_request_miyano.guard_submit",
+		"on_submit": "hrms.hr.doctype.attendance_request.attendance_request_miyano.set_attendance_request_code",
+	},
 	"User": {
 		"validate": [
 			"erpnext.setup.doctype.employee.employee.validate_employee_role",
@@ -178,6 +207,13 @@ doc_events = {
 		"on_trash": "hrms.utils.holiday_list.invalidate_cache",
 	},
 	"Timesheet": {"validate": "hrms.hr.utils.validate_active_employee"},
+	# Miyano: lương NET gross-up theo công thức MVL — chạy sau calculate_net_pay của controller.
+	"Salary Slip": {"validate": "hrms.vn_payroll.salary_slip_hook.apply_mvl"},
+	# Miyano: gộp một quỹ phép năm — validate mã lý do; sau duyệt ghi mã lên Attendance (thuần hiển thị).
+	"Leave Application": {
+		"validate": "hrms.hr.doctype.leave_application.leave_single_pool.validate_pool_code",
+		"on_submit": "hrms.hr.doctype.leave_application.leave_single_pool.set_leave_attendance_code",
+	},
 	"Payment Entry": {
 		"on_submit": "hrms.hr.doctype.expense_claim.expense_claim.update_payment_for_expense_claim",
 		"on_cancel": "hrms.hr.doctype.expense_claim.expense_claim.update_payment_for_expense_claim",
@@ -365,4 +401,64 @@ company_data_to_be_ignored = [
 	"Leave Policy Assignment",
 	"Employee Onboarding Template",
 	"Employee Separation Template",
+]
+
+# VN timekeeping (mã công) master data — deployed to all sites via `bench migrate`.
+# Leave Type is filtered to only the VN anchors so existing/standard Leave Types are not exported.
+fixtures = [
+	{
+		"dt": "Leave Type",
+		"filters": {
+			"name": [
+				"in",
+				[
+					"Nghỉ phép năm",
+					"Nghỉ ốm",
+					"Nghỉ chăm con ốm",
+					"Nghỉ thai sản",
+					"Nghỉ tai nạn lao động",
+					"Nghỉ bù",
+					"Nghỉ không lương",
+					"Nghỉ kết hôn",
+					"Nghỉ con kết hôn",
+					"Nghỉ tang",
+				],
+			]
+		},
+	},
+	"Attendance Code",
+	{
+		"dt": "Custom Field",
+		"filters": {
+			"name": [
+				"in",
+				[
+					"Attendance-custom_attendance_code",
+					"Attendance-custom_morning_code",
+					"Attendance-custom_afternoon_code",
+					"Attendance-custom_work_credit",
+					"Attendance-custom_lunch",
+					"Leave Application-custom_attendance_code",
+					"Leave Application-custom_leave_reason",
+					"Leave Application-custom_half_day_period",
+					"Attendance Request-custom_approver",
+					"Expense Claim-custom_business_trip",
+					"Shift Type-custom_split_half_day",
+					"Shift Type-custom_lunch_start",
+					"Shift Type-custom_lunch_end",
+					"Shift Type-custom_half_day_min_fraction",
+					"Shift Type-custom_half_day_grace_minutes",
+					"Employee-custom_citizen_id",
+					"Employee-custom_social_insurance_no",
+				],
+			]
+		},
+	},
+	# Miyano: mở rộng options field `reason` của Attendance Request (thêm Quên chấm công / Đi muộn-về
+	# sớm bên cạnh Work From Home / On Duty). Lọc theo doc_type+field_name (không dùng `name in` nên
+	# test đồng bộ bỏ qua) → export đúng 1 property setter này.
+	{
+		"dt": "Property Setter",
+		"filters": {"doc_type": "Attendance Request", "field_name": "reason"},
+	},
 ]

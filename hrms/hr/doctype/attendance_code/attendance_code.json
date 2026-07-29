@@ -1,0 +1,133 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:code",
+ "creation": "2026-07-03 17:13:34.496550",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "code",
+  "code_name",
+  "category",
+  "work_fraction",
+  "is_paid",
+  "maps_to_status",
+  "leave_type",
+  "color"
+ ],
+ "fields": [
+  {
+   "description": "The attendance symbol, e.g. X, P, \u00d4.",
+   "fieldname": "code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Code",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "code_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Code Name",
+   "reqd": 1
+  },
+  {
+   "description": "Grouping for the timesheet totals, e.g. C\u00f4ng / Ph\u00e9p / \u1ed0m.",
+   "fieldname": "category",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Category"
+  },
+  {
+   "default": "1",
+   "description": "Phần ngày tính là công đi làm thực tế / worked-công fraction (0, 0.5 or 1).",
+   "fieldname": "work_fraction",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Work Fraction",
+   "precision": "2"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_paid",
+   "fieldtype": "Check",
+   "label": "Is Paid"
+  },
+  {
+   "description": "The native Attendance status this code drives (payroll reads this).",
+   "fieldname": "maps_to_status",
+   "fieldtype": "Select",
+   "label": "Maps to Status",
+   "options": "\nPresent\nAbsent\nHalf Day\nOn Leave\nWork From Home",
+   "reqd": 1
+  },
+  {
+   "description": "Optional \u2014 set when the code represents a leave.",
+   "fieldname": "leave_type",
+   "fieldtype": "Link",
+   "label": "Leave Type",
+   "options": "Leave Type"
+  },
+  {
+   "fieldname": "color",
+   "fieldtype": "Color",
+   "label": "Color"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-03 17:16:21.151136",
+ "modified_by": "Administrator",
+ "module": "HR",
+ "name": "Attendance Code",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "HR Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "HR User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "quick_entry": 1,
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
