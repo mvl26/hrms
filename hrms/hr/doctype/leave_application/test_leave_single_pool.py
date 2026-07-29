@@ -16,9 +16,23 @@ class TestLeaveSinglePool(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
-		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
 		cls.year = 2099
+		# Phải là nhân viên mà bảng công tháng THỰC SỰ render, không phải "Active" bất kỳ:
+		# get_employees() chỉ lấy người vào làm trước cuối kỳ và chưa nghỉ việc trước đầu kỳ.
+		# Site có sẵn dữ liệu (test_site của CI) dễ trả về người đã có relieving_date, khi đó
+		# get_sheet_rows không có dòng nào cho họ và test vỡ bằng StopIteration.
+		cls.emp = frappe.db.get_value(
+			"Employee",
+			{
+				"status": "Active",
+				"date_of_joining": ["<=", f"{cls.year}-01-01"],
+				"relieving_date": ["is", "not set"],
+			},
+			"name",
+		)
+		if not cls.emp:
+			raise AssertionError("site không có nhân viên đang làm việc nào để dựng bảng công")
+		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
 
 	def _alloc(self, leave_type, days):
 		a = frappe.get_doc(
