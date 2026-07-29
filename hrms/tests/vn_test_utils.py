@@ -20,3 +20,28 @@ def default_company() -> str:
 	if not company:
 		raise AssertionError("site chưa có Company nào để dựng dữ liệu test")
 	return company
+
+
+def ensure_short_hours_code() -> str:
+	"""Đảm bảo mã `1/2X` (làm nửa ngày do thiếu giờ) có mặt cho test cần nó.
+
+	`1/2X` đi kèm `hrms/fixtures/attendance_code.json` nên site đã `bench migrate` thì hàm này là
+	no-op. Site chưa sync fixtures (hoặc `test_site` của CI dựng từ đầu) thì tạo tạm trong chính
+	transaction của test — harness rollback dọn sạch sau đó. Đây là DML thuần, không phải DDL, nên
+	không có nguy cơ rò rỉ như khi tạo Custom Field.
+	"""
+	code = "1/2X"
+	if not frappe.db.exists("Attendance Code", code):
+		frappe.get_doc(
+			{
+				"doctype": "Attendance Code",
+				"__newname": code,
+				"code": code,
+				"code_name": "Làm nửa ngày (thiếu giờ)",
+				"category": "Công",
+				"work_fraction": 0.5,
+				"is_paid": 1,
+				"maps_to_status": "Half Day",
+			}
+		).insert()
+	return code

@@ -51,8 +51,8 @@ class TestAttendanceCodeBridge(PerTestRollback, FrappeTestCase):
 		self.assertEqual(d.custom_work_credit, 0.5)
 
 	def test_forward_single_half_day_worked_paid(self):
-		# NN = làm nửa ngày hưởng lương: Half Day, worked half present, no leave, công 0.5
-		d = self._bridge(custom_attendance_code="NN")
+		# 1/2X = đi làm thiếu giờ hưởng lương: Half Day, worked half present, no leave, công 0.5
+		d = self._bridge(custom_attendance_code="1/2X")
 		self.assertEqual(d.status, "Half Day")
 		self.assertEqual(d.half_day_status, "Present")
 		self.assertIn(d.leave_type, (None, ""))
@@ -256,7 +256,7 @@ class TestHalfDayLeaveCodeFullValidation(PerTestRollback, FrappeTestCase):
 	def test_plain_half_day_code_without_leave_still_absent(self):
 		# NN: worked half + unexcused (no leave_type) half -> must stay Absent (docks 0.5, matches native).
 		# Guards that the fix keys on leave_type and does not overpay NN.
-		d = self._insert(custom_attendance_code="NN")
+		d = self._insert(custom_attendance_code="1/2X")
 		self.assertEqual(d.status, "Half Day")
 		self.assertIn(d.leave_type, (None, ""))
 		self.assertEqual(d.half_day_status, "Absent")

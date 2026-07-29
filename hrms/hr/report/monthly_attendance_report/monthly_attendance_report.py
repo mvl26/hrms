@@ -9,7 +9,7 @@ Pivots by employee x day-of-month. Each cell is the mã công for that day:
 
 Totals columns sum per category: Công = actual worked công (Σ work_fraction), and the unworked
 remainder of each half goes to that code's own category — or to Vắng when the code is itself a
-"Công" code that only covers half a day (NN), so every attended day still adds up to a full công.
+"Công" code that only covers half a day (1/2X), so every attended day still adds up to a full công.
 Read-only: never writes, so it is safe against payroll and existing data.
 """
 
@@ -55,7 +55,7 @@ REPORT_CATEGORIES = [
 # Một nguồn màu duy nhất: report on-screen (formatter JS) và print format (Jinja) đều suy màu từ đây.
 # Không đụng dữ liệu/status/payroll — chỉ tô nền để trạng thái mỗi ngày đọc được bằng mắt.
 
-# category của Attendance Code → state màu. Mã có work_fraction ∈ (0,1) (1/2P, 1/2K, NN) được
+# category của Attendance Code → state màu. Mã có work_fraction ∈ (0,1) (1/2P, 1/2K, 1/2X) được
 # xử lý riêng thành "half" TRƯỚC khi tra bảng này, nên ở đây chỉ cần map theo category.
 CATEGORY_STATE = {
 	"Công": "work",
@@ -152,7 +152,7 @@ STATE_STYLE = {
 def day_state(symbol: str, code_map: dict) -> str | None:
 	"""State màu của một ô bảng công (thuần hiển thị; màu tra ở STATE_STYLE).
 
-	Ưu tiên: **có phần đi làm nửa buổi → 'half'** (bắt 1/2P, 1/2K, NN và ô ghép có nửa đi làm),
+	Ưu tiên: **có phần đi làm nửa buổi → 'half'** (bắt 1/2P, 1/2K, 1/2X và ô ghép có nửa đi làm),
 	rồi tới marker lịch ('-'/'NL'), rồi category của mã. Trả None cho ô trống (không tô)."""
 	if not symbol:
 		return None
@@ -426,8 +426,8 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 					rest = (1 - wf) * 0.5  # phần không đi làm của nửa buổi này
 					if rest:
 						# Mã nghỉ (P, Ô, 1/2P…) ghi vào đúng loại của nó. Mã thuộc loại "Công" mà
-						# không làm đủ buổi (NN = làm nửa ngày) không nói nửa kia nghỉ vì gì, nên
-						# nửa đó là nghỉ không lý do -> Vắng. Thiếu nhánh này thì ngày NN chỉ quy ra
+						# không làm đủ buổi (1/2X = đi làm thiếu giờ) không nói nửa kia nghỉ vì gì, nên
+						# nửa đó là nghỉ không lý do -> Vắng. Thiếu nhánh này thì ngày 1/2X chỉ quy ra
 						# 0.5 công và dòng bảng công không cân về số ngày công của tháng.
 						bucket = c.category if c.category != "Công" else CATEGORY_UNEXCUSED
 						totals[bucket] = totals.get(bucket, 0.0) + rest

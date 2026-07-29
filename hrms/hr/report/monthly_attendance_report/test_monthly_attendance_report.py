@@ -107,20 +107,20 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
 
 		labels = self._cat_labels()
-		self._mk(10, custom_attendance_code="NN")  # worked half, paid
+		self._mk(10, custom_attendance_code="1/2X")  # worked half, paid
 		self._mk(11, custom_attendance_code="1/2P")  # half work + half annual leave
 		self._mk(12, custom_attendance_code="1/2K")  # half work + half unpaid
 
 		row = self._row(self.emp)
-		self.assertEqual(row["day_10"], "NN")
+		self.assertEqual(row["day_10"], "1/2X")
 		self.assertEqual(row["day_11"], "1/2P")
 		self.assertEqual(row["day_12"], "1/2K")
-		# Tổng công (được trả lương) = NN 0.5 + 1/2P 1.0 (làm+phép) + 1/2K 0.5 (làm) = 2.0
+		# Tổng công (được trả lương) = 1/2X 0.5 + 1/2P 1.0 (làm+phép) + 1/2K 0.5 (làm) = 2.0
 		self.assertEqual(row["tong_cong"], 2.0)
 		# Phép năm leave-half of 1/2P = 0.5 ; Không lương leave-half of 1/2K = 0.5
 		self.assertEqual(row[labels["Phép năm"]], 0.5)
 		self.assertEqual(row[labels["Không lương"]], 0.5)
-		# NN nửa kia là nghỉ không lý do → Vắng (không còn cột; kiểm qua totals)
+		# 1/2X nửa kia là nghỉ không lý do → Vắng (không còn cột; kiểm qua totals)
 		srow = next(
 			r for r in get_sheet_rows({"month": self.month, "year": self.year}) if r["employee"] == self.emp
 		)
@@ -129,7 +129,7 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 	def test_a_half_day_code_still_accounts_for_the_whole_day(self):
 		"""Mỗi ngày có chấm công phải quy ra đủ 1 công trên bảng — không được bốc hơi nửa nào.
 
-		`NN` (làm nửa ngày) có work_fraction 0.5 nhưng category vẫn là "Công", nên nhánh cộng phần
+		`1/2X` (đi làm thiếu giờ) có work_fraction 0.5 nhưng category vẫn là "Công", nên nhánh cộng phần
 		nghỉ (chỉ chạy khi category != "Công") bỏ sót nửa không làm: ngày đó chỉ vào sổ 0.5 công và
 		dòng bảng công không cân về số ngày công của tháng.
 		"""
@@ -138,7 +138,7 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 			get_sheet_rows,
 		)
 
-		for day, code in ((10, "NN"), (11, "1/2P"), (12, "1/2K")):
+		for day, code in ((10, "1/2X"), (11, "1/2P"), (12, "1/2K")):
 			self._mk(day, custom_attendance_code=code)
 
 		srow = next(
@@ -293,7 +293,7 @@ class TestAttendanceColorState(PerTestRollback, FrappeTestCase):
 		return {
 			"X": c("Công", 1.0),
 			"CT": c("Công", 1.0),
-			"NN": c("Công", 0.5),
+			"1/2X": c("Công", 0.5),
 			"1/2P": c("Phép", 0.5),
 			"1/2K": c("Không lương", 0.5),
 			"P": c("Phép", 0.0),
@@ -316,7 +316,7 @@ class TestAttendanceColorState(PerTestRollback, FrappeTestCase):
 			"X": "work",
 			"CT": "work",
 			# có nửa đi làm → half (bất kể category của mã)
-			"NN": "half",
+			"1/2X": "half",
 			"1/2P": "half",
 			"1/2K": "half",
 			# nghỉ cả ngày → theo category

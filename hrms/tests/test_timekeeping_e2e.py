@@ -23,7 +23,7 @@ from frappe.utils import get_time, getdate
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
-from hrms.tests.vn_test_utils import default_company
+from hrms.tests.vn_test_utils import default_company, ensure_short_hours_code
 
 
 def mk_attendance(employee, date, submit=True, **codes):
@@ -49,13 +49,20 @@ ALL_CODES = [
 	("K", "On Leave", "Nghỉ không lương", 0.0, None),
 	("KH", "On Leave", "Nghỉ kết hôn", 0.0, None),
 	("V", "Absent", None, 0.0, None),
-	("NN", "Half Day", None, 0.5, "Absent"),  # worked half + unexcused half
+	("1/2X", "Half Day", None, 0.5, "Absent"),  # đi làm nhưng thiếu giờ → nửa công, nửa kia không lý do
 	("1/2P", "Half Day", "Nghỉ phép năm", 0.5, "Present"),  # worked half + paid-leave half
 	("1/2K", "Half Day", "Nghỉ không lương", 0.5, "Present"),  # worked half + unpaid-leave half
 ]
 
 
-class TestAllCodesForwardBridge(FrappeTestCase):
+class ShortHoursCodeMixin:
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		ensure_short_hours_code()
+
+
+class TestAllCodesForwardBridge(ShortHoursCodeMixin, FrappeTestCase):
 	"""Every mã công produces the right native triple through the real submit path."""
 
 	def test_all_14_codes_map_correctly(self):
@@ -72,7 +79,7 @@ class TestAllCodesForwardBridge(FrappeTestCase):
 				self.assertEqual(att.half_day_status, hds, f"{code}: half_day_status")
 
 
-class TestPayrollDaysScenarios(FrappeTestCase):
+class TestPayrollDaysScenarios(ShortHoursCodeMixin, FrappeTestCase):
 	"""Attendance-based payroll figures for a full month mixing every deduction shape."""
 
 	@change_settings(
@@ -97,7 +104,7 @@ class TestPayrollDaysScenarios(FrappeTestCase):
 			7: "V",  # absent         -> absent 1.0
 			8: "1/2P",  # half paid leave  -> 0 (the fix; was 0.5)
 			9: "1/2K",  # half unpaid leave -> lwp 0.5 (not doubled by the fix)
-			10: "NN",  # half worked      -> half-absent 0.5
+			10: "1/2X",  # thiếu giờ       -> half-absent 0.5
 		}
 		for day, code in plan.items():
 			mk_attendance(emp, f"2099-06-{day:02d}", custom_attendance_code=code)
@@ -110,8 +117,8 @@ class TestPayrollDaysScenarios(FrappeTestCase):
 		ss.get_working_days_details()
 
 		self.assertEqual(ss.leave_without_pay, 1.5, "K 1.0 + 1/2K 0.5")
-		self.assertEqual(ss.absent_days, 1.5, "V 1.0 + NN half-absent 0.5")
-		# payment_days = total_working_days - lwp(1.5) - absent(V 1.0) - half_absent(NN 0.5)
+		self.assertEqual(ss.absent_days, 1.5, "V 1.0 + 1/2X half-absent 0.5")
+		# payment_days = total_working_days - lwp(1.5) - absent(V 1.0) - half_absent(1/2X 0.5)
 		self.assertEqual(ss.total_working_days - ss.payment_days, 3.0)
 
 	@change_settings(
@@ -144,7 +151,7 @@ class TestPayrollDaysScenarios(FrappeTestCase):
 		self.assertEqual(ss.total_working_days, ss.payment_days)  # full pay
 
 
-class TestBangCongMonthEndToEnd(FrappeTestCase):
+class TestBangCongMonthEndToEnd(ShortHoursCodeMixin, FrappeTestCase):
 	"""Bảng Công Tháng report: every category total + calendar markers, over a realistic month."""
 
 	def test_every_category_total_and_markers(self):
@@ -158,7 +165,7 @@ class TestBangCongMonthEndToEnd(FrappeTestCase):
 			4: "Cô",
 			5: "K",
 			6: "V",
-			7: "NN",
+			7: "1/2X",
 			8: "1/2P",
 			9: "1/2K",
 			10: "KH",
@@ -172,11 +179,11 @@ class TestBangCongMonthEndToEnd(FrappeTestCase):
 		rows = get_sheet_rows({"month": 6, "year": 2099})
 		row = next(r for r in rows if r["employee"] == worker)
 		t = row["totals"]
-		self.assertEqual(t["Công"], 2.5, "X1 + NN.5 + 1/2P.5 + 1/2K.5")
+		self.assertEqual(t["Công"], 2.5, "X1 + 1/2X.5 + 1/2P.5 + 1/2K.5")
 		self.assertEqual(t["Phép"], 1.5, "P1 + 1/2P.5")
 		self.assertEqual(t["Ốm"], 2.0, "Ô1 + Cô1")
 		self.assertEqual(t["Không lương"], 1.5, "K1 + 1/2K.5")
-		self.assertEqual(t["Vắng"], 1.5, "V1 + NN.5")
+		self.assertEqual(t["Vắng"], 1.5, "V1 + 1/2X.5")
 		self.assertEqual(t["Việc riêng"], 1.0)
 		self.assertEqual(t["Thai sản"], 1.0)
 		self.assertEqual(t["Nghỉ bù"], 1.0)
@@ -260,11 +267,12 @@ class TestCheckinAutoAttendanceE2E(FrappeTestCase):
 	def test_morning_only_checkins_classified_as_half_day(self):
 		from hrms.hr.doctype.employee_checkin.test_employee_checkin import make_checkin
 
+		ensure_short_hours_code()
 		st = self._shift("E2E Split Shift", split=True)
 		emp = make_employee("e2e_checkin_half@codes.com", company=default_company())
 		date = getdate()  # setup_shift_type's process window is anchored on today
 		self._assign(st.name, emp, date)
-		# only the morning window is covered -> classifier: token đơn 1/2K (làm nửa + nửa không lương) -> Half Day
+		# chỉ làm buổi sáng = 4h < 8h tối thiểu -> mã 1/2X (đi làm nhưng thiếu giờ) -> Half Day
 		make_checkin(emp, datetime.combine(date, get_time("08:00:00")))
 		make_checkin(emp, datetime.combine(date, get_time("12:00:00")))
 
@@ -278,4 +286,4 @@ class TestCheckinAutoAttendanceE2E(FrappeTestCase):
 		)
 		self.assertIsNotNone(att, "auto-attendance did not create an Attendance")
 		self.assertEqual(att.status, "Half Day")
-		self.assertEqual(att.custom_attendance_code, "1/2K")
+		self.assertEqual(att.custom_attendance_code, "1/2X")

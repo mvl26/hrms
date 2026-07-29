@@ -54,15 +54,15 @@ class TestBackfillAttendanceCodes(PerTestRollback, FrappeTestCase):
 		self.assertEqual(self._code(n_leave).custom_attendance_code, "P")
 		self.assertEqual(self._code(n_leave).custom_work_credit, 0.0)
 		self.assertEqual(self._code(n_absent).custom_attendance_code, "V")
-		self.assertEqual(self._code(n_halfday).custom_attendance_code, "NN")
+		self.assertEqual(self._code(n_halfday).custom_attendance_code, "1/2X")
 		self.assertEqual(self._code(n_halfday).custom_work_credit, 0.5)
 
 	def test_backfill_preserves_existing_codes(self):
 		# a record that already carries a code must NOT be overwritten
 		n = self._bare(6, "Present")
-		frappe.db.set_value("Attendance", n, "custom_attendance_code", "NN", update_modified=False)
+		frappe.db.set_value("Attendance", n, "custom_attendance_code", "1/2X", update_modified=False)
 		backfill()
-		self.assertEqual(self._code(n).custom_attendance_code, "NN")
+		self.assertEqual(self._code(n).custom_attendance_code, "1/2X")
 
 	def test_dry_run_writes_nothing(self):
 		n = self._bare(7, "Present")

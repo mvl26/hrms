@@ -1,18 +1,24 @@
 # Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
 # See license.txt
-"""VN auto morning/afternoon classifier + its Shift Type config fields."""
+"""Tầng Document của bộ phân loại VN: chốt chặn, đọc cấu hình ca, và chuỗi mã → field payroll.
+
+Bản thân LUẬT (ca trượt, giờ net, X / 1/2X / V) được test đầy đủ ở `test_vn_day_classifier.py`
+dưới dạng hàm thuần — không cần DB. Ở đây chỉ kiểm phần ráp nối.
+"""
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import ensure_short_hours_code
 
 SHIFT_FIELDS = (
 	"custom_split_half_day",
 	"custom_lunch_start",
 	"custom_lunch_end",
-	"custom_half_day_min_fraction",
-	"custom_half_day_grace_minutes",
+	"custom_flexible_shift",
+	"custom_flex_band_minutes",
+	"custom_min_work_hours",
 )
 
 
@@ -40,21 +46,22 @@ class TestVNHalfDayLogic(PerTestRollback, FrappeTestCase):
 					"custom_split_half_day": 1,
 					"custom_lunch_start": "12:00:00",
 					"custom_lunch_end": "13:30:00",
-					"custom_half_day_min_fraction": 0.5,
-					"custom_half_day_grace_minutes": 15,
 				}
 			).insert()
+		ensure_short_hours_code()
+		# 2099-03-04 là thứ Tư — ngày thường, để chốt chặn ngày nghỉ không nuốt mất test
 		cls.day = frappe.utils.getdate("2099-03-04")
 
-	def _cls(self, in_hm, out_hm, shift="__default__", **extra):
+	def cls_doc(self, in_hm, out_hm, shift="__default__", day=None, **extra):
+		d = day or self.day
 		doc = frappe.get_doc(
 			{
 				"doctype": "Attendance",
 				"employee": self.emp,
-				"attendance_date": self.day,
+				"attendance_date": d,
 				"shift": self.shift if shift == "__default__" else shift,
-				"in_time": f"{self.day} {in_hm}:00",
-				"out_time": f"{self.day} {out_hm}:00",
+				"in_time": f"{d} {in_hm}:00",
+				"out_time": f"{d} {out_hm}:00",
 				**extra,
 			}
 		)
@@ -62,76 +69,82 @@ class TestVNHalfDayLogic(PerTestRollback, FrappeTestCase):
 		return doc
 
 	def test_full_day(self):
-		d = self._cls("08:00", "17:30")
+		d = self.cls_doc("08:00", "17:30")
 		self.assertEqual(d.status, "Present")
 		self.assertEqual(d.custom_work_credit, 1.0)
 		self.assertEqual(d.custom_attendance_code, "X")  # cả ngày đi làm → MỘT mã đơn (không X/X)
-		self.assertEqual(d.working_hours, 8.0)  # 4h morning + 4h afternoon, lunch excluded
+		self.assertEqual(d.working_hours, 8.0)
 
-	def test_morning_only(self):
-		# làm buổi sáng, nửa còn lại là nghỉ KHÔNG LƯƠNG → mã CHUẨN token đơn 1/2K (không tách X/K).
-		d = self._cls("08:00", "12:00")
+	def test_short_hours_is_half_day_without_a_fake_leave(self):
+		"""Thiếu giờ → 1/2X: Half Day, KHÔNG gắn loại nghỉ (trước đây bịa ra 'Nghỉ không lương')."""
+		d = self.cls_doc("08:00", "12:00")
+		self.assertEqual(d.working_hours, 4.0)
+		self.assertEqual(d.custom_attendance_code, "1/2X")
 		self.assertEqual(d.status, "Half Day")
-		self.assertEqual(d.half_day_status, "Present")  # nửa đi làm là Present; nửa K trừ qua LWP
-		self.assertEqual(d.leave_type, "Nghỉ không lương")
+		self.assertIsNone(d.leave_type)
 		self.assertEqual(d.custom_work_credit, 0.5)
-		self.assertEqual(d.custom_attendance_code, "1/2K")
 		self.assertIsNone(d.custom_morning_code)
 		self.assertIsNone(d.custom_afternoon_code)
-		self.assertEqual(d.working_hours, 4.0)
 
-	def test_afternoon_only(self):
-		# làm buổi chiều → cùng token đơn 1/2K (không phân biệt sáng/chiều ở phần hiển thị)
-		d = self._cls("13:30", "17:30")
-		self.assertEqual(d.status, "Half Day")
-		self.assertEqual(d.custom_attendance_code, "1/2K")
-		self.assertIsNone(d.custom_morning_code)
-		self.assertEqual(d.leave_type, "Nghỉ không lương")
-		self.assertEqual(d.custom_work_credit, 0.5)
+	def test_early_leave_is_short_hours(self):
+		d = self.cls_doc("08:00", "15:00")
+		self.assertEqual(d.working_hours, 5.5)
+		self.assertEqual(d.custom_attendance_code, "1/2X")
 
-	def test_early_leave_below_threshold_is_half_day(self):
-		# leaves 15:00: afternoon coverage 13:30-15:15(grace) = 1.75h/4h = 44% < 50% -> morning only
-		d = self._cls("08:00", "15:00")
-		self.assertEqual(d.status, "Half Day")
-		self.assertEqual(d.custom_attendance_code, "1/2K")
-		self.assertEqual(d.working_hours, 5.5)  # 4h morning + 1.5h afternoon (actual overlap, no grace)
-
-	def test_no_session_is_absent(self):
-		d = self._cls("12:10", "13:20")  # entirely inside lunch
-		self.assertEqual(d.status, "Absent")
+	def test_no_worked_time_is_absent(self):
+		d = self.cls_doc("12:10", "13:20")  # chỉ có mặt trong giờ nghỉ trưa
+		self.assertEqual(d.working_hours, 0.0)
 		self.assertEqual(d.custom_attendance_code, "V")
+		self.assertEqual(d.status, "Absent")
 
 	def test_gated_off_without_split_shift(self):
-		# no split shift -> classifier is a no-op; a morning-only in/out is NOT reclassified
-		d = self._cls("08:00", "12:00", shift=None, status="Present")
+		"""Ca không bật tách buổi → bộ phân loại không chạy: không tính giờ, không đổi status.
+		(Mã hiển thị "X" vẫn được cầu nối suy ngược từ status Present — đó là việc khác.)"""
+		d = self.cls_doc("08:00", "12:00", shift=None, status="Present")
 		self.assertIsNone(d.get("custom_morning_code"))
+		self.assertFalse(d.get("working_hours"))
 		self.assertEqual(d.status, "Present")
 
 	def test_manual_code_wins(self):
-		d = self._cls("08:00", "12:00", custom_attendance_code="P")
+		d = self.cls_doc("08:00", "12:00", custom_attendance_code="P")
 		self.assertEqual(d.status, "On Leave")
 		self.assertEqual(d.leave_type, "Nghỉ phép năm")
 
 	def test_half_day_leave_keeps_its_leave_type_when_the_other_half_is_worked(self):
 		"""Nửa ngày phép + nửa ngày đi làm: bộ phân loại KHÔNG được xoá `leave_type`.
 
-		A half-day Leave Application marks Attendance as Half Day + leave_type. If check-in times are
-		then present on that record, the classifier would re-derive both halves from the clock alone
-		and the bridge would rewrite leave_type from the (leave-less) 'V' code — silently dropping the
-		employee's annual leave, which payroll reads."""
-		d = self._cls(
-			"13:30",
-			"17:30",
-			status="Half Day",
-			leave_type="Nghỉ phép năm",
-			half_day_status="Present",
+		Nếu re-derive cả ngày từ đồng hồ thì cầu nối sẽ ghi đè leave_type bằng mã không mang phép
+		→ mất phép của nhân viên, mà payroll thì đọc chính field đó."""
+		d = self.cls_doc(
+			"13:30", "17:30", status="Half Day", leave_type="Nghỉ phép năm", half_day_status="Present"
 		)
-
 		self.assertEqual(d.status, "Half Day")
 		self.assertEqual(d.leave_type, "Nghỉ phép năm")
 
 	def test_a_full_day_of_leave_is_never_reclassified_from_the_clock(self):
-		d = self._cls("13:30", "17:30", status="On Leave", leave_type="Nghỉ ốm")
-
+		d = self.cls_doc("13:30", "17:30", status="On Leave", leave_type="Nghỉ ốm")
 		self.assertEqual(d.status, "On Leave")
 		self.assertEqual(d.leave_type, "Nghỉ ốm")
+
+	def test_holiday_is_never_auto_coded(self):
+		"""Đi làm ngày nghỉ (T7/CN/lễ) không bị tự chấm — trước đây bị quy thành V hoặc nửa công."""
+		holiday_list = frappe.db.get_value("Employee", self.emp, "holiday_list") or frappe.db.get_value(
+			"Company", frappe.db.get_value("Employee", self.emp, "company"), "default_holiday_list"
+		)
+		self.assertTrue(holiday_list, "nhân viên phải có Holiday List thì mới test được nhánh này")
+		holiday = frappe.db.get_value(
+			"Holiday", {"parent": holiday_list}, "holiday_date", order_by="holiday_date desc"
+		)
+		d = self.cls_doc("09:00", "12:00", day=frappe.utils.getdate(holiday))
+		self.assertIsNone(d.get("custom_attendance_code"))
+
+	def test_half_day_code_docks_exactly_half_after_insert(self):
+		"""Khoá cả 3 chặng: cầu nối đặt Present → check_leave_record ép Absent (không có đơn nghỉ)
+		→ restore_code_driven_half_day_status KHÔNG hoàn tác vì mã không có leave_type.
+		Payroll trừ 0,5 qua `get_half_absent_days`, nên chặng giữa mới là chặng quyết định."""
+		doc = self.cls_doc("08:00", "12:00")
+		doc.insert()
+		self.assertEqual(doc.status, "Half Day")
+		self.assertIsNone(doc.leave_type)
+		self.assertEqual(doc.half_day_status, "Absent")
+		self.assertEqual(doc.custom_work_credit, 0.5)

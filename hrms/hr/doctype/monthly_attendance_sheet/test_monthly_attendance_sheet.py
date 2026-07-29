@@ -124,7 +124,7 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		if not emp:
 			self.skipTest("no active employee in company")
 		Y, M = 2096, 5
-		for day, code in ((1, "X"), (2, "P"), (3, "NN"), (4, "1/2P")):
+		for day, code in ((1, "X"), (2, "P"), (3, "1/2X"), (4, "1/2P")):
 			self._seed_attendance(emp, Y, M, day, custom_attendance_code=code)
 
 		sheet = self._sheet(month=str(M), year=Y)

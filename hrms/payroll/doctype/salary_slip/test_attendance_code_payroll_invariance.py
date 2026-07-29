@@ -85,7 +85,7 @@ class TestAttendanceCodePayrollInvariance(PerTestRollback, FrappeTestCase):
 		"Payroll Settings", {"payroll_based_on": "Attendance", "daily_wages_fraction_for_half_day": 0.5}
 	)
 	def test_half_day_code_payroll_matches_native(self):
-		"""Half-day codes (NN/1/2P/1/2K) map to native Half Day. Run BOTH the native and the
+		"""Half-day codes (1/2X/1/2P/1/2K) map to native Half Day. Run BOTH the native and the
 		code path through full validation so check_leave_record settles half_day_status the
 		same way for both — proving the code layer adds no payroll difference on half days."""
 		first_sunday = get_first_sunday()
@@ -95,10 +95,10 @@ class TestAttendanceCodePayrollInvariance(PerTestRollback, FrappeTestCase):
 			frappe.db.set_value("Employee", e, {"relieving_date": None, "status": "Active"})
 
 		date = add_days(first_sunday, 1)
-		# NN = làm nửa ngày; native equivalent is a plain Half Day. No leave application exists,
+		# 1/2X = đi làm thiếu giờ; native equivalent is a plain Half Day. No leave application exists,
 		# so check_leave_record forces half_day_status -> Absent identically on both paths.
 		mark_attendance(emp_native, date, "Half Day", half_day_status="Present")  # full validate
-		self._mark_by_code(emp_codes, date, "NN")
+		self._mark_by_code(emp_codes, date, "1/2X")
 
 		ss_native = make_employee_salary_slip(emp_native, "Monthly", "Invariance HD Native")
 		ss_codes = make_employee_salary_slip(emp_codes, "Monthly", "Invariance HD Codes")

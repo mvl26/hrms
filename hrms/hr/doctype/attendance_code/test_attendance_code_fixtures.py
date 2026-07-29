@@ -28,7 +28,9 @@ VN_LEAVE_TYPES = {
 # work_fraction = phần ngày tính là CÔNG đi làm thực tế (1 / 0.5 / 0). Confirmed 2026-07-08.
 VN_ATTENDANCE_CODES = {
 	"X": ("Công", 1.0, 1, "Present", None),
-	"NN": ("Công", 0.5, 1, "Half Day", None),
+	# đi làm nhưng KHÔNG đủ số giờ tối thiểu của ca → nửa công. Thay cho "NN" (bỏ 2026-07-29): NN
+	# không nói nửa còn lại nghỉ vì gì, và không có gì tự sinh ra nó. 1/2X do bộ phân loại tự chấm.
+	"1/2X": ("Công", 0.5, 1, "Half Day", None),
 	"P": ("Phép", 0.0, 1, "On Leave", "Nghỉ phép năm"),
 	"1/2P": ("Phép", 0.5, 1, "Half Day", "Nghỉ phép năm"),
 	"Ô": ("Ốm", 0.0, 1, "On Leave", "Nghỉ ốm"),
@@ -58,6 +60,10 @@ class TestAttendanceCodeFixtures(PerTestRollback, FrappeTestCase):
 	def test_deprecated_kl_code_removed(self):
 		# 'KL' was renamed to 'K' (+ half-day '1/2K') on 2026-07-08; the old code must be gone.
 		self.assertFalse(frappe.db.exists("Attendance Code", "KL"), "deprecated code 'KL' should be removed")
+
+	def test_deprecated_nn_code_removed(self):
+		# 'NN' bỏ 2026-07-29, thay bằng '1/2X' (xem spec/flex-shift-and-timekeeping-pipeline.md §4.3).
+		self.assertFalse(frappe.db.exists("Attendance Code", "NN"), "deprecated code 'NN' should be removed")
 
 	def test_attendance_custom_fields_exist(self):
 		for fn in (

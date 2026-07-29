@@ -19,7 +19,7 @@ from hrms.payroll_gate import (
 	simulate_payroll_mode_delta,
 )
 from hrms.tests.isolation import PerTestRollback
-from hrms.tests.vn_test_utils import default_company
+from hrms.tests.vn_test_utils import default_company, ensure_short_hours_code
 
 
 def slip(name, employee="EMP-1", payment_days=22, absent_days=0, leave_without_pay=0):
@@ -131,6 +131,7 @@ class TestClassifierDelta(PerTestRollback, FrappeTestCase):
 	def setUpClass(cls):
 		super().setUpClass()
 		cls.employee = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		ensure_short_hours_code()
 		cls.shift = "VN Gate Split Shift (test)"
 		if not frappe.db.exists("Shift Type", cls.shift):
 			frappe.get_doc(
@@ -143,8 +144,6 @@ class TestClassifierDelta(PerTestRollback, FrappeTestCase):
 					"custom_split_half_day": 1,
 					"custom_lunch_start": "12:00:00",
 					"custom_lunch_end": "13:30:00",
-					"custom_half_day_min_fraction": 0.5,
-					"custom_half_day_grace_minutes": 15,
 					"working_hours_calculation_based_on": "First Check-in and Last Check-out",
 					"determine_check_in_and_check_out": "Alternating entries as IN and OUT during the same shift",
 				}
@@ -333,12 +332,12 @@ class TestSimulatePayrollModeDelta(PerTestRollback, FrappeTestCase):
 
 	def test_absence_and_half_day_are_counted_in_attendance_mode(self):
 		self.mark(3, "V")  # vắng cả ngày
-		self.mark(4, "NN")  # làm nửa ngày, nửa còn lại không phép
+		self.mark(4, "1/2X")  # đi làm nhưng thiếu giờ, nửa còn lại không phép
 
 		report = simulate_payroll_mode_delta(2098, 3, company=default_company(), employees=[self.employee])
 		row = self.row_for(report)
 
-		self.assertEqual(row["Attendance"]["absent_days"], 1.5, "V 1.0 + NN 0.5")
+		self.assertEqual(row["Attendance"]["absent_days"], 1.5, "V 1.0 + 1/2X 0.5")
 		self.assertEqual(row["delta"]["payment_days"], -1.5)
 
 	def test_a_fully_present_month_moves_nothing(self):
