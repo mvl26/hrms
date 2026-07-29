@@ -9,6 +9,7 @@ from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms import hooks
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import default_company
 from hrms.vn_payroll.setup_mvl import ensure_mvl_defaults
 from hrms.vn_payroll.test_salary_slip_mvl import ensure_fiscal_year_2099, make_slip, make_ssa, mark_full_month
 
@@ -82,7 +83,7 @@ class TestMVLPackaging(PerTestRollback, FrappeTestCase):
 	def test_payslip_renders_with_amounts(self):
 		ensure_fiscal_year_2099()
 		ensure_mvl_defaults()
-		emp = make_employee("mvl_print@codes.com", company="Miyano")
+		emp = make_employee("mvl_print@codes.com", company=default_company())
 		make_ssa(
 			emp,
 			base=25_000_000,

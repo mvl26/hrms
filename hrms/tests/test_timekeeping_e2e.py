@@ -23,6 +23,8 @@ from frappe.utils import get_time, getdate
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
+from hrms.tests.vn_test_utils import default_company
+
 
 def mk_attendance(employee, date, submit=True, **codes):
 	att = frappe.get_doc(
@@ -57,7 +59,7 @@ class TestAllCodesForwardBridge(FrappeTestCase):
 	"""Every mã công produces the right native triple through the real submit path."""
 
 	def test_all_14_codes_map_correctly(self):
-		emp = make_employee("e2e_allcodes@codes.com", company="Miyano")
+		emp = make_employee("e2e_allcodes@codes.com", company=default_company())
 		for i, (code, status, leave_type, credit, hds) in enumerate(ALL_CODES, start=1):
 			att = mk_attendance(emp, f"2099-06-{i:02d}", custom_attendance_code=code)
 			self.assertEqual(att.status, status, f"{code}: status")
@@ -82,7 +84,7 @@ class TestPayrollDaysScenarios(FrappeTestCase):
 		},
 	)
 	def test_month_mixed_codes_payment_days(self):
-		emp = make_employee("e2e_payroll@codes.com", company="Miyano")
+		emp = make_employee("e2e_payroll@codes.com", company=default_company())
 		company = frappe.db.get_value("Employee", emp, "company")
 		# June 2099, no holiday list covers it -> a clean 30 working days.
 		plan = {
@@ -123,7 +125,7 @@ class TestPayrollDaysScenarios(FrappeTestCase):
 	def test_half_paid_leave_not_docked_even_when_unmarked_is_absent(self):
 		# regression for the fix: a paid half-day leave must never be docked, even in the strict
 		# "unmarked = Absent" mode where every other blank day is docked.
-		emp = make_employee("e2e_payroll_strict@codes.com", company="Miyano")
+		emp = make_employee("e2e_payroll_strict@codes.com", company=default_company())
 		company = frappe.db.get_value("Employee", emp, "company")
 		# mark the whole month present except one 1/2P day, so unmarked-absent does not interfere
 		for day in range(1, 31):
@@ -148,7 +150,7 @@ class TestBangCongMonthEndToEnd(FrappeTestCase):
 	def test_every_category_total_and_markers(self):
 		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
 
-		worker = make_employee("e2e_bcct_worker@codes.com", company="Miyano")
+		worker = make_employee("e2e_bcct_worker@codes.com", company=default_company())
 		plan = {
 			1: "X",
 			2: "P",
@@ -198,7 +200,7 @@ class TestBangCongMonthEndToEnd(FrappeTestCase):
 				],
 			}
 		).insert()
-		emp = make_employee("e2e_bcct_markers@codes.com", company="Miyano")
+		emp = make_employee("e2e_bcct_markers@codes.com", company=default_company())
 		frappe.db.set_value(
 			"Employee", emp, {"holiday_list": hl.name, "relieving_date": "2099-06-20", "status": "Left"}
 		)
@@ -238,7 +240,7 @@ class TestCheckinAutoAttendanceE2E(FrappeTestCase):
 		from hrms.hr.doctype.employee_checkin.test_employee_checkin import make_checkin
 
 		st = self._shift("E2E Full Day Shift")
-		emp = make_employee("e2e_checkin_full@codes.com", company="Miyano")
+		emp = make_employee("e2e_checkin_full@codes.com", company=default_company())
 		date = getdate()  # setup_shift_type's process window is anchored on today
 		self._assign(st.name, emp, date)
 		make_checkin(emp, datetime.combine(date, get_time("08:00:00")))
@@ -259,7 +261,7 @@ class TestCheckinAutoAttendanceE2E(FrappeTestCase):
 		from hrms.hr.doctype.employee_checkin.test_employee_checkin import make_checkin
 
 		st = self._shift("E2E Split Shift", split=True)
-		emp = make_employee("e2e_checkin_half@codes.com", company="Miyano")
+		emp = make_employee("e2e_checkin_half@codes.com", company=default_company())
 		date = getdate()  # setup_shift_type's process window is anchored on today
 		self._assign(st.name, emp, date)
 		# only the morning window is covered -> classifier: token đơn 1/2K (làm nửa + nửa không lương) -> Half Day

@@ -12,6 +12,7 @@ from frappe.tests.utils import FrappeTestCase, change_settings
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import default_company
 from hrms.vn_payroll.setup_mvl import ensure_mvl_defaults, structure_for_type
 
 
@@ -34,7 +35,7 @@ def make_ssa(employee, **kw):
 		{
 			"doctype": "Salary Structure Assignment",
 			"employee": employee,
-			"company": "Miyano",
+			"company": default_company(),
 			"salary_structure": structure_for_type(kw.get("custom_salary_type", "Chính thức")),
 			"from_date": "2099-06-01",
 			**kw,
@@ -81,7 +82,7 @@ class TestSalarySlipMVL(PerTestRollback, FrappeTestCase):
 	def test_chinh_thuc_full_month(self):
 		ensure_fiscal_year_2099()
 		ensure_mvl_defaults()
-		emp = make_employee("mvl_ft@codes.com", company="Miyano")
+		emp = make_employee("mvl_ft@codes.com", company=default_company())
 		make_ssa(
 			emp,
 			base=25_000_000,
@@ -119,7 +120,7 @@ class TestSalarySlipMVL(PerTestRollback, FrappeTestCase):
 		# nghỉ không lương vài ngày → I giảm theo payment_days, net theo I
 		ensure_fiscal_year_2099()
 		ensure_mvl_defaults()
-		emp = make_employee("mvl_lwp@codes.com", company="Miyano")
+		emp = make_employee("mvl_lwp@codes.com", company=default_company())
 		make_ssa(emp, base=22_000_000, custom_salary_type="Chính thức")
 		for d in range(1, 31):
 			code = "K" if d <= 3 else "X"  # 3 ngày nghỉ không lương
@@ -146,7 +147,7 @@ class TestSalarySlipMVL(PerTestRollback, FrappeTestCase):
 		# NV giữ MỘT cấu trúc chính thức từ đầu kỳ (thoả ERPNext); phần thử việc suy từ ngày chính thức.
 		ensure_fiscal_year_2099()
 		ensure_mvl_defaults()
-		emp = make_employee("mvl_prob@codes.com", company="Miyano")
+		emp = make_employee("mvl_prob@codes.com", company=default_company())
 		frappe.db.set_value("Employee", emp, "final_confirmation_date", "2099-06-16")
 		make_ssa(emp, base=18_000_000, custom_salary_type="Chính thức")  # from 2099-06-01
 		mark_full_month(emp)  # chấm đủ 30 ngày Present (không Holiday List → 30 công)
@@ -162,7 +163,7 @@ class TestSalarySlipMVL(PerTestRollback, FrappeTestCase):
 	def test_bonus_and_lunch_days_on_slip(self):
 		ensure_fiscal_year_2099()
 		ensure_mvl_defaults()
-		emp = make_employee("mvl_bonus@codes.com", company="Miyano")
+		emp = make_employee("mvl_bonus@codes.com", company=default_company())
 		make_ssa(
 			emp,
 			base=25_000_000,

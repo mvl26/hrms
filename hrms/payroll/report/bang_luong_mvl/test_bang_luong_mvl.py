@@ -9,6 +9,7 @@ from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms.payroll.report.bang_luong_mvl.bang_luong_mvl import execute
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import default_company
 from hrms.vn_payroll.setup_mvl import ensure_mvl_defaults
 from hrms.vn_payroll.test_salary_slip_mvl import ensure_fiscal_year_2099, make_slip, make_ssa, mark_full_month
 
@@ -18,7 +19,7 @@ class TestBangLuongMVL(PerTestRollback, FrappeTestCase):
 	def test_report_rows_and_total(self):
 		ensure_fiscal_year_2099()
 		ensure_mvl_defaults()
-		emp = make_employee("blmvl@codes.com", company="Miyano")
+		emp = make_employee("blmvl@codes.com", company=default_company())
 		make_ssa(
 			emp,
 			base=25_000_000,
@@ -31,7 +32,7 @@ class TestBangLuongMVL(PerTestRollback, FrappeTestCase):
 		ss = make_slip(emp)
 		ss.submit()
 
-		columns, data = execute(frappe._dict({"company": "Miyano", "month": 6, "year": 2099}))
+		columns, data = execute(frappe._dict({"company": default_company(), "month": 6, "year": 2099}))
 		labels = [c["label"] for c in columns]
 		# CỘT GIỐNG HỆT Excel, đúng thứ tự: Mã NV, Họ tên, Loại, NET/GROSS, E, F, G, H, I ... T, U
 		expected = [
@@ -75,4 +76,4 @@ class TestBangLuongMVL(PerTestRollback, FrappeTestCase):
 		self.assertGreaterEqual(total["net_t"], row["net_t"])
 
 	def test_empty_when_no_period(self):
-		self.assertEqual(execute(frappe._dict({"company": "Miyano"}))[1], [])
+		self.assertEqual(execute(frappe._dict({"company": default_company()}))[1], [])

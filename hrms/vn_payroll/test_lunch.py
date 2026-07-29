@@ -10,6 +10,7 @@ from frappe.utils import get_datetime
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import default_company
 from hrms.vn_payroll.lunch import (
 	DEFAULT_LUNCH_END,
 	DEFAULT_LUNCH_START,
@@ -34,7 +35,7 @@ class TestShiftLunchWindow(PerTestRollback, FrappeTestCase):
 
 class TestCountLunchDays(PerTestRollback, FrappeTestCase):
 	def setUp(self):
-		self.emp = make_employee("lunch_test@codes.com", company="Miyano")
+		self.emp = make_employee("lunch_test@codes.com", company=default_company())
 
 	def day(self, d, status, ins=()):
 		att = frappe.get_doc(

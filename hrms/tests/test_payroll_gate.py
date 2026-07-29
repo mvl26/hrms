@@ -19,6 +19,7 @@ from hrms.payroll_gate import (
 	simulate_payroll_mode_delta,
 )
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import default_company
 
 
 def slip(name, employee="EMP-1", payment_days=22, absent_days=0, leave_without_pay=0):
@@ -304,7 +305,7 @@ class TestSimulatePayrollModeDelta(PerTestRollback, FrappeTestCase):
 	def setUp(self):
 		from erpnext.setup.doctype.employee.test_employee import make_employee
 
-		self.employee = make_employee("mode_delta@codes.com", company="Miyano")
+		self.employee = make_employee("mode_delta@codes.com", company=default_company())
 
 	def mark(self, day, code):
 		frappe.get_doc(
@@ -322,7 +323,7 @@ class TestSimulatePayrollModeDelta(PerTestRollback, FrappeTestCase):
 	def test_unpaid_leave_docks_days_only_under_attendance_mode(self):
 		self.mark(2, "K")  # nghỉ không lương
 
-		report = simulate_payroll_mode_delta(2098, 3, company="Miyano", employees=[self.employee])
+		report = simulate_payroll_mode_delta(2098, 3, company=default_company(), employees=[self.employee])
 		row = self.row_for(report)
 
 		self.assertEqual(row["Leave"]["leave_without_pay"], 0.0, "no Leave Application exists")
@@ -334,7 +335,7 @@ class TestSimulatePayrollModeDelta(PerTestRollback, FrappeTestCase):
 		self.mark(3, "V")  # vắng cả ngày
 		self.mark(4, "NN")  # làm nửa ngày, nửa còn lại không phép
 
-		report = simulate_payroll_mode_delta(2098, 3, company="Miyano", employees=[self.employee])
+		report = simulate_payroll_mode_delta(2098, 3, company=default_company(), employees=[self.employee])
 		row = self.row_for(report)
 
 		self.assertEqual(row["Attendance"]["absent_days"], 1.5, "V 1.0 + NN 0.5")
@@ -343,7 +344,7 @@ class TestSimulatePayrollModeDelta(PerTestRollback, FrappeTestCase):
 	def test_a_fully_present_month_moves_nothing(self):
 		self.mark(5, "X")
 
-		report = simulate_payroll_mode_delta(2098, 3, company="Miyano", employees=[self.employee])
+		report = simulate_payroll_mode_delta(2098, 3, company=default_company(), employees=[self.employee])
 		row = self.row_for(report)
 
 		self.assertEqual(row["delta"]["payment_days"], 0.0)
@@ -353,7 +354,7 @@ class TestSimulatePayrollModeDelta(PerTestRollback, FrappeTestCase):
 		"""1/2P is the regression that used to dock half a day — it must stay whole."""
 		self.mark(6, "1/2P")
 
-		report = simulate_payroll_mode_delta(2098, 3, company="Miyano", employees=[self.employee])
+		report = simulate_payroll_mode_delta(2098, 3, company=default_company(), employees=[self.employee])
 		row = self.row_for(report)
 
 		self.assertEqual(row["Attendance"]["absent_days"], 0.0)
@@ -362,7 +363,7 @@ class TestSimulatePayrollModeDelta(PerTestRollback, FrappeTestCase):
 	def test_the_report_summarises_who_would_be_affected(self):
 		self.mark(7, "K")
 
-		report = simulate_payroll_mode_delta(2098, 3, company="Miyano", employees=[self.employee])
+		report = simulate_payroll_mode_delta(2098, 3, company=default_company(), employees=[self.employee])
 
 		self.assertEqual(report["period"], "2098-03-01 .. 2098-03-31")
 		self.assertEqual(report["employees_examined"], 1)
@@ -376,7 +377,7 @@ class TestSimulatePayrollModeDelta(PerTestRollback, FrappeTestCase):
 			"Salary Slip"
 		)  # site có thể đã có slip thật — so delta, không tuyệt đối
 
-		simulate_payroll_mode_delta(2098, 3, company="Miyano", employees=[self.employee])
+		simulate_payroll_mode_delta(2098, 3, company=default_company(), employees=[self.employee])
 
 		self.assertEqual(frappe.db.get_single_value("Payroll Settings", "payroll_based_on"), before_mode)
 		self.assertEqual(frappe.db.count("Salary Slip"), before_slips, "simulation must not create slips")
