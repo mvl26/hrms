@@ -75,7 +75,6 @@
    "fieldtype": "Datetime",
    "label": "Time",
    "permlevel": 1,
-   "read_only": 1,
    "reqd": 1
   },
   {
@@ -188,11 +187,11 @@
   }
  ],
  "links": [],
- "modified": "2026-06-15 16:08:48.949700",
+ "modified": "2026-07-16 08:31:28.762583",
  "modified_by": "hieu.cv2@miyano.com.vn",
  "module": "HR",
  "name": "Employee Checkin",
- "naming_rule": "Expression (old style)",
+ "naming_rule": "Expression",
  "owner": "Administrator",
  "permissions": [
   {
