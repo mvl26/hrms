@@ -131,8 +131,7 @@ class TestGateAgainstLiveData(PerTestRollback, FrappeTestCase):
 					f"{s.name}: phiếu {s.payment_days} vs bảng {paid_days_in_sheet(row) if row else '?'}"
 				)
 
-		# 2 phiếu của HR-EMP-00002 đang lệch 0,5 vì ngày 1/2P (phép năm nửa ngày, CÓ LƯƠNG) bị
-		# half_day_status="Absent" — DỮ LIỆU seed demo ghi sai, không phải lỗi code (đường đơn nghỉ
-		# chạy thật ra "Present", xem test_half_day_leave_payroll). Cổng phải bắt được; test này khoá
-		# hiện trạng lại để khi dọn dữ liệu đó thì số này về 0 một cách có chủ đích.
-		self.assertEqual(len(blocked), 2, f"số phiếu lệch đã đổi: {blocked}")
+		# Sau khi dọn dữ liệu seed và chấm lại từ lượt chấm (2026-07-29), toàn bộ phiếu lương phải
+		# khớp bảng đã chốt. Test này là chốt chặn: bất kỳ lệch nào xuất hiện lại đều phải nổ ở đây
+		# trước khi ai đó phát hiện qua bảng lương.
+		self.assertEqual(blocked, [], f"có phiếu lương lệch khỏi bảng đã chốt: {blocked}")

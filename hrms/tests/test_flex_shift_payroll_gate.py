@@ -53,13 +53,24 @@ def worked_days_on_site() -> list:
 def reclassify(name: str):
 	"""Chấm lại một ngày bằng luật mới, trả về doc trong bộ nhớ (KHÔNG lưu).
 
-	Xoá mã cũ trước để bộ phân loại thực sự suy lại từ đồng hồ thay vì tôn trọng mã sẵn có."""
+	Xoá mã cũ trước để bộ phân loại thực sự suy lại từ đồng hồ thay vì tôn trọng mã sẵn có.
+
+	Phải chạy **đủ cả hai pha** của đường lưu thật, không chỉ `before_validate`:
+
+	    before_validate: bộ phân loại -> cầu nối mã công   (đặt half_day_status = "Present")
+	    validate:        check_leave_record                (ép "Absent" khi không có đơn nghỉ)
+	                     restore_code_driven_half_day_status
+
+	Bỏ pha `validate` thì mọi ngày `1/2X` đọc thành 1,0 công thay vì 0,5 — cổng sẽ báo "xê dịch"
+	cho dữ liệu vốn đang đúng. Chính chặng giữa mới quyết định số tiền, nên nó phải có mặt ở đây."""
 	doc = frappe.get_doc("Attendance", name)
 	doc.custom_attendance_code = None
 	doc.custom_morning_code = None
 	doc.custom_afternoon_code = None
 	doc.apply_vn_half_day_classifier()
 	doc.apply_attendance_code_bridge()
+	doc.check_leave_record()
+	doc.restore_code_driven_half_day_status()
 	return doc
 
 
