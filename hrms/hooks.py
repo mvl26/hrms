@@ -180,6 +180,13 @@ doc_events = {
 	# Miyano: Yêu cầu chấm công (khác Đơn xin nghỉ) — ngày vẫn làm việc/tính có mặt (WFH, quên chấm
 	# công, on-duty, đi muộn/về sớm). Có DUYỆT bởi quản lý trực tiếp + ghi mã công riêng (payroll-
 	# neutral). Xem attendance_request_miyano.py. (Đi công tác có chi phí vẫn qua Công Tác/Business Trip.)
+	# Khoá kỳ: Bảng Công Tháng đã chốt thì ngày công trong kỳ không được thêm/sửa/huỷ nữa,
+	# nếu không thì bảng đã ký và phiếu lương lệch nhau trong im lặng (spec §6).
+	"Attendance": {
+		"before_insert": "hrms.hr.period_lock.guard_period_not_locked",
+		"on_update_after_submit": "hrms.hr.period_lock.guard_period_not_locked",
+		"before_cancel": "hrms.hr.period_lock.guard_period_not_locked",
+	},
 	"Attendance Request": {
 		"before_insert": "hrms.hr.doctype.attendance_request.attendance_request_miyano.set_default_approver",
 		"validate": "hrms.hr.doctype.attendance_request.attendance_request_miyano.set_default_approver",
