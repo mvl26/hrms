@@ -261,13 +261,16 @@ payment_days  ==  cột "Tổng công" của nhân viên trong bảng đã chố
 
 > Ngày 05/06 mã `1/2P` (nghỉ phép năm nửa ngày, **có lương**, có Leave Application đã duyệt) lại
 > mang `half_day_status = "Absent"`, nên `get_half_absent_days` trừ 0,5 của **nửa ngày phép có
-> lương**. Bảng công đã ký ghi 20,5 công, phiếu lương đã trả 20,0. Nhân viên vừa bị trừ quỹ phép
-> vừa bị trừ nửa ngày lương cho cùng một nửa ngày.
+> lương**. Bảng công đã ký ghi 20,5 công, phiếu lương đã trả 20,0.
 
-`restore_code_driven_half_day_status` hiện chỉ chữa trường hợp mã công **không** có đơn nghỉ; ngày
-đi qua đường Leave Application (đường bình thường) vẫn bị. Cổng đối soát **chặn đúng 2 phiếu này**
-và test khoá hiện trạng lại, để khi sửa lỗi đó thì con số về 0 một cách có chủ đích.
-**Việc sửa nằm ngoài phạm vi spec này** — nó đụng cầu nối payroll nên cần cổng ký riêng.
+**Nguyên nhân: DỮ LIỆU, không phải code** (kiểm chứng 2026-07-29). Chạy thật đường đơn nghỉ nửa
+ngày trên site cho ra `half_day_status = "Present"` — đúng, không trừ hai lần. Hai bản ghi `Absent`
+kia do lượt seed dữ liệu demo MVL lúc 17:13 ngày 28/07 ghi tường minh. Hành vi đúng của đường code
+nay đã bị khoá lại bằng `test_half_day_leave_payroll.py`.
+
+Hệ quả: 2 phiếu lương đó **trả thiếu 0,5 ngày** mỗi phiếu. Sửa cho khớp cần (a) sửa 2 dòng
+Attendance — mà kỳ đang khoá nên phải huỷ bảng chốt trước, và (b) amend 2 phiếu lương đã submit.
+Cả hai đều là quyết định tiền bạc ⇒ **ngoài phạm vi spec này, cần cổng ký riêng.**
 
 Cổng **TẮT mặc định**; bật bằng site config `hrms_enforce_sheet_gate: 1` sau khi 2 phiếu lệch trên
 được xử lý — bật khi còn phiếu lệch thì không ai lập được lương.

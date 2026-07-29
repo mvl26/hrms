@@ -21,8 +21,11 @@ CÔNG THỨC ĐỐI SOÁT — chốt bằng dữ liệu thật, không suy diễ
 Đo trên 12 phiếu lương thật T6+T7/2026 của site: **10/12 khớp tuyệt đối**. Hai phiếu còn lại
 (HR-EMP-00002) lệch đúng 0,5 vì ngày `1/2P` — nghỉ phép năm nửa ngày, CÓ LƯƠNG, có đơn đã duyệt —
 lại mang `half_day_status="Absent"`, nên `get_half_absent_days` trừ 0,5 của nửa ngày phép có lương.
-Bảng ghi 20,5 công còn phiếu trả 20,0. Đó là lệch THẬT, và cổng phải chặn chứ không được nới công
-thức để chiều nó — chính loại lệch âm thầm này là lý do tính năng tồn tại.
+Bảng ghi 20,5 công còn phiếu trả 20,0.
+
+Đó là lệch THẬT, do DỮ LIỆU SEED demo ghi sai chứ không phải đường code sai (đường đơn nghỉ chạy
+thật cho ra "Present" — xem `test_half_day_leave_payroll.py`). Cổng phải chặn chứ không được nới
+công thức để chiều nó: chính loại lệch âm thầm này là lý do tính năng tồn tại.
 
 Cả hai vế đều dùng `total_working_days` / `Tổng công` đã loại ngày nghỉ lễ - cuối tuần (bảng đếm
 "Nghỉ lễ" ở cột riêng, payroll không tính ngày nghỉ vào `total_working_days`), nên so thẳng được.
