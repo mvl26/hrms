@@ -146,15 +146,17 @@ class TestAttendanceCodePayrollInvariance(PerTestRollback, FrappeTestCase):
 				"out_time": f"{date} 12:00:00",
 			}
 		)
-		att.insert()  # classifier -> token đơn 1/2K -> Half Day (Nghỉ không lương)
+		att.insert()  # 4h < 8h tối thiểu -> mã 1/2X -> Half Day, KHÔNG gắn loại nghỉ
 		att.submit()
 		self.assertEqual(att.status, "Half Day")
-		self.assertEqual(att.custom_attendance_code, "1/2K")
+		self.assertEqual(att.custom_attendance_code, "1/2X")
 
 		ss_native = make_employee_salary_slip(emp_native, "Monthly", "Inv HD Native")
 		ss_class = make_employee_salary_slip(emp_class, "Monthly", "Inv HD Class")
-		# NET PAY BẤT BIẾN: cùng payment_days (0.5 bị trừ dù nửa kia là vắng hay không lương)
+		# Từ 2026-07-29 mã do máy chấm là 1/2X (không bịa ra đơn nghỉ không lương), nên ngày này
+		# GIỐNG HỆT một Half Day nhập tay: cùng payment_days, cùng absent_days, LWP bằng 0.
 		self.assertEqual(ss_class.payment_days, ss_native.payment_days)
-		# nhưng 0.5 đó nay là NGHỈ KHÔNG LƯƠNG (LWP), không phải Vắng — đúng ý X/K
-		self.assertEqual(flt(ss_class.leave_without_pay), 0.5)
-		self.assertEqual(flt(ss_class.absent_days), 0.0)
+		self.assertEqual(flt(ss_class.leave_without_pay), flt(ss_native.leave_without_pay))
+		self.assertEqual(flt(ss_class.absent_days), flt(ss_native.absent_days))
+		self.assertEqual(flt(ss_class.leave_without_pay), 0.0)
+		self.assertEqual(flt(ss_class.absent_days), 0.5)
