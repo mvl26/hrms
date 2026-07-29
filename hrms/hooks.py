@@ -215,7 +215,14 @@ doc_events = {
 	},
 	"Timesheet": {"validate": "hrms.hr.utils.validate_active_employee"},
 	# Miyano: lương NET gross-up theo công thức MVL — chạy sau calculate_net_pay của controller.
-	"Salary Slip": {"validate": "hrms.vn_payroll.salary_slip_hook.apply_mvl"},
+	# `sheet_gate.gate` chạy TRƯỚC engine MVL: chặn phiếu khi kỳ chưa chốt công và đối soát với
+	# bảng đã chốt. Mặc định TẮT — bật bằng site config `hrms_enforce_sheet_gate` (spec §7).
+	"Salary Slip": {
+		"validate": [
+			"hrms.vn_payroll.sheet_gate.gate",
+			"hrms.vn_payroll.salary_slip_hook.apply_mvl",
+		]
+	},
 	# Miyano: gộp một quỹ phép năm — validate mã lý do; sau duyệt ghi mã lên Attendance (thuần hiển thị).
 	"Leave Application": {
 		"validate": "hrms.hr.doctype.leave_application.leave_single_pool.validate_pool_code",

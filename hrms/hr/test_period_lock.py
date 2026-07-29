@@ -100,3 +100,58 @@ class TestPeriodLock(PerTestRollback, FrappeTestCase):
 		sheet.cancel()
 		apply_correction(att.name, "1/2X", "mở lại kỳ để sửa theo biên bản")
 		self.assertEqual(frappe.db.get_value("Attendance", att.name, "status"), "Half Day")
+
+
+class TestLockedPeriodStopsAutoAttendance(PerTestRollback, FrappeTestCase):
+	"""Kỳ đã chốt thì auto-attendance phải LẶNG LẼ bỏ qua, không được ném lỗi.
+
+	Ném ở đây là giết cả job `process_auto_attendance_for_all_shifts` cho mọi nhân viên còn lại chỉ
+	vì một kỳ đã khoá — đúng lỗi đã suýt lên production ngày 2026-07-29 (bảng T7 chốt giữa tháng
+	trong khi tháng chưa hết, scheduler vẫn phải chấm những ngày sau đó)."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
+		cls.shift = "VN Lock Shift (test)"
+		if not frappe.db.exists("Shift Type", cls.shift):
+			frappe.get_doc(
+				{
+					"doctype": "Shift Type",
+					"__newname": cls.shift,
+					"start_time": "08:00:00",
+					"end_time": "17:30:00",
+					"enable_auto_attendance": 1,
+				}
+			).insert()
+
+	def test_should_mark_attendance_says_no_inside_a_locked_period(self):
+		shift = frappe.get_doc("Shift Type", self.shift)
+		self.assertTrue(shift.should_mark_attendance(self.emp, "2099-11-05"))
+
+		frappe.get_doc(
+			{
+				"doctype": "Monthly Attendance Sheet",
+				"company": self.company,
+				"month": "11",
+				"year": 2099,
+			}
+		).insert().submit()
+
+		self.assertFalse(shift.should_mark_attendance(self.emp, "2099-11-05"))
+
+	def test_absent_marking_skips_locked_dates(self):
+		shift = frappe.get_doc("Shift Type", self.shift)
+		frappe.get_doc(
+			{
+				"doctype": "Monthly Attendance Sheet",
+				"company": self.company,
+				"month": "11",
+				"year": 2099,
+			}
+		).insert().submit()
+
+		dates = shift.get_dates_for_attendance(self.emp)
+		locked = [d for d in dates if str(d).startswith("2099-11")]
+		self.assertEqual(locked, [], "không được chấm vắng vào kỳ đã chốt")

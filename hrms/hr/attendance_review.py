@@ -107,7 +107,7 @@ def attendance_names(employees: list, start, end) -> dict:
 
 @frappe.whitelist()
 def get_review_grid(filters=None) -> dict:
-	"""Lưới soát công của một tháng: hàng nhân viên × cột ngày, kèm cờ bất thường từng ô.
+	"""Lưới soát công của một tháng: hàng nhân viên x cột ngày, kèm cờ bất thường từng ô.
 
 	Trả `{rows: [...], flags: {employee: {day: [flag]}}, flag_labels: {...}}`. `rows` chính là
 	`get_sheet_rows` — cùng một nguồn suy diễn với report và Bảng Công Tháng."""

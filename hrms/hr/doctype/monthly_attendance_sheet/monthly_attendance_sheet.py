@@ -20,6 +20,42 @@ class MonthlyAttendanceSheet(Document):
 		self.set_period_dates()
 		self.check_duplicate()
 
+	def before_submit(self):
+		self.warn_about_unreviewed_days()
+
+	def warn_about_unreviewed_days(self):
+		"""Chốt công là hành động KHOÁ kỳ — sau đó không sửa được nữa nếu không huỷ bảng. Nên trước
+		khi khoá, nói thẳng còn bao nhiêu ô đang mang cờ bất thường (vắng, thiếu giờ, ngày trống,
+		chỉ 1 lượt chấm, chấm vào ngày nghỉ). Chỉ CẢNH BÁO, không chặn: có những ngày vắng là đúng
+		thật, và người chốt mới là người quyết."""
+		from hrms.hr.attendance_review import FLAG_LABEL, get_review_grid
+
+		grid = get_review_grid(
+			{
+				"month": self.month,
+				"year": self.year,
+				"company": self.company,
+				"include_company_descendants": self.include_company_descendants,
+				**({"department": self.department} if self.department else {}),
+			}
+		)
+		counts = {}
+		for day_flags in grid["flags"].values():
+			for flags in day_flags.values():
+				for f in flags:
+					counts[f] = counts.get(f, 0) + 1
+		if not counts:
+			return
+
+		detail = ", ".join(f"{FLAG_LABEL.get(f, f)}: {n}" for f, n in sorted(counts.items()))
+		frappe.msgprint(
+			_(
+				"Bảng công còn {0} ô chưa xử lý ({1}). Chốt xong sẽ KHOÁ kỳ, muốn sửa phải huỷ bảng này."
+			).format(sum(counts.values()), detail),
+			title=_("Còn ô bất thường"),
+			indicator="orange",
+		)
+
 	def set_period_dates(self):
 		year, month = cint(self.year), cint(self.month)
 		if not (year and month):

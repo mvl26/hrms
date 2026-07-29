@@ -231,3 +231,44 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		self.assertIn("NGƯỜI CHẤM CÔNG", html)  # sign box 1
 		self.assertIn("PHÒNG NHÂN SỰ", html)  # sign box 2
 		self.assertIn("Chú thích", html)  # symbol legend
+
+
+class TestSubmitWarnsAboutUnreviewedDays(PerTestRollback, FrappeTestCase):
+	"""Chốt công khoá kỳ, nên trước khi khoá phải nói rõ còn bao nhiêu ô đáng ngờ."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
+
+	def sheet(self, month=8, year=2099):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Monthly Attendance Sheet",
+				"company": self.company,
+				"month": str(month),
+				"year": year,
+			}
+		).insert()
+		doc.populate_from_attendance()
+		doc.save()
+		return doc
+
+	def test_it_warns_when_days_still_carry_flags(self):
+		frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": "2099-08-03",
+				"company": self.company,
+				"status": "Absent",
+			}
+		).insert().submit()
+
+		doc = self.sheet()
+		frappe.message_log = []
+		doc.submit()
+
+		messages = " ".join(str(m) for m in frappe.message_log)
+		self.assertIn("chưa xử lý", messages)

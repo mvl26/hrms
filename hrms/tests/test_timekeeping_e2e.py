@@ -243,9 +243,20 @@ class TestCheckinAutoAttendanceE2E(FrappeTestCase):
 			}
 		).submit()
 
+	def skip_if_period_locked(self, date):
+		"""Trên site đã chốt công cho kỳ chứa `date`, auto-attendance CỐ Ý không chấm nữa (kỳ đóng
+		băng). Nhánh đó được kiểm riêng ở `test_period_lock`; ở đây bỏ qua chứ không báo xanh giả."""
+		from hrms.hr.period_lock import locking_sheet
+
+		emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		sheet = locking_sheet(emp, date) if emp else None
+		if sheet:
+			self.skipTest(f"ky chua {date} da chot tai {sheet} - auto-attendance khong cham nua")
+
 	def test_full_day_checkins_create_present_attendance(self):
 		from hrms.hr.doctype.employee_checkin.test_employee_checkin import make_checkin
 
+		self.skip_if_period_locked(getdate())
 		st = self._shift("E2E Full Day Shift")
 		emp = make_employee("e2e_checkin_full@codes.com", company=default_company())
 		date = getdate()  # setup_shift_type's process window is anchored on today
@@ -268,6 +279,7 @@ class TestCheckinAutoAttendanceE2E(FrappeTestCase):
 		from hrms.hr.doctype.employee_checkin.test_employee_checkin import make_checkin
 
 		ensure_short_hours_code()
+		self.skip_if_period_locked(getdate())
 		st = self._shift("E2E Split Shift", split=True)
 		emp = make_employee("e2e_checkin_half@codes.com", company=default_company())
 		date = getdate()  # setup_shift_type's process window is anchored on today
