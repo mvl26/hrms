@@ -44,11 +44,11 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 		return att
 
 	def _row(self, employee):
-		_, data = execute({"month": self.month, "year": self.year})
+		_, data, _msg = execute({"month": self.month, "year": self.year})
 		return next(r for r in data if r["employee"] == employee)
 
 	def _cat_labels(self):
-		columns, _ = execute({"month": self.month, "year": self.year})
+		columns, _data, _msg = execute({"month": self.month, "year": self.year})
 		return {c["label"]: c["fieldname"] for c in columns if c["fieldname"].startswith("cat_")}
 
 	def test_pivot_cells_and_tong_cong(self):
@@ -56,7 +56,7 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 		self._mk(6, custom_attendance_code="P")  # full annual leave (paid)
 		self._mk(7, custom_morning_code="X", custom_afternoon_code="P")  # half work / half leave
 
-		columns, data = execute({"month": self.month, "year": self.year})
+		columns, data, _msg = execute({"month": self.month, "year": self.year})
 		labels = {c["fieldname"]: c["label"] for c in columns}
 		self.assertEqual(labels["tong_cong"], "Tổng công")
 		self.assertEqual(labels["cat_0"], "Phép năm")
@@ -86,7 +86,7 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 	def test_report_columns_are_the_configured_set(self):
 		# cột tổng hợp đúng bộ đã cấu hình (gọn): Tổng công (đầu, in đậm) + Phép năm/Thai sản/Không
 		# lương/Tai nạn lao động/Nghỉ riêng. Ốm/chăm con ốm/nghỉ bù gộp Tổng công; Vắng/Nghỉ lễ chỉ ký hiệu.
-		columns, _ = execute({"month": self.month, "year": self.year})
+		columns, _data, _msg = execute({"month": self.month, "year": self.year})
 		summary = [
 			c["label"] for c in columns if c["fieldname"] == "tong_cong" or c["fieldname"].startswith("cat_")
 		]
@@ -275,7 +275,7 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 
 	def test_color_state_columns_not_rendered(self):
 		# "_state_*" chỉ là metadata cho formatter — KHÔNG được thành cột hiển thị
-		columns, _ = execute({"month": self.month, "year": self.year})
+		columns, _data, _msg = execute({"month": self.month, "year": self.year})
 		fieldnames = {c["fieldname"] for c in columns}
 		self.assertFalse(
 			any(fn.startswith("_state_") for fn in fieldnames), "state màu không được lộ thành cột"
@@ -412,51 +412,47 @@ class TestAttendanceColorState(PerTestRollback, FrappeTestCase):
 
 
 class TestLegend(PerTestRollback, FrappeTestCase):
-	"""Chú thích ký hiệu phải nằm TRONG dữ liệu report — `message` không đi vào file Excel."""
+	"""Chú thích ký hiệu: MỘT DÒNG, dùng chung, nằm trên bảng — không làm báo cáo dài ra."""
 
-	def rows(self):
+	def test_report_returns_the_legend_as_a_message_not_as_rows(self):
 		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
 
-		_columns, data = execute({"month": 6, "year": 2099})
-		return data
-
-	def legend(self):
-		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
-			get_code_map,
-			legend_rows,
+		result = execute({"month": 6, "year": 2099})
+		self.assertEqual(len(result), 3, "report phải trả cả message chú thích")
+		_columns, data, message = result
+		self.assertTrue(message)
+		self.assertTrue(
+			all(r.get("employee") for r in data),
+			"mọi dòng dữ liệu phải là nhân viên — chú thích không được nhét vào bảng",
 		)
 
-		return legend_rows(get_code_map())
+	def test_every_attendance_code_is_explained_in_one_line(self):
+		from hrms.hr.attendance_legend import legend_pairs, legend_text
 
-	def test_every_attendance_code_is_explained(self):
-		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_code_map
-
-		codes = set(get_code_map())
-		explained = {r["day_1"] for r in self.legend() if r.get("day_1")}
+		codes = set(frappe.get_all("Attendance Code", pluck="name"))
+		explained = {c for c, _n in legend_pairs()}
 		self.assertTrue(codes <= explained, f"mã chưa có chú thích: {codes - explained}")
+		self.assertNotIn("\n", legend_text(), "chú thích phải gọn trong một dòng")
 
 	def test_calendar_markers_are_explained_too(self):
-		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
-			MARKER_HOLIDAY,
-			MARKER_WEEKLY_OFF,
-		)
+		from hrms.hr.attendance_legend import legend_pairs
 
-		explained = {r["day_1"] for r in self.legend() if r.get("day_1")}
-		self.assertIn(MARKER_WEEKLY_OFF, explained)
-		self.assertIn(MARKER_HOLIDAY, explained)
+		explained = {c for c, _n in legend_pairs()}
+		self.assertIn("-", explained)
+		self.assertIn("NL", explained)
 
-	def test_each_legend_line_carries_its_colour(self):
-		"""Ký hiệu mẫu phải mang state màu, nếu không chú thích chỉ là chữ, không phải bảng màu."""
-		coloured = [r for r in self.legend() if r.get("day_1") and r.get("_state_1")]
-		self.assertGreaterEqual(len(coloured), 10)
+	def test_worked_codes_come_first_and_X_leads(self):
+		from hrms.hr.attendance_legend import legend_pairs
 
-	def test_legend_sits_at_the_end_of_the_report_data(self):
-		data = self.rows()
-		titles = [i for i, r in enumerate(data) if r.get("employee_name") == "CHÚ THÍCH KÝ HIỆU"]
-		self.assertEqual(len(titles), 1, "phải có đúng một khối chú thích")
-		self.assertTrue(all(not r.get("employee") for r in data[titles[0] :]), "chú thích phải ở cuối")
+		codes = [c for c, _n in legend_pairs()]
+		self.assertEqual(codes[0], "X", "X là ký hiệu gốc của bảng công nên đứng đầu")
+		self.assertLess(codes.index("X"), codes.index("V"), "đi làm phải xếp trước vắng")
+		self.assertLess(codes.index("P"), codes.index("1/2P"), "mã cả ngày trước mã nửa ngày")
 
-	def test_legend_lines_are_not_mistaken_for_employees(self):
-		"""Dòng chú thích không được mang mã nhân viên — nếu không nó lọt vào mọi thống kê theo NV."""
-		self.assertTrue(all(not r.get("employee") for r in self.legend()))
-		self.assertTrue(all(not r.get("tong_cong") for r in self.legend()))
+	def test_the_legend_is_shared_not_copied_per_report(self):
+		"""Một nguồn duy nhất: report chỉ gọi helper, không tự dựng danh sách mã."""
+		from hrms.hr.attendance_legend import legend_text
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
+
+		_columns, _data, message = execute({"month": 6, "year": 2099})
+		self.assertIn(legend_text()[:40], message)

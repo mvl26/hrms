@@ -22,6 +22,8 @@ from frappe.utils.nestedset import get_descendants_of
 
 from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
 
+from hrms.hr.attendance_legend import legend_html
+
 Filters = frappe._dict
 
 # display-only markers derived from the calendar, not Attendance Code master records
@@ -218,62 +220,8 @@ def execute(filters: Filters | None = None) -> tuple:
 
 	columns = get_columns(days)
 	data = _rows_to_report_data(rows, days, code_map)
-	data += legend_rows(code_map)
-	return columns, data
-
-
-# Thứ tự chú thích: đi làm trước, rồi các loại nghỉ có lương, rồi không lương/vắng — đọc từ trên
-# xuống là đi từ "được trả đủ" tới "không được trả".
-LEGEND_CATEGORY_ORDER = [
-	"Công",
-	"Phép",
-	"Ốm",
-	"Thai sản",
-	"Tai nạn LĐ",
-	"Nghỉ bù",
-	"Việc riêng",
-	"Không lương",
-	"Vắng",
-]
-
-
-def legend_rows(code_map: dict) -> list[dict]:
-	"""Bảng chú thích ký hiệu, gắn ở CUỐI bảng công.
-
-	Để trong `data` chứ không để ở `message` của report vì hai lẽ: bảng chấm công giấy vẫn luôn in
-	chú thích ở cuối tờ, và quan trọng hơn — `message` KHÔNG đi vào file Excel xuất ra, còn `data`
-	thì có. Ký hiệu mẫu đặt ở cột ngày đầu tiên nên nó được formatter tô đúng màu của loại đó,
-	tức chú thích cũng là bảng màu luôn.
-
-	Danh sách mã lấy từ Attendance Code (fixtures) chứ không viết cứng: thêm/bớt mã là chú thích
-	tự theo, không bao giờ lệch với thứ đang hiển thị trong lưới.
-	"""
-
-	def add(symbol: str, name: str, state: str | None) -> dict:
-		row = {"employee_name": f"{symbol}  —  {name}", "day_1": symbol}
-		if state:
-			row["_state_1"] = state
-		return row
-
-	rows = [{}, {"employee_name": _("CHÚ THÍCH KÝ HIỆU")}]
-
-	def order(code: str):
-		c = code_map[code]
-		cat = c.category or ""
-		rank = (
-			LEGEND_CATEGORY_ORDER.index(cat) if cat in LEGEND_CATEGORY_ORDER else len(LEGEND_CATEGORY_ORDER)
-		)
-		is_half = 0 < flt(c.work_fraction) < 1  # mã cả ngày trước, mã nửa ngày ngay dưới nó
-		return (rank, is_half, code != "X", code)  # X là ký hiệu gốc của bảng công → đứng đầu
-
-	for code in sorted(code_map, key=order):
-		c = code_map[code]
-		rows.append(add(code, c.code_name or code, day_state(code, code_map)))
-
-	# hai ký hiệu suy từ lịch, không phải Attendance Code — vẫn hiện trong lưới nên phải chú thích
-	rows.append(add(MARKER_WEEKLY_OFF, _("Nghỉ hàng tuần / ngoài thời gian làm việc"), "off"))
-	rows.append(add(MARKER_HOLIDAY, _("Nghỉ lễ hưởng lương"), "holiday"))
-	return rows
+	# chú thích ký hiệu: MỘT DÒNG ở trên bảng (dùng chung mọi báo cáo), không nhét thành dòng dữ liệu
+	return columns, data, legend_html()
 
 
 def get_code_map() -> dict:
