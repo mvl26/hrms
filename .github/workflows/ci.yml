@@ -24,6 +24,11 @@ env:
     # version-15 chứ không phải nhánh feature đang chạy, để CI không phụ thuộc mục tiêu di động.
     ERPNEXT_REPO: https://github.com/mvl26/erpnext
     ERPNEXT_BRANCH: version-15
+    # frappe cung phai khop production: bench chay 15.112.0, con nhanh version-15 tren GitHub nay
+    # da la 15.116.1 va them chan `distinct(...)` trong db_query -> erpnext 15.83.0 cua Miyano vo
+    # o Repost Allowed Types. Ghim dung ban dang deploy. NHO NANG khi nang frappe tren bench.
+    FRAPPE_REPO: https://github.com/frappe/frappe
+    FRAPPE_BRANCH: v15.112.0
 
 concurrency:
   group: develop-${{ github.event.number }}
@@ -123,6 +128,8 @@ jobs:
           BRANCH_TO_CLONE: ${{ env.HR_BRANCH }}
           ERPNEXT_REPO: ${{ env.ERPNEXT_REPO }}
           ERPNEXT_BRANCH: ${{ env.ERPNEXT_BRANCH }}
+          FRAPPE_REPO: ${{ env.FRAPPE_REPO }}
+          FRAPPE_BRANCH: ${{ env.FRAPPE_BRANCH }}
 
       - name: Run Tests
         run: cd ~/frappe-bench/ && bench --site test_site run-parallel-tests --app hrms --total-builds 2 --build-number ${{ matrix.container }}
