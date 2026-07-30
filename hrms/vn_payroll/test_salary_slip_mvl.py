@@ -78,6 +78,15 @@ def make_slip(employee, salary_type="Chính thức"):
 
 
 class TestSalarySlipMVL(PerTestRollback, FrappeTestCase):
+	def setUp(self):
+		super().setUp()
+		# Bộ test này kiểm CÔNG THỨC lương, không kiểm tuyến chấm công. Cổng "phải chốt công trước
+		# khi tính lương" (`vn_payroll.sheet_gate`) sẽ chặn mọi phiếu ở đây vì các kỳ 2099 dựng riêng
+		# cho test không có Bảng Công Tháng nào. Tắt cổng đúng trong phạm vi test, bằng cửa thoát
+		# `skip_sheet_gate` — dựng sẵn cho chính tình huống này; cổng vẫn được kiểm ở test_sheet_gate.
+		frappe.flags.skip_sheet_gate = True
+		self.addCleanup(lambda: frappe.flags.pop("skip_sheet_gate", None))
+
 	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
 	def test_chinh_thuc_full_month(self):
 		ensure_fiscal_year_2099()
