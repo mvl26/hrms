@@ -31,7 +31,7 @@ class AttendanceReview {
 		const today = frappe.datetime.now_date(true);
 		this.month = this.page.add_select(
 			__("Tháng"),
-			Array.from({ length: 12 }, (_, i) => ({ label: String(i + 1), value: String(i + 1) }))
+			Array.from({ length: 12 }, (_, i) => ({ label: String(i + 1), value: String(i + 1) })),
 		);
 		this.month.val(String(today.getMonth() + 1));
 
@@ -55,6 +55,14 @@ class AttendanceReview {
 			options: "Department",
 		});
 
+		// nhận bộ lọc khi được mở từ báo cáo bảng công (giữ nguyên kỳ đang xem, không phải chọn lại)
+		const ro = frappe.route_options || {};
+		if (ro.month) this.month.val(String(ro.month));
+		if (ro.year) this.year.set_value(ro.year);
+		if (ro.company) this.company.set_value(ro.company);
+		if (ro.department) this.department.set_value(ro.department);
+		frappe.route_options = null;
+
 		for (const f of [this.year, this.company, this.department]) {
 			f.$input.on("change", () => this.refresh());
 		}
@@ -64,6 +72,27 @@ class AttendanceReview {
 	make_actions() {
 		this.page.set_primary_action(__("Lưu tất cả"), () => this.save_all());
 		this.page.set_secondary_action(__("Tải lại"), () => this.refresh());
+		// chặng nối của luồng: soát xong thì về báo cáo xem lại, rồi chốt công
+		this.page.add_inner_button(__("Về bảng công tháng"), () => this.go_to_report());
+		this.page.add_inner_button(__("Chốt công tháng"), () => this.go_to_sheet());
+	}
+
+	go_to_report() {
+		frappe.route_options = this.filters();
+		frappe.set_route("query-report", "Monthly Attendance Report");
+	}
+
+	go_to_sheet() {
+		const f = this.filters();
+		frappe.call({
+			method: "hrms.hr.doctype.monthly_attendance_sheet.monthly_attendance_sheet.get_or_create_sheet",
+			args: f,
+			freeze: true,
+			freeze_message: __("Đang mở bảng chốt công..."),
+			callback: (r) => {
+				if (r.message) frappe.set_route("Form", "Monthly Attendance Sheet", r.message);
+			},
+		});
 	}
 
 	filters() {
@@ -89,24 +118,29 @@ class AttendanceReview {
 	render(data) {
 		this.data = data;
 		if (!data.rows.length) {
-			this.body.html(`<div class="text-muted p-4">${__("Không có nhân viên nào trong kỳ này.")}</div>`);
+			this.body.html(
+				`<div class="text-muted p-4">${__("Không có nhân viên nào trong kỳ này.")}</div>`,
+			);
 			return;
 		}
 
-		const days = Object.keys(data.rows[0].days)
-			.map(Number)
-			.sort((a, b) => a - b);
+		// vẽ trọn tháng: ngày thiếu bản ghi không có khoá trong `days` nhưng vẫn phải có ô để hiện cờ
+		const last = data.days_in_month || 31;
+		const days = Array.from({ length: last }, (_, i) => i + 1);
 
-		let html = '<div class="table-responsive"><table class="table table-bordered ar-grid"><thead><tr>';
+		let html =
+			'<div class="table-responsive"><table class="table table-bordered ar-grid"><thead><tr>';
 		html += `<th class="ar-emp">${__("Nhân viên")}</th>`;
 		for (const d of days) html += `<th>${d}</th>`;
 		html += `<th>${__("Tổng công")}</th></tr></thead><tbody>`;
 
 		for (const row of data.rows) {
 			const flags = (data.flags || {})[row.employee] || {};
-			html += `<tr><td class="ar-emp">${frappe.utils.escape_html(row.employee_name || row.employee)}</td>`;
+			html += `<tr><td class="ar-emp">${frappe.utils.escape_html(
+				row.employee_name || row.employee,
+			)}</td>`;
 			for (const d of days) {
-				const symbol = row.days[d] ?? "";
+				const symbol = row.days[d] ?? ""; // rỗng = ngày làm việc chưa có bản ghi công
 				const cell_flags = flags[d] || [];
 				const name = (row.attendance_names || {})[d];
 				const title = cell_flags.map((f) => data.flag_labels[f] || f).join(", ");
@@ -149,7 +183,11 @@ class AttendanceReview {
 			],
 			primary_action_label: __("Ghi nhận"),
 			primary_action: (values) => {
-				this.pending.set(attendance, { attendance, code: values.code, reason: values.reason });
+				this.pending.set(attendance, {
+					attendance,
+					code: values.code,
+					reason: values.reason,
+				});
 				$cell.text(values.code).addClass("ar-pending");
 				this.update_pending_label();
 				d.hide();
@@ -161,7 +199,7 @@ class AttendanceReview {
 	update_pending_label() {
 		this.page.set_indicator(
 			this.pending.size ? __("{0} ô chờ lưu", [this.pending.size]) : __("Chưa có thay đổi"),
-			this.pending.size ? "orange" : "gray"
+			this.pending.size ? "orange" : "gray",
 		);
 	}
 
@@ -178,11 +216,17 @@ class AttendanceReview {
 				freeze_message: __("Đang lưu điều chỉnh..."),
 			})
 			.then((r) => {
+				const n = (r.message || {}).applied || 0;
 				frappe.show_alert({
-					message: __("Đã lưu {0} điều chỉnh", [(r.message || {}).applied || 0]),
+					message: __("Đã lưu {0} điều chỉnh", [n]),
 					indicator: "green",
 				});
 				this.refresh();
+				// soát xong thường là đi tiếp, nên hỏi luôn thay vì bắt tự nhớ đường
+				frappe.confirm(
+					__("Đã lưu {0} điều chỉnh. Xem lại bảng công tháng bây giờ?", [n]),
+					() => this.go_to_report(),
+				);
 			});
 	}
 

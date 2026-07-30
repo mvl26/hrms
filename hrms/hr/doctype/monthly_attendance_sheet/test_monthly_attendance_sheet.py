@@ -272,3 +272,62 @@ class TestSubmitWarnsAboutUnreviewedDays(PerTestRollback, FrappeTestCase):
 
 		messages = " ".join(str(m) for m in frappe.message_log)
 		self.assertIn("chưa xử lý", messages)
+
+
+class TestFlowFromReportToPayroll(PerTestRollback, FrappeTestCase):
+	"""Luồng nối: báo cáo -> soát -> CHỐT CÔNG -> LƯƠNG. Test phần server của hai chặng cuối."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
+
+	def test_get_or_create_sheet_opens_the_existing_one_instead_of_duplicating(self):
+		from hrms.hr.doctype.monthly_attendance_sheet.monthly_attendance_sheet import get_or_create_sheet
+
+		first = get_or_create_sheet("8", 2099, self.company)
+		second = get_or_create_sheet("8", 2099, self.company)
+		self.assertEqual(first, second, "bấm Chốt công hai lần không được đẻ ra hai bảng")
+
+	def test_get_or_create_sheet_fills_the_rows_right_away(self):
+		from hrms.hr.doctype.monthly_attendance_sheet.monthly_attendance_sheet import get_or_create_sheet
+
+		name = get_or_create_sheet("8", 2099, self.company)
+		doc = frappe.get_doc("Monthly Attendance Sheet", name)
+		self.assertTrue(doc.employees, "bảng mở ra phải có sẵn dữ liệu, không bắt bấm Lấy dữ liệu")
+
+	def test_payroll_is_refused_before_the_sheet_is_closed(self):
+		from hrms.hr.doctype.monthly_attendance_sheet.monthly_attendance_sheet import get_or_create_sheet
+
+		doc = frappe.get_doc("Monthly Attendance Sheet", get_or_create_sheet("8", 2099, self.company))
+		with self.assertRaises(frappe.exceptions.ValidationError):
+			doc.create_salary_slips()
+
+	def test_closing_then_running_payroll_creates_slips_for_the_sheet_employees(self):
+		from hrms.hr.doctype.monthly_attendance_sheet.monthly_attendance_sheet import get_or_create_sheet
+
+		doc = frappe.get_doc("Monthly Attendance Sheet", get_or_create_sheet("8", 2099, self.company))
+		doc.submit()
+
+		result = doc.create_salary_slips()
+		self.assertEqual(
+			len(result["created"]) + len(result["failed"]),
+			len(doc.employees),
+			"mỗi nhân viên trong bảng phải được xử lý đúng một lần",
+		)
+
+	def test_running_payroll_twice_refreshes_drafts_instead_of_duplicating(self):
+		from hrms.hr.doctype.monthly_attendance_sheet.monthly_attendance_sheet import get_or_create_sheet
+
+		doc = frappe.get_doc("Monthly Attendance Sheet", get_or_create_sheet("8", 2099, self.company))
+		doc.submit()
+		first = doc.create_salary_slips()
+		if not first["created"]:
+			self.skipTest("site không lập được phiếu lương cho kỳ này (thiếu cấu trúc lương)")
+
+		second = doc.create_salary_slips()
+		self.assertEqual(second["created"], [], "lần hai không được tạo thêm phiếu")
+		self.assertEqual(
+			len(second["refreshed"]), len(first["created"]), "phiếu nháp phải được lấy lại số công"
+		)

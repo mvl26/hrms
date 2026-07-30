@@ -120,7 +120,7 @@ def get_review_grid(filters=None) -> dict:
 
 	rows = get_sheet_rows(filters)
 	if not rows:
-		return {"rows": [], "flags": {}, "flag_labels": FLAG_LABEL}
+		return {"rows": [], "flags": {}, "flag_labels": FLAG_LABEL, "days_in_month": 0}
 
 	from calendar import monthrange
 
@@ -169,7 +169,9 @@ def get_review_grid(filters=None) -> dict:
 		if day_flags:
 			flags[emp] = day_flags
 
-	return {"rows": rows, "flags": flags, "flag_labels": FLAG_LABEL}
+	# `days_in_month` để giao diện vẽ TRỌN tháng: `row["days"]` không có khoá cho ngày thiếu bản ghi,
+	# vẽ theo nó thì đúng những ô cần soát nhất lại không có chỗ để hiện.
+	return {"rows": rows, "flags": flags, "flag_labels": FLAG_LABEL, "days_in_month": last}
 
 
 def payroll_snapshot(doc) -> dict:
