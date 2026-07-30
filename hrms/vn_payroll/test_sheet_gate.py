@@ -6,7 +6,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from hrms.tests.isolation import PerTestRollback
-from hrms.tests.vn_test_utils import ensure_short_hours_code
+from hrms.tests.vn_test_utils import ensure_short_hours_code, test_employee
 from hrms.vn_payroll.sheet_gate import (
 	gate,
 	gate_enabled,
@@ -37,7 +37,7 @@ class TestSheetGate(PerTestRollback, FrappeTestCase):
 	def setUpClass(cls):
 		super().setUpClass()
 		ensure_short_hours_code()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.emp = test_employee()
 		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
 
 	def setUp(self):

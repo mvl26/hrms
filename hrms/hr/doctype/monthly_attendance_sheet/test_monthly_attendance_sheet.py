@@ -7,6 +7,7 @@ from frappe.tests.utils import FrappeTestCase
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import test_employee
 
 
 class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
@@ -239,7 +240,7 @@ class TestSubmitWarnsAboutUnreviewedDays(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.emp = test_employee()
 		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
 
 	def sheet(self, month=8, year=2099):
@@ -280,7 +281,7 @@ class TestFlowFromReportToPayroll(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.emp = test_employee()
 		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
 
 	def test_get_or_create_sheet_opens_the_existing_one_instead_of_duplicating(self):

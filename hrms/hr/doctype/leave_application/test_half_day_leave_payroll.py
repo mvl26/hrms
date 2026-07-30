@@ -16,13 +16,14 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import test_employee
 
 
 class TestHalfDayLeaveIsNotDoubleDocked(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.emp = test_employee()
 		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
 
 	def half_day_leave(self, date="2099-03-04", period="Sáng"):

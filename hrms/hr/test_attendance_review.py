@@ -16,7 +16,7 @@ from hrms.hr.attendance_review import (
 	get_review_grid,
 )
 from hrms.tests.isolation import PerTestRollback
-from hrms.tests.vn_test_utils import ensure_short_hours_code
+from hrms.tests.vn_test_utils import ensure_short_hours_code, test_employee
 
 
 class TestAnomalyFlags(FrappeTestCase):
@@ -59,7 +59,7 @@ class TestReviewGrid(PerTestRollback, FrappeTestCase):
 	def setUpClass(cls):
 		super().setUpClass()
 		ensure_short_hours_code()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.emp = test_employee()
 		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
 
 	def mk(self, day, **kw):
@@ -123,7 +123,7 @@ class TestApplyCorrection(PerTestRollback, FrappeTestCase):
 	def setUpClass(cls):
 		super().setUpClass()
 		ensure_short_hours_code()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.emp = test_employee()
 		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
 
 	def mk(self, day, **kw):

@@ -9,13 +9,14 @@ from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import test_employee
 
 
 class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.emp = test_employee()
 		cls.year, cls.month = 2099, 3  # far future to avoid colliding with any real/test data
 
 	def _mk(self, day, **codes):

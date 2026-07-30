@@ -23,7 +23,7 @@ from frappe.utils import get_time, getdate
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
-from hrms.tests.vn_test_utils import default_company, ensure_short_hours_code
+from hrms.tests.vn_test_utils import default_company, ensure_short_hours_code, test_employee
 
 
 def mk_attendance(employee, date, submit=True, **codes):
@@ -248,7 +248,7 @@ class TestCheckinAutoAttendanceE2E(FrappeTestCase):
 		băng). Nhánh đó được kiểm riêng ở `test_period_lock`; ở đây bỏ qua chứ không báo xanh giả."""
 		from hrms.hr.period_lock import locking_sheet
 
-		emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		emp = test_employee()
 		sheet = locking_sheet(emp, date) if emp else None
 		if sheet:
 			self.skipTest(f"ky chua {date} da chot tai {sheet} - auto-attendance khong cham nua")

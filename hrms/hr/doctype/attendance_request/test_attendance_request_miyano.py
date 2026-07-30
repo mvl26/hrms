@@ -14,6 +14,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import test_employee
 
 _FIX_DIR = os.path.join(frappe.get_app_path("hrms"), "fixtures")
 _FIXTURE = os.path.join(_FIX_DIR, "attendance_code.json")
@@ -249,7 +250,7 @@ class TestAttendanceRequestCode(PerTestRollback, FrappeTestCase):
 	"""T4 — mã công theo reason (payroll-neutral). WFH→W, On Duty→CT, quên/muộn→X."""
 
 	def setUp(self):
-		self.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		self.emp = test_employee()
 		self.company = frappe.db.get_value("Employee", self.emp, "company")
 
 	def _att(self, status, date, half=False, half_status="Absent"):
@@ -377,7 +378,7 @@ class TestAttendanceRequestPayrollInvariance(PerTestRollback, FrappeTestCase):
 	với khấu trừ = trả đủ công."""
 
 	def setUp(self):
-		self.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		self.emp = test_employee()
 		self.company = frappe.db.get_value("Employee", self.emp, "company")
 
 	def _att(self, status, date):

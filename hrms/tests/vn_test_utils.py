@@ -45,3 +45,18 @@ def ensure_short_hours_code() -> str:
 			}
 		).insert()
 	return code
+
+
+def test_employee(email: str = "vn_fixture@codes.com") -> str:
+	"""Nhân viên để dựng dữ liệu test — TỰ TẠO, không đi tìm người có sẵn trên site.
+
+	``frappe.db.get_value("Employee", {"status": "Active"}, "name")`` chỉ chạy được trên site đã
+	có dữ liệu. Trên ``test_site`` của CI, mỗi test class rollback phần của nó, nên tới lượt class
+	sau có thể không còn nhân viên nào: get_value trả ``None`` và mọi thứ phía sau vỡ —
+	``MandatoryError: [Attendance]: employee``, ``KeyError: 'employee'``.
+
+	``make_employee`` trả lại đúng nhân viên cũ nếu user đã tồn tại, nên gọi nhiều lần là an toàn.
+	"""
+	from erpnext.setup.doctype.employee.test_employee import make_employee
+
+	return make_employee(email, company=default_company())

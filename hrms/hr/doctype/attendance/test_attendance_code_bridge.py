@@ -9,13 +9,14 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import getdate
 
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import test_employee
 
 
 class TestAttendanceCodeBridge(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.emp = test_employee()
 
 	def _bridge(self, **codes):
 		doc = frappe.get_doc(

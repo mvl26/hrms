@@ -7,7 +7,7 @@ from frappe.tests.utils import FrappeTestCase
 
 from hrms.hr.period_lock import is_period_locked, locking_sheet
 from hrms.tests.isolation import PerTestRollback
-from hrms.tests.vn_test_utils import ensure_short_hours_code
+from hrms.tests.vn_test_utils import ensure_short_hours_code, test_employee
 
 
 class TestPeriodLock(PerTestRollback, FrappeTestCase):
@@ -15,7 +15,7 @@ class TestPeriodLock(PerTestRollback, FrappeTestCase):
 	def setUpClass(cls):
 		super().setUpClass()
 		ensure_short_hours_code()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.emp = test_employee()
 		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
 
 	def mk_sheet(self, month, year=2099, submit=True, department=None):
@@ -112,7 +112,7 @@ class TestLockedPeriodStopsAutoAttendance(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.emp = test_employee()
 		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
 		cls.shift = "VN Lock Shift (test)"
 		if not frappe.db.exists("Shift Type", cls.shift):

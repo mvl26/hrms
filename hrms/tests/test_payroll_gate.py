@@ -19,7 +19,7 @@ from hrms.payroll_gate import (
 	simulate_payroll_mode_delta,
 )
 from hrms.tests.isolation import PerTestRollback
-from hrms.tests.vn_test_utils import default_company, ensure_short_hours_code
+from hrms.tests.vn_test_utils import default_company, ensure_short_hours_code, test_employee
 
 
 def slip(name, employee="EMP-1", payment_days=22, absent_days=0, leave_without_pay=0):
@@ -130,7 +130,7 @@ class TestClassifierDelta(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.employee = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.employee = test_employee()
 		ensure_short_hours_code()
 		cls.shift = "VN Gate Split Shift (test)"
 		if not frappe.db.exists("Shift Type", cls.shift):

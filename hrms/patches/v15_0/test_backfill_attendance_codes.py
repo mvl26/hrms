@@ -9,13 +9,14 @@ from frappe.utils import getdate
 
 from hrms.patches.v15_0.backfill_attendance_codes import backfill
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import test_employee
 
 
 class TestBackfillAttendanceCodes(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.emp = test_employee()
 
 	def _bare(self, day, status, leave_type=None, half_day_status=None):
 		"""Insert an attendance then strip its code fields, simulating a pre-feature record."""

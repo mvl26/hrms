@@ -14,6 +14,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import test_employee
 
 _CF = os.path.join(frappe.get_app_path("hrms"), "fixtures", "custom_field.json")
 
@@ -84,7 +85,7 @@ class TestLunchFlagForAttendance(PerTestRollback, FrappeTestCase):
 	"""L2 — ``lunch_flag_for_attendance`` đọc checkin thật của ngày rồi áp luật."""
 
 	def setUp(self):
-		self.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		self.emp = test_employee()
 
 	def _checkin(self, dt):
 		frappe.get_doc({"doctype": "Employee Checkin", "employee": self.emp, "time": dt}).insert(
@@ -115,7 +116,7 @@ class TestLunchPayrollInvariance(PerTestRollback, FrappeTestCase):
 	"""L3 — GATE: Σ cờ per-Attendance == count_lunch_days cũ → phụ cấp ăn trưa (J) bất biến."""
 
 	def setUp(self):
-		self.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		self.emp = test_employee()
 		self.company = frappe.db.get_value("Employee", self.emp, "company")
 
 	def _checkin(self, dt):
@@ -177,7 +178,7 @@ class TestLunchReport(PerTestRollback, FrappeTestCase):
 	"""L4 — report Bảng chấm công có cột 'Số buổi ăn trưa'."""
 
 	def setUp(self):
-		self.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		self.emp = test_employee()
 		self.company = frappe.db.get_value("Employee", self.emp, "company")
 
 	def _checkin(self, dt):
@@ -217,7 +218,7 @@ class TestSheetLunch(PerTestRollback, FrappeTestCase):
 	"""L5 — Bảng Công Tháng (Monthly Attendance Sheet) mang tổng ăn trưa."""
 
 	def setUp(self):
-		self.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		self.emp = test_employee()
 		self.company = frappe.db.get_value("Employee", self.emp, "company")
 
 	def _checkin(self, dt):
@@ -257,7 +258,7 @@ class TestLunchRecompute(PerTestRollback, FrappeTestCase):
 	"""L6 — tiện ích tính lại cờ ăn trưa (làm mới khi checkin về muộn)."""
 
 	def setUp(self):
-		self.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		self.emp = test_employee()
 		self.company = frappe.db.get_value("Employee", self.emp, "company")
 
 	def _checkin(self, dt):
@@ -383,7 +384,7 @@ class TestWFHCodeOnSheet(PerTestRollback, FrappeTestCase):
 	chuỗi: Attendance mã W → report hiện 'W' + cộng vào Công, không lẫn CT."""
 
 	def setUp(self):
-		self.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		self.emp = test_employee()
 		self.company = frappe.db.get_value("Employee", self.emp, "company")
 		if not frappe.db.exists("Attendance Code", "W"):
 			frappe.get_doc(

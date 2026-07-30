@@ -10,7 +10,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from hrms.tests.isolation import PerTestRollback
-from hrms.tests.vn_test_utils import ensure_short_hours_code
+from hrms.tests.vn_test_utils import ensure_short_hours_code, test_employee
 
 SHIFT_FIELDS = (
 	"custom_split_half_day",
@@ -34,7 +34,7 @@ class TestVNHalfDayLogic(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.emp = test_employee()
 		cls.shift = "VN Split 08-1730 (test)"
 		if not frappe.db.exists("Shift Type", cls.shift):
 			frappe.get_doc(
