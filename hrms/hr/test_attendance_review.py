@@ -88,6 +88,28 @@ class TestReviewGrid(PerTestRollback, FrappeTestCase):
 		grid = get_review_grid({"month": 9, "year": 2099, "company": self.company})
 		self.assertIn(FLAG_SHORT_HOURS, grid["flags"][self.emp][2])
 
+	def test_grid_flags_a_working_day_with_no_record(self):
+		"""Ô trống trên ngày làm việc = thiếu bản ghi công, phải nổi cờ.
+
+		Từng bị nuốt vì ô trống bị xếp chung nhóm "ngày nghỉ" — cờ NO_RECORD không bao giờ nổi."""
+		self.mk(1, custom_attendance_code="X").submit()  # để tháng có ít nhất một ngày có bản ghi
+		grid = get_review_grid({"month": 9, "year": 2099, "company": self.company})
+		flags = grid["flags"].get(self.emp, {})
+		self.assertTrue(
+			any(FLAG_NO_RECORD in f for f in flags.values()),
+			"ngày làm việc không có bản ghi phải mang cờ NO_RECORD",
+		)
+
+	def test_grid_does_not_flag_days_before_the_employee_joined(self):
+		"""Ngày trước khi vào làm cũng cho ô trống — không được coi là thiếu bản ghi."""
+		joined = frappe.db.get_value("Employee", self.emp, "date_of_joining")
+		month = frappe.utils.getdate(joined).month
+		year = frappe.utils.getdate(joined).year
+		grid = get_review_grid({"month": month, "year": year, "company": self.company})
+		flags = grid["flags"].get(self.emp, {})
+		before = [d for d in flags if d < frappe.utils.getdate(joined).day]
+		self.assertEqual(before, [], f"ngày trước khi vào làm bị gắn cờ: {before}")
+
 	def test_grid_exposes_the_attendance_name_so_the_cell_knows_what_to_fix(self):
 		att = self.mk(3, custom_attendance_code="X")
 		att.submit()

@@ -44,7 +44,10 @@ FLAG_LABEL = {
 
 SHORT_HOURS_CODE = "1/2X"
 ABSENT_CODE = "V"
-REST_MARKERS = (MARKER_WEEKLY_OFF, MARKER_HOLIDAY, "")
+# Ô nghỉ theo lịch. KHÔNG gộp ô trống ("") vào đây: ô trống nghĩa là ngày làm việc mà không có bản
+# ghi công nào — chính là thứ `NO_RECORD` phải bắt. (Ngày ngoài thời gian làm việc của nhân viên
+# cũng cho ô trống, nên `get_review_grid` phải loại chúng bằng ngày vào làm / ngày nghỉ việc.)
+REST_MARKERS = (MARKER_WEEKLY_OFF, MARKER_HOLIDAY)
 
 
 def anomaly_flags(symbol: str, punches: int, has_record: bool, is_rest_day: bool) -> list[str]:
@@ -129,18 +132,36 @@ def get_review_grid(filters=None) -> dict:
 	employees = [r["employee"] for r in rows]
 	punches = punch_counts(employees, start, end)
 	names = attendance_names(employees, start, end)
+	employment = {
+		e.name: e
+		for e in frappe.get_all(
+			"Employee",
+			filters={"name": ["in", employees]},
+			fields=["name", "date_of_joining", "relieving_date"],
+		)
+	}
 
 	flags = {}
 	for row in rows:
 		emp = row["employee"]
 		emp_punch, emp_names = punches.get(emp, {}), names.get(emp, {})
+		emp_job = employment.get(emp) or frappe._dict()
 		day_flags = {}
-		for day, symbol in row["days"].items():
+		# Duyệt TRỌN tháng, không duyệt `row["days"]`: report chỉ đặt khoá cho ngày có bản ghi, ngày
+		# lễ/CN, hoặc ngày ngoài thời gian làm việc. Ngày làm việc mà thiếu bản ghi thì KHÔNG có khoá
+		# nào cả — duyệt theo khoá là vĩnh viễn không thấy nó, tức cờ NO_RECORD không bao giờ nổi.
+		for day in range(1, last + 1):
+			symbol = row["days"].get(day, "")
+			d = getdate(f"{year}-{month:02d}-{day:02d}")
+			# ngoài thời gian làm việc thì ô trống là đương nhiên, không phải thiếu bản ghi
+			outside = (emp_job.date_of_joining and d < getdate(emp_job.date_of_joining)) or (
+				emp_job.relieving_date and d > getdate(emp_job.relieving_date)
+			)
 			f = anomaly_flags(
 				symbol,
 				emp_punch.get(day, 0),
 				bool(emp_names.get(day)),
-				symbol in REST_MARKERS,
+				symbol in REST_MARKERS or bool(outside),
 			)
 			if f:
 				day_flags[day] = f
