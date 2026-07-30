@@ -22,7 +22,7 @@ from frappe.utils.nestedset import get_descendants_of
 
 from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
 
-from hrms.hr.attendance_legend import legend_html
+from hrms.hr.attendance_legend import legend_html, legend_row
 
 Filters = frappe._dict
 
@@ -220,7 +220,10 @@ def execute(filters: Filters | None = None) -> tuple:
 
 	columns = get_columns(days)
 	data = _rows_to_report_data(rows, days, code_map)
-	# chú thích ký hiệu: MỘT DÒNG ở trên bảng (dùng chung mọi báo cáo), không nhét thành dòng dữ liệu
+	# Chú thích ký hiệu ra hai đường: khối chip màu ở `message` (đẹp, chỉ có trên màn hình) và ĐÚNG
+	# MỘT dòng cuối bảng (thuần văn bản) để nó theo được vào file Excel — `message` không vào file,
+	# mà dòng chỉ thêm lúc xuất thì bị `visible_idx` lọc mất.
+	data.append(legend_row())
 	return columns, data, legend_html()
 
 

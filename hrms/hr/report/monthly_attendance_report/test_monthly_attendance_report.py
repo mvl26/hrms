@@ -414,16 +414,33 @@ class TestAttendanceColorState(PerTestRollback, FrappeTestCase):
 class TestLegend(PerTestRollback, FrappeTestCase):
 	"""Chú thích ký hiệu: MỘT DÒNG, dùng chung, nằm trên bảng — không làm báo cáo dài ra."""
 
-	def test_report_returns_the_legend_as_a_message_not_as_rows(self):
+	def test_the_grid_carries_exactly_one_legend_row_at_the_end(self):
+		"""Một dòng thôi, và ở cuối — nhiều hơn là báo cáo dài ra, không có thì file Excel mất nó."""
+		from hrms.hr.attendance_legend import is_legend_row
 		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
 
-		result = execute({"month": 6, "year": 2099})
-		self.assertEqual(len(result), 3, "report phải trả cả message chú thích")
-		_columns, data, message = result
-		self.assertTrue(message)
+		_columns, data, message = execute({"month": 6, "year": 2099})
+		self.assertTrue(message, "vẫn phải có khối chú thích màu trên bảng")
+		self.assertEqual(sum(1 for r in data if is_legend_row(r)), 1)
+		self.assertTrue(is_legend_row(data[-1]), "dòng chú thích phải ở cuối")
 		self.assertTrue(
-			all(r.get("employee") for r in data),
-			"mọi dòng dữ liệu phải là nhân viên — chú thích không được nhét vào bảng",
+			all(r.get("employee") for r in data[:-1]),
+			"các dòng còn lại phải đều là nhân viên",
+		)
+
+	def test_the_legend_row_survives_the_excel_export_path(self):
+		"""Đường xuất file lọc dòng theo `visible_idx`, nên phải kiểm bằng chính hàm dựng file."""
+		from frappe.desk.query_report import build_xlsx_data, format_fields, run
+
+		filters = {"month": 7, "year": 2026, "company": frappe.db.get_value("Company", {}, "name")}
+		data = frappe._dict(run("Monthly Attendance Report", filters, ignore_prepared_report=True))
+		data.filters = filters
+		format_fields(data)
+		xlsx_data, _widths = build_xlsx_data(data, list(range(len(data.result))), include_indentation=0)
+
+		self.assertTrue(
+			any("Chú thích" in str(cell) for row in xlsx_data for cell in row),
+			"file Excel xuất ra phải có dòng chú thích ký hiệu",
 		)
 
 	def test_every_attendance_code_is_explained_in_one_line(self):

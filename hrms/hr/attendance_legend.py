@@ -10,9 +10,14 @@ Mỗi ký hiệu hiện dưới dạng chip **tô đúng màu mà ô đó mang t
 formatter của report và bản in), nên nhìn chú thích là tra được màu luôn — không phải đoán ô vàng
 nghĩa là gì.
 
-Trả về dạng `message` của query report (HTML nằm TRÊN bảng), cố ý không nhét thành dòng dữ liệu:
-nhét vào bảng thì báo cáo dài ra và lẫn với dữ liệu thật. Đánh đổi: `message` KHÔNG đi vào file
-Excel xuất ra — `frappe.desk.query_report._export_query` dựng file từ `columns` + `result` mà thôi.
+Hai đường ra, cho hai nơi khác nhau:
+
+- `legend_html()` → `message` của query report: khối chip màu nằm TRÊN bảng, chỉ có trên màn hình.
+- `legend_row()` → ĐÚNG MỘT dòng cuối bảng, thuần văn bản, để chú thích có mặt trong file Excel.
+
+Phải có dòng đó vì `message` không đi vào file: `_export_query` dựng file từ `columns` + `result`.
+Và dòng đó phải nằm sẵn trong bảng chứ không thể chỉ thêm lúc xuất — `build_xlsx_data` lọc dòng
+theo `visible_idx` client gửi lên, dòng nào màn hình không có sẽ bị loại khỏi file.
 """
 
 import frappe
@@ -117,4 +122,23 @@ def legend_html() -> str:
 		f'<span class="vn-legend-title">{escape_html(_("Chú thích"))}</span>'
 		f"{''.join(items)}"
 		f"</div>"
+	)
+
+
+# Cột đặt dòng chú thích trong bảng: rộng nhất trong các cột văn bản, và là cột người đọc quét mắt
+# xuống đầu tiên. Không đặt vào cột `employee` (Link) để nó không bị render thành liên kết gãy.
+LEGEND_ROW_FIELD = "employee_name"
+
+
+def legend_row() -> dict:
+	"""ĐÚNG MỘT dòng chú thích, gắn cuối bảng để đi được vào file Excel xuất ra."""
+	return {LEGEND_ROW_FIELD: f"{_('Chú thích')}: {legend_text()}"}
+
+
+def is_legend_row(row: dict) -> bool:
+	"""Dòng chú thích, không phải dòng nhân viên — dùng để bỏ qua khi thống kê."""
+	return (
+		bool(row)
+		and not row.get("employee")
+		and str(row.get(LEGEND_ROW_FIELD, "")).startswith(f"{_('Chú thích')}:")
 	)
