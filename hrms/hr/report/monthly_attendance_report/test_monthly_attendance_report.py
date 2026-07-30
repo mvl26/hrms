@@ -451,8 +451,38 @@ class TestLegend(PerTestRollback, FrappeTestCase):
 
 	def test_the_legend_is_shared_not_copied_per_report(self):
 		"""Một nguồn duy nhất: report chỉ gọi helper, không tự dựng danh sách mã."""
-		from hrms.hr.attendance_legend import legend_text
+		from hrms.hr.attendance_legend import legend_html
 		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
 
 		_columns, _data, message = execute({"month": 6, "year": 2099})
-		self.assertIn(legend_text()[:40], message)
+		self.assertEqual(message, legend_html())
+
+	def test_each_symbol_wears_the_same_colour_as_its_cell_in_the_grid(self):
+		"""Chú thích phải là bảng màu luôn: chip lấy đúng state màu mà ô đó mang trong lưới."""
+		from hrms.hr.attendance_legend import legend_html
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
+			day_state,
+			get_code_map,
+		)
+
+		html = legend_html()
+		code_map = get_code_map()
+		for code in ("X", "1/2X", "P", "Ô", "K", "V"):
+			state = day_state(code, code_map)
+			self.assertIn(f"vn-lg-{state}", html, f"{code} phải mang lớp màu của state {state}")
+
+	def test_the_colours_come_from_the_shared_palette_not_hardcoded(self):
+		from hrms.hr.attendance_legend import legend_styles
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import STATE_STYLE
+
+		css = legend_styles()
+		for state, style in STATE_STYLE.items():
+			self.assertIn(f".vn-lg-{state}", css, f"thiếu lớp màu cho state {state}")
+			self.assertIn(style["bg"], css, f"{state}: màu nền sáng phải khớp bảng màu chung")
+			self.assertIn(style["bg_dark"], css, f"{state}: màu nền tối phải khớp bảng màu chung")
+
+	def test_dark_theme_is_handled_by_attribute_not_only_media_query(self):
+		"""Desk đổi theme bằng data-theme; chỉ dựa vào prefers-color-scheme là lệch màu."""
+		from hrms.hr.attendance_legend import legend_styles
+
+		self.assertIn('[data-theme="dark"]', legend_styles())
