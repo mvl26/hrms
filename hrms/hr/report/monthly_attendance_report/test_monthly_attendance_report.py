@@ -409,3 +409,54 @@ class TestAttendanceColorState(PerTestRollback, FrappeTestCase):
 		)
 
 		self.assertEqual(attendance_state_styles(), STATE_STYLE)
+
+
+class TestLegend(PerTestRollback, FrappeTestCase):
+	"""Chú thích ký hiệu phải nằm TRONG dữ liệu report — `message` không đi vào file Excel."""
+
+	def rows(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
+
+		_columns, data = execute({"month": 6, "year": 2099})
+		return data
+
+	def legend(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
+			get_code_map,
+			legend_rows,
+		)
+
+		return legend_rows(get_code_map())
+
+	def test_every_attendance_code_is_explained(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_code_map
+
+		codes = set(get_code_map())
+		explained = {r["day_1"] for r in self.legend() if r.get("day_1")}
+		self.assertTrue(codes <= explained, f"mã chưa có chú thích: {codes - explained}")
+
+	def test_calendar_markers_are_explained_too(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
+			MARKER_HOLIDAY,
+			MARKER_WEEKLY_OFF,
+		)
+
+		explained = {r["day_1"] for r in self.legend() if r.get("day_1")}
+		self.assertIn(MARKER_WEEKLY_OFF, explained)
+		self.assertIn(MARKER_HOLIDAY, explained)
+
+	def test_each_legend_line_carries_its_colour(self):
+		"""Ký hiệu mẫu phải mang state màu, nếu không chú thích chỉ là chữ, không phải bảng màu."""
+		coloured = [r for r in self.legend() if r.get("day_1") and r.get("_state_1")]
+		self.assertGreaterEqual(len(coloured), 10)
+
+	def test_legend_sits_at_the_end_of_the_report_data(self):
+		data = self.rows()
+		titles = [i for i, r in enumerate(data) if r.get("employee_name") == "CHÚ THÍCH KÝ HIỆU"]
+		self.assertEqual(len(titles), 1, "phải có đúng một khối chú thích")
+		self.assertTrue(all(not r.get("employee") for r in data[titles[0] :]), "chú thích phải ở cuối")
+
+	def test_legend_lines_are_not_mistaken_for_employees(self):
+		"""Dòng chú thích không được mang mã nhân viên — nếu không nó lọt vào mọi thống kê theo NV."""
+		self.assertTrue(all(not r.get("employee") for r in self.legend()))
+		self.assertTrue(all(not r.get("tong_cong") for r in self.legend()))
