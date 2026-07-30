@@ -42,14 +42,16 @@ CATEGORY_HOLIDAY = "Nghỉ lễ"
 # in đậm. KHÔNG gồm Vắng / Không lương (không lương) và Nghỉ lễ (đếm riêng nếu cần).
 TOTAL_PAID = "Tổng công"
 
-# Cột tổng hợp hiển thị trên report (theo yêu cầu — gọn). Ốm/chăm con ốm/nghỉ bù đã gộp vào Tổng công
-# nên không có cột riêng; Vắng/Nghỉ lễ chỉ còn ký hiệu trong lưới. (category nội bộ, nhãn hiển thị)
+# Cột tổng hợp hiển thị trên report. Nghỉ bù do công ty trả nên đã gộp vào Tổng công; Ốm và Thai
+# sản KHÔNG gộp (BHXH chi trả — xem `is_paid_leave`) nên phải có cột riêng, nếu không số ngày đó
+# biến mất khỏi mọi cột tổng. Vắng/Nghỉ lễ chỉ còn ký hiệu trong lưới.
 REPORT_CATEGORIES = [
 	("Phép", "Phép năm"),
+	("Ốm", "Ốm / chăm con ốm"),
 	("Thai sản", "Thai sản"),
-	("Không lương", "Không lương"),
 	("Tai nạn LĐ", "Tai nạn lao động"),
 	("Việc riêng", "Nghỉ riêng"),
+	("Không lương", "Không lương"),
 ]
 
 
@@ -242,7 +244,14 @@ NON_PAID_LEAVE_CATEGORIES = ("Công", "Không lương", "Vắng")
 
 
 def is_paid_leave(code) -> bool:
-	"""Mã nghỉ CÓ LƯƠNG (Phép/Ốm/Chăm con ốm/Thai sản/TNLĐ/Nghỉ bù/Việc riêng) → phần nghỉ tính đủ công."""
+	"""Mã nghỉ mà DOANH NGHIỆP trả lương → ngày đó tính vào Tổng công.
+
+	Quyết định 2026-07-30: nghỉ do **BHXH chi trả** (ốm Đ.28, chăm con ốm Đ.25, thai sản Đ.39 Luật
+	BHXH) KHÔNG phải công của doanh nghiệp — người lao động nhận tiền từ quỹ BHXH, công ty không trả
+	lương ngày đó. Ba mã Ô/Cô/TS vì thế mang `is_paid = 0` trong fixtures và rơi khỏi Tổng công.
+
+	Ngược lại, **tai nạn lao động vẫn tính công**: Đ.38.3 Luật ATVSLĐ bắt người sử dụng lao động trả
+	đủ lương trong thời gian điều trị — "nghỉ chế độ" không đồng nghĩa "BHXH trả"."""
 	return bool(code and cint(code.is_paid) and code.category not in NON_PAID_LEAVE_CATEGORIES)
 
 

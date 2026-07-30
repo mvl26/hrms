@@ -44,13 +44,18 @@ class TestAnnualLeaveEarnedFixture(PerTestRollback, FrappeTestCase):
 	def test_fixture_is_lwp_truth_table(self):
 		# is_lwp / is_ppl are the ONLY Leave Type levers payroll reads (they build the LWP map that
 		# docks payment_days). Lock every type's value so an accidental flip — e.g. making Nghỉ ốm
-		# unpaid, or clearing Nghỉ không lương — is caught here instead of on a Salary Slip.
+		# paid again, or clearing Nghỉ không lương — is caught here instead of on a Salary Slip.
+		#
+		# Ốm / chăm con ốm / thai sản: `is_ppl = 1` với phần công ty trả = 0 → BHXH chi trả, doanh
+		# nghiệp không trả lương ngày đó (quyết định 2026-07-30). Dùng is_ppl chứ không phải is_lwp
+		# vì `LeaveType.validate_lwp` chặn is_lwp cho loại nghỉ đã có cấp phép.
+		# Tai nạn lao động vẫn (0, 0): Đ.38.3 Luật ATVSLĐ bắt công ty trả đủ lương khi điều trị.
 		expected = {
 			# leave type: (is_lwp, is_ppl)
 			"Nghỉ phép năm": (0, 0),
-			"Nghỉ ốm": (0, 0),
-			"Nghỉ chăm con ốm": (0, 0),
-			"Nghỉ thai sản": (0, 0),
+			"Nghỉ ốm": (0, 1),
+			"Nghỉ chăm con ốm": (0, 1),
+			"Nghỉ thai sản": (0, 1),
 			"Nghỉ tai nạn lao động": (0, 0),
 			"Nghỉ bù": (0, 0),
 			"Nghỉ kết hôn": (0, 0),

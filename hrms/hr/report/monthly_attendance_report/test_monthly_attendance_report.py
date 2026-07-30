@@ -84,24 +84,39 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 		self.assertEqual(row["totals"]["Phép"], 1.0)
 
 	def test_report_columns_are_the_configured_set(self):
-		# cột tổng hợp đúng bộ đã cấu hình (gọn): Tổng công (đầu, in đậm) + Phép năm/Thai sản/Không
-		# lương/Tai nạn lao động/Nghỉ riêng. Ốm/chăm con ốm/nghỉ bù gộp Tổng công; Vắng/Nghỉ lễ chỉ ký hiệu.
+		# Tổng công (đầu, in đậm) + các cột loại nghỉ. Từ 2026-07-30 Ốm và Thai sản có cột RIÊNG vì
+		# chúng do BHXH chi trả nên không còn gộp vào Tổng công — không có cột thì số ngày đó biến
+		# mất khỏi mọi tổng. Nghỉ bù (công ty trả) vẫn gộp Tổng công; Vắng/Nghỉ lễ chỉ còn ký hiệu.
 		columns, _data, _msg = execute({"month": self.month, "year": self.year})
 		summary = [
 			c["label"] for c in columns if c["fieldname"] == "tong_cong" or c["fieldname"].startswith("cat_")
 		]
 		self.assertEqual(
 			summary,
-			["Tổng công", "Phép năm", "Thai sản", "Không lương", "Tai nạn lao động", "Nghỉ riêng"],
+			[
+				"Tổng công",
+				"Phép năm",
+				"Ốm / chăm con ốm",
+				"Thai sản",
+				"Tai nạn lao động",
+				"Nghỉ riêng",
+				"Không lương",
+			],
 		)
 
-	def test_paid_leave_counts_in_tong_cong_unpaid_does_not(self):
-		# ốm / thai sản là nghỉ CÓ LƯƠNG → tính đủ công vào Tổng công; không lương (K) thì không.
+	def test_only_leave_the_company_pays_for_counts_in_tong_cong(self):
+		"""Tổng công = ngày DOANH NGHIỆP trả lương.
+
+		Ốm và thai sản do BHXH chi trả (Đ.25/28/39 Luật BHXH) nên không phải công của công ty; nghỉ
+		không lương thì đương nhiên không. Ngược lại tai nạn lao động VẪN tính: Đ.38.3 Luật ATVSLĐ
+		bắt công ty trả đủ lương trong thời gian điều trị."""
 		self._mk(5, custom_attendance_code="Ô")
 		self._mk(6, custom_attendance_code="TS")
 		self._mk(7, custom_attendance_code="K")
+		self._mk(8, custom_attendance_code="P")
+		self._mk(9, custom_attendance_code="T")
 		row = self._row(self.emp)
-		self.assertEqual(row["tong_cong"], 2.0)  # Ô + TS được trả lương; K không
+		self.assertEqual(row["tong_cong"], 2.0, "chỉ P (phép năm) + T (TNLĐ) là công ty trả")
 
 	def test_single_half_day_code_totals(self):
 		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows

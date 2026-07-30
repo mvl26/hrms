@@ -28,7 +28,10 @@ PAYROLL_FIELDS = ("status", "leave_type", "half_day_status")
 
 
 def lwp_leave_types() -> set:
-	return set(frappe.get_all("Leave Type", filters={"is_lwp": 1}, pluck="name"))
+	"""Loại nghỉ công ty không trả — dùng chung hàm của engine lương để hai bên không lệch nhau."""
+	from hrms.vn_payroll.salary_slip_hook import unpaid_leave_types
+
+	return unpaid_leave_types()
 
 
 def worked_days_on_site() -> list:

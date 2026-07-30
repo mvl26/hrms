@@ -10,7 +10,7 @@ LOẠI lương suy TỪ cấu trúc của slip. Slip khác đi đường Frappe 
 """
 
 import frappe
-from frappe.utils import add_days, flt, getdate, rounded
+from frappe.utils import add_days, cint, flt, getdate, rounded
 
 from hrms.vn_payroll.lunch import lunch_days_for_period
 from hrms.vn_payroll.mvl import MVLInput, compute_mvl
@@ -70,10 +70,37 @@ def get_mvl_assignment(doc) -> frappe._dict | None:
 	return rows[0] if rows else None
 
 
+def unpaid_leave_types() -> set:
+	"""Loại nghỉ mà DOANH NGHIỆP không trả lương — payroll trừ trọn ngày cho những loại này.
+
+	Hai nhóm, không chỉ `is_lwp`:
+
+	- `is_lwp = 1` — nghỉ không lương thông thường.
+	- `is_ppl = 1` với phần công ty trả = 0 — nghỉ do **BHXH chi trả** (ốm, chăm con ốm, thai sản).
+	  Phải dùng `is_ppl` chứ không phải `is_lwp` vì `LeaveType.validate_lwp` chặn đặt `is_lwp` cho
+	  loại nghỉ đã có cấp phép, mà ba loại này đều có (quyết định 2026-07-30).
+
+	Bỏ sót nhóm thứ hai thì engine MVL và cổng đối soát sẽ tính ngày BHXH là có lương trong khi
+	controller payroll đã trừ — hai bên lệch nhau mà không ai báo.
+	"""
+	rows = frappe.get_all(
+		"Leave Type",
+		or_filters={"is_lwp": 1, "is_ppl": 1},
+		fields=["name", "is_lwp", "is_ppl", "fraction_of_daily_salary_per_leave"],
+	)
+	return {
+		r.name
+		for r in rows
+		if cint(r.is_lwp) or (cint(r.is_ppl) and not flt(r.fraction_of_daily_salary_per_leave))
+	}
+
+
 def _day_paid_fraction(status, half_day_status, leave_type, lwp: set) -> float:
 	"""Số công CÓ LƯƠNG của một ngày Attendance (khớp cách payroll tính payment_days theo ngày):
-	đi làm/nghỉ có lương = 1; vắng/nghỉ không lương = 0; nửa ngày = 0.5 (nửa làm) + 0.5 nếu nửa kia
-	Present và KHÔNG phải nghỉ không lương."""
+	đi làm/nghỉ có lương = 1; vắng/nghỉ công ty không trả = 0; nửa ngày = 0.5 (nửa làm) + 0.5 nếu
+	nửa kia Present và KHÔNG thuộc nhóm công ty không trả.
+
+	`lwp` phải là kết quả của `unpaid_leave_types()` — gồm cả nghỉ BHXH, không chỉ `is_lwp`."""
 	if status in ("Present", "Work From Home"):
 		return 1.0
 	if status == "On Leave":
@@ -94,7 +121,7 @@ def paid_work_days_between(employee: str, start, end) -> float:
 	)
 	if not rows:
 		return 0.0
-	lwp = set(frappe.get_all("Leave Type", filters={"is_lwp": 1}, pluck="name"))
+	lwp = unpaid_leave_types()
 	return sum(_day_paid_fraction(r.status, r.half_day_status, r.leave_type, lwp) for r in rows)
 
 

@@ -97,7 +97,7 @@ class TestPayrollDaysScenarios(ShortHoursCodeMixin, FrappeTestCase):
 		plan = {
 			1: "X",  # present        -> 0
 			2: "P",  # annual leave   -> 0 (paid, not in LWP map)
-			3: "Ô",  # sick leave     -> 0 (paid)
+			3: "Ô",  # nghỉ ốm        -> lwp 1.0 (BHXH trả, công ty không - từ 2026-07-30)
 			4: "KH",  # personal leave (kết hôn) -> 0 (paid)
 			5: "CT",  # business trip  -> 0 (WFH, not read by payroll)
 			6: "K",  # unpaid leave   -> lwp 1.0
@@ -116,10 +116,10 @@ class TestPayrollDaysScenarios(ShortHoursCodeMixin, FrappeTestCase):
 		ss.end_date = getdate("2099-06-30")
 		ss.get_working_days_details()
 
-		self.assertEqual(ss.leave_without_pay, 1.5, "K 1.0 + 1/2K 0.5")
+		self.assertEqual(ss.leave_without_pay, 2.5, "K 1.0 + 1/2K 0.5 + Ô 1.0 (BHXH trả)")
 		self.assertEqual(ss.absent_days, 1.5, "V 1.0 + 1/2X half-absent 0.5")
-		# payment_days = total_working_days - lwp(1.5) - absent(V 1.0) - half_absent(1/2X 0.5)
-		self.assertEqual(ss.total_working_days - ss.payment_days, 3.0)
+		# payment_days = total_working_days - lwp(2.5) - absent(V 1.0) - half_absent(1/2X 0.5)
+		self.assertEqual(ss.total_working_days - ss.payment_days, 4.0)
 
 	@change_settings(
 		"Payroll Settings",

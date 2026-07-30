@@ -8,13 +8,20 @@ from frappe.tests.utils import FrappeTestCase
 
 from hrms.tests.isolation import PerTestRollback
 
-# VN Leave Type anchors (Phase 0) — name -> expected flags. All BHXH-funded leaves stay
-# is_lwp=0 so company payroll is unchanged (user decision 2026-07-08).
+# VN Leave Type anchors — name -> expected flags (is_lwp, is_compensatory, is_ppl, fraction).
+#
+# Nghỉ do **BHXH chi trả** (ốm Đ.28, chăm con ốm Đ.25, thai sản Đ.39 Luật BHXH): công ty KHÔNG trả
+# lương ngày đó nên payroll phải trừ ra (quyết định 2026-07-30, thay quyết định 2026-07-08 vốn giữ
+# nguyên is_lwp=0). Cơ chế dùng là `is_ppl` (nghỉ trả một phần) với phần công ty trả = 0, KHÔNG phải
+# `is_lwp`: `LeaveType.validate_lwp` chặn đặt is_lwp cho loại nghỉ đã có cấp phép, mà ba loại này đều
+# có. Với fraction = 0, cả hai nhánh payroll (theo đơn nghỉ và theo Attendance) đều trừ trọn ngày.
+#
+# Tai nạn lao động thì KHÁC: Đ.38.3 Luật ATVSLĐ bắt công ty trả đủ lương khi điều trị → vẫn trả đủ.
 VN_LEAVE_TYPES = {
 	"Nghỉ phép năm": {"is_lwp": 0, "is_compensatory": 0},
-	"Nghỉ ốm": {"is_lwp": 0, "is_compensatory": 0},
-	"Nghỉ chăm con ốm": {"is_lwp": 0, "is_compensatory": 0},
-	"Nghỉ thai sản": {"is_lwp": 0, "is_compensatory": 0},
+	"Nghỉ ốm": {"is_lwp": 0, "is_compensatory": 0, "is_ppl": 1, "fraction": 0.0},
+	"Nghỉ chăm con ốm": {"is_lwp": 0, "is_compensatory": 0, "is_ppl": 1, "fraction": 0.0},
+	"Nghỉ thai sản": {"is_lwp": 0, "is_compensatory": 0, "is_ppl": 1, "fraction": 0.0},
 	"Nghỉ tai nạn lao động": {"is_lwp": 0, "is_compensatory": 0},
 	"Nghỉ bù": {"is_lwp": 0, "is_compensatory": 1},
 	"Nghỉ không lương": {"is_lwp": 1, "is_compensatory": 0},
@@ -33,9 +40,9 @@ VN_ATTENDANCE_CODES = {
 	"1/2X": ("Công", 0.5, 1, "Half Day", None),
 	"P": ("Phép", 0.0, 1, "On Leave", "Nghỉ phép năm"),
 	"1/2P": ("Phép", 0.5, 1, "Half Day", "Nghỉ phép năm"),
-	"Ô": ("Ốm", 0.0, 1, "On Leave", "Nghỉ ốm"),
-	"Cô": ("Ốm", 0.0, 1, "On Leave", "Nghỉ chăm con ốm"),
-	"TS": ("Thai sản", 0.0, 1, "On Leave", "Nghỉ thai sản"),
+	"Ô": ("Ốm", 0.0, 0, "On Leave", "Nghỉ ốm"),
+	"Cô": ("Ốm", 0.0, 0, "On Leave", "Nghỉ chăm con ốm"),
+	"TS": ("Thai sản", 0.0, 0, "On Leave", "Nghỉ thai sản"),
 	"T": ("Tai nạn LĐ", 0.0, 1, "On Leave", "Nghỉ tai nạn lao động"),
 	"NB": ("Nghỉ bù", 0.0, 1, "On Leave", "Nghỉ bù"),
 	"K": ("Không lương", 0.0, 0, "On Leave", "Nghỉ không lương"),
@@ -53,9 +60,20 @@ class TestAttendanceCodeFixtures(PerTestRollback, FrappeTestCase):
 	def test_vn_leave_type_anchors_exist(self):
 		for name, flags in VN_LEAVE_TYPES.items():
 			self.assertTrue(frappe.db.exists("Leave Type", name), f"Missing Leave Type: {name}")
-			row = frappe.db.get_value("Leave Type", name, ["is_lwp", "is_compensatory"], as_dict=True)
+			row = frappe.db.get_value(
+				"Leave Type",
+				name,
+				["is_lwp", "is_compensatory", "is_ppl", "fraction_of_daily_salary_per_leave"],
+				as_dict=True,
+			)
 			self.assertEqual(int(row.is_lwp), flags["is_lwp"], f"{name}.is_lwp")
 			self.assertEqual(int(row.is_compensatory), flags["is_compensatory"], f"{name}.is_compensatory")
+			self.assertEqual(int(row.is_ppl), flags.get("is_ppl", 0), f"{name}.is_ppl")
+			self.assertEqual(
+				float(row.fraction_of_daily_salary_per_leave or 0),
+				flags.get("fraction", 0.0),
+				f"{name}: phần lương công ty trả cho ngày nghỉ này",
+			)
 
 	def test_deprecated_kl_code_removed(self):
 		# 'KL' was renamed to 'K' (+ half-day '1/2K') on 2026-07-08; the old code must be gone.

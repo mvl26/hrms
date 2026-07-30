@@ -316,3 +316,45 @@ monkeypatch `frappe.db.commit`, savepoint mỗi test, `frappe.db.rollback()` ở
 5. Bật khoá kỳ (GĐ3) và cổng lương (GĐ4) — sau khi bộ đối soát chạy sạch trên T6/T7.
 
 Mục 3–5 đổi hành vi trên site production ⇒ **hỏi trước từng bước**, không chạy tự động.
+
+
+## 11. Nghỉ do BHXH chi trả không phải công của doanh nghiệp (2026-07-30)
+
+**Vấn đề:** thai sản, ốm, chăm con ốm đang được tính vào Tổng công và được payroll trả lương, trong
+khi tiền của người lao động những ngày đó đến từ **quỹ BHXH**, không phải doanh nghiệp.
+
+**Quyết định (user chốt 2026-07-30):** ba mã `TS` / `Ô` / `Cô` thôi tính công của doanh nghiệp.
+Thay hai quyết định cũ — 2026-07-08 ("mọi loại nghỉ BHXH giữ `is_lwp=0` để lương không đổi") và
+2026-07-26 ("ốm/chăm con ốm có lương, đủ công").
+
+**Ngược lại, tai nạn lao động VẪN tính công:** Điều 38.3 Luật ATVSLĐ 2015 bắt người sử dụng lao động
+trả đủ lương trong thời gian điều trị. "Nghỉ chế độ" không đồng nghĩa "BHXH trả".
+
+| Mã | Loại | Ai trả | Vào Tổng công |
+|---|---|---|---|
+| X · CT · W · 1/2X | đi làm | công ty | có |
+| P · 1/2P | phép năm (Đ.113 BLLĐ) | công ty | có |
+| NB | nghỉ bù | công ty | có |
+| KH · R1 · R2 | việc riêng (Đ.115 BLLĐ) | công ty | có |
+| T | tai nạn lao động (Đ.38.3 ATVSLĐ) | **công ty** | có |
+| TS | thai sản (Đ.39 Luật BHXH) | **BHXH** | không |
+| Ô | ốm đau (Đ.28) | **BHXH** | không |
+| Cô | chăm con ốm (Đ.25) | **BHXH** | không |
+| K · 1/2K · V | không lương / vắng | không ai | không |
+
+**Ba tầng phải đổi cùng nhau**, thiếu tầng nào là hai bên số liệu lệch nhau:
+
+1. `Leave Type`: `is_ppl = 1` + `fraction_of_daily_salary_per_leave = 0` — phần công ty trả bằng 0.
+   **Không dùng `is_lwp`**: `LeaveType.validate_lwp` chặn đặt `is_lwp` cho loại nghỉ đã có cấp phép,
+   mà cả ba loại này đều có. Với fraction = 0, cả hai nhánh payroll (theo đơn nghỉ và theo
+   Attendance) đều trừ trọn ngày.
+2. `Attendance Code`: `is_paid = 0` cho `TS`/`Ô`/`Cô` → `is_paid_leave()` loại chúng khỏi Tổng công.
+3. Report: trả lại cột **"Ốm / chăm con ốm"** (từ 2026-07-26 nó gộp vào Tổng công) — không có cột
+   riêng thì số ngày ốm biến mất khỏi mọi cột tổng.
+
+Thêm `unpaid_leave_types()` trong `vn_payroll/salary_slip_hook.py`: engine MVL và cổng đối soát phải
+nhận diện **cả hai** nhóm (`is_lwp` và `is_ppl` với fraction 0), nếu chỉ nhìn `is_lwp` thì chúng tính
+ngày BHXH là có lương trong khi controller đã trừ — lệch mà không ai báo.
+
+**Tác động trên dữ liệu thật (T6/2026):** Nguyễn Văn An 20,5 → 18,5 công (1 Ô + 1 Cô);
+Trần Thị Bình 22,0 → 19,0 (3 TS). Bảng chốt và 6 phiếu lương T6 đã được tính lại theo luật mới.
