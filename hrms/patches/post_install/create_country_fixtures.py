@@ -1,9 +1,8 @@
 import frappe
 
-from hrms.overrides.company import make_salary_components, run_regional_setup
+from hrms.overrides.company import make_salary_components
 
 
 def execute():
-	for country in frappe.get_all("Company", pluck="country", distinct=True):
-		run_regional_setup(country)
-		make_salary_components(country)
+	if frappe.get_all("Company", limit=1):
+		make_salary_components()

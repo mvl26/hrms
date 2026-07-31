@@ -1,12 +1,11 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
-
+# Copyright (c) 2026, Miyano Việt Nam.
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import test_employee
 
 
 class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
@@ -124,7 +123,7 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		if not emp:
 			self.skipTest("no active employee in company")
 		Y, M = 2096, 5
-		for day, code in ((1, "X"), (2, "P"), (3, "NN"), (4, "1/2P")):
+		for day, code in ((1, "X"), (2, "P"), (3, "1/2X"), (4, "1/2P")):
 			self._seed_attendance(emp, Y, M, day, custom_attendance_code=code)
 
 		sheet = self._sheet(month=str(M), year=Y)
@@ -231,3 +230,103 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		self.assertIn("NGƯỜI CHẤM CÔNG", html)  # sign box 1
 		self.assertIn("PHÒNG NHÂN SỰ", html)  # sign box 2
 		self.assertIn("Chú thích", html)  # symbol legend
+
+
+class TestSubmitWarnsAboutUnreviewedDays(PerTestRollback, FrappeTestCase):
+	"""Chốt công khoá kỳ, nên trước khi khoá phải nói rõ còn bao nhiêu ô đáng ngờ."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.emp = test_employee()
+		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
+
+	def sheet(self, month=8, year=2099):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Monthly Attendance Sheet",
+				"company": self.company,
+				"month": str(month),
+				"year": year,
+			}
+		).insert()
+		doc.populate_from_attendance()
+		doc.save()
+		return doc
+
+	def test_it_warns_when_days_still_carry_flags(self):
+		frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": "2099-08-03",
+				"company": self.company,
+				"status": "Absent",
+			}
+		).insert().submit()
+
+		doc = self.sheet()
+		frappe.local.message_log = []
+		doc.submit()
+
+		messages = " ".join(str(m) for m in frappe.message_log)
+		self.assertIn("chưa xử lý", messages)
+
+
+class TestFlowFromReportToPayroll(PerTestRollback, FrappeTestCase):
+	"""Luồng nối: báo cáo -> soát -> CHỐT CÔNG -> LƯƠNG. Test phần server của hai chặng cuối."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.emp = test_employee()
+		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
+
+	def test_get_or_create_sheet_opens_the_existing_one_instead_of_duplicating(self):
+		from hrms.hr.doctype.monthly_attendance_sheet.monthly_attendance_sheet import get_or_create_sheet
+
+		first = get_or_create_sheet("8", 2099, self.company)
+		second = get_or_create_sheet("8", 2099, self.company)
+		self.assertEqual(first, second, "bấm Chốt công hai lần không được đẻ ra hai bảng")
+
+	def test_get_or_create_sheet_fills_the_rows_right_away(self):
+		from hrms.hr.doctype.monthly_attendance_sheet.monthly_attendance_sheet import get_or_create_sheet
+
+		name = get_or_create_sheet("8", 2099, self.company)
+		doc = frappe.get_doc("Monthly Attendance Sheet", name)
+		self.assertTrue(doc.employees, "bảng mở ra phải có sẵn dữ liệu, không bắt bấm Lấy dữ liệu")
+
+	def test_payroll_is_refused_before_the_sheet_is_closed(self):
+		from hrms.hr.doctype.monthly_attendance_sheet.monthly_attendance_sheet import get_or_create_sheet
+
+		doc = frappe.get_doc("Monthly Attendance Sheet", get_or_create_sheet("8", 2099, self.company))
+		with self.assertRaises(frappe.exceptions.ValidationError):
+			doc.create_salary_slips()
+
+	def test_closing_then_running_payroll_creates_slips_for_the_sheet_employees(self):
+		from hrms.hr.doctype.monthly_attendance_sheet.monthly_attendance_sheet import get_or_create_sheet
+
+		doc = frappe.get_doc("Monthly Attendance Sheet", get_or_create_sheet("8", 2099, self.company))
+		doc.submit()
+
+		result = doc.create_salary_slips()
+		self.assertEqual(
+			len(result["created"]) + len(result["failed"]),
+			len(doc.employees),
+			"mỗi nhân viên trong bảng phải được xử lý đúng một lần",
+		)
+
+	def test_running_payroll_twice_refreshes_drafts_instead_of_duplicating(self):
+		from hrms.hr.doctype.monthly_attendance_sheet.monthly_attendance_sheet import get_or_create_sheet
+
+		doc = frappe.get_doc("Monthly Attendance Sheet", get_or_create_sheet("8", 2099, self.company))
+		doc.submit()
+		first = doc.create_salary_slips()
+		if not first["created"]:
+			self.skipTest("site không lập được phiếu lương cho kỳ này (thiếu cấu trúc lương)")
+
+		second = doc.create_salary_slips()
+		self.assertEqual(second["created"], [], "lần hai không được tạo thêm phiếu")
+		self.assertEqual(
+			len(second["refreshed"]), len(first["created"]), "phiếu nháp phải được lấy lại số công"
+		)

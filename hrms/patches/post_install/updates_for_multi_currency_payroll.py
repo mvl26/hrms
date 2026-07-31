@@ -1,6 +1,3 @@
-# Copyright (c) 2019, Frappe and Contributors
-# License: GNU General Public License v3. See license.txt
-
 import frappe
 from frappe import _
 from frappe.model.utils.rename_field import rename_field

@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Công cụ dựng lại Attendance từ checkin — bất biến quan trọng nhất là KHÔNG đụng ngày nghỉ phép."""
 
 import datetime
@@ -63,3 +62,52 @@ class TestRebuildAttendanceFromCheckin(PerTestRollback, FrappeTestCase):
 		found = set(shift_employees(SHIFT, start, end))
 		by_default = set(frappe.get_all("Employee", filters={"default_shift": SHIFT}, pluck="name"))
 		self.assertTrue(by_default <= found, "người lấy ca này làm mặc định phải nằm trong phạm vi")
+
+
+class TestRebuildSkipsPeopleWhoLeft(PerTestRollback, FrappeTestCase):
+	"""Công cụ dựng lại công cũng chỉ được dựng cho người ĐANG làm việc.
+
+	`shift_employees` gom người theo Shift Assignment và theo `default_shift` — cả hai nhánh trước
+	đây không lọc trạng thái, nên chạy rebuild một tháng là dựng lại công cho cả người đã nghỉ việc.
+	"""
+
+	def setUp(self):
+		self.shift = "VN Rebuild Status Shift (test)"
+		if not frappe.db.exists("Shift Type", self.shift):
+			frappe.get_doc(
+				{
+					"doctype": "Shift Type",
+					"__newname": self.shift,
+					"start_time": "08:00:00",
+					"end_time": "17:30:00",
+				}
+			).insert()
+
+	def mk_employee(self, ten, status, relieving=None):
+		from erpnext.setup.doctype.employee.test_employee import make_employee
+
+		from hrms.tests.vn_test_utils import default_company
+
+		emp = make_employee(f"{ten}@rebuild.test", company=default_company(), date_of_joining="2098-01-01")
+		frappe.db.set_value(
+			"Employee", emp, {"default_shift": self.shift, "status": status, "relieving_date": relieving}
+		)
+		return emp
+
+	def scope(self):
+		from hrms.rebuild_attendance_from_checkin import shift_employees
+
+		return set(shift_employees(self.shift, "2098-05-01", "2098-05-31"))
+
+	def test_active_employee_is_rebuilt(self):
+		self.assertIn(self.mk_employee("rb_active", "Active"), self.scope())
+
+	def test_employee_who_left_is_not_rebuilt(self):
+		self.assertNotIn(self.mk_employee("rb_left", "Left"), self.scope())
+
+	def test_inactive_employee_is_not_rebuilt(self):
+		self.assertNotIn(self.mk_employee("rb_inactive", "Inactive"), self.scope())
+
+	def test_someone_who_left_mid_period_is_still_rebuilt(self):
+		"""Ngày đã làm trước khi nghỉ vẫn phải dựng lại, nếu không là mất công của họ."""
+		self.assertIn(self.mk_employee("rb_left_mid", "Left", relieving="2098-05-15"), self.scope())

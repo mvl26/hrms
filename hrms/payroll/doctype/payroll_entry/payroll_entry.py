@@ -1,6 +1,3 @@
-# Copyright (c) 2017, Frappe Technologies Pvt. Ltd. and contributors
-# For license information, please see license.txt
-
 import json
 
 from dateutil.relativedelta import relativedelta
@@ -1261,7 +1258,11 @@ def get_filtered_employees(
 		.on(Employee.name == SalaryStructureAssignment.employee)
 		.where(
 			(SalaryStructureAssignment.docstatus == 1)
-			& (Employee.status != "Inactive")
+			# Chỉ lập lương cho người ĐANG làm việc. Bản gốc chỉ trừ `Inactive` nên người đã `Left`
+			# (nghỉ việc) hoặc `Suspended` (đình chỉ) mà chưa điền ngày nghỉ việc vẫn được lập phiếu.
+			# Nhánh `relieving_date` phải giữ: nghỉ việc giữa kỳ thì những ngày đã làm vẫn phải trả
+			# (điều kiện `relieving_date >= start_date` ngay dưới lo phần giới hạn kỳ).
+			& ((Employee.status == "Active") | (Employee.relieving_date.isnotnull()))
 			& (Employee.company == filters.company)
 			& ((Employee.date_of_joining <= filters.end_date) | (Employee.date_of_joining.isnull()))
 			& ((Employee.relieving_date >= filters.start_date) | (Employee.relieving_date.isnull()))

@@ -1,12 +1,11 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
-
+# Copyright (c) 2026, Miyano Việt Nam.
 import frappe
 from frappe.model.workflow import apply_workflow
 from frappe.tests.utils import FrappeTestCase
 
 from hrms.patches.v15_0.setup_cong_tac_workflow import ensure_workflow
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import test_employee
 
 
 class TestBusinessTrip(PerTestRollback, FrappeTestCase):
@@ -14,7 +13,7 @@ class TestBusinessTrip(PerTestRollback, FrappeTestCase):
 	def setUpClass(cls):
 		super().setUpClass()
 		ensure_workflow()  # idempotent — role COO + workflow
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.emp = test_employee()
 		cls.user = frappe.session.user
 
 	def setUp(self):

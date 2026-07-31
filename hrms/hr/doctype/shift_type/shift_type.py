@@ -1,7 +1,3 @@
-# Copyright (c) 2018, Frappe Technologies Pvt. Ltd. and contributors
-# For license information, please see license.txt
-
-
 from datetime import datetime, timedelta
 from itertools import groupby
 
@@ -257,7 +253,11 @@ class ShiftType(Document):
 		# skip dates with attendance
 		marked_attendance_dates = self.get_marked_attendance_dates_between(employee, start_date, end_date)
 
-		return sorted(set(date_range) - set(holiday_dates) - set(marked_attendance_dates))
+		from hrms.hr.period_lock import is_period_locked
+
+		dates = sorted(set(date_range) - set(holiday_dates) - set(marked_attendance_dates))
+		# ngày thuộc kỳ đã chốt công thì không chấm vắng nữa — kỳ đã đóng băng (xem should_mark_attendance)
+		return [d for d in dates if not is_period_locked(employee, d)]
 
 	def get_start_and_end_dates(self, employee):
 		"""Returns start and end dates for checking attendance and marking absent
@@ -324,10 +324,15 @@ class ShiftType(Document):
 			)
 			assigned_employees = set(assigned_employees + default_shift_employees)
 
-		# exclude inactive employees
-		inactive_employees = frappe.db.get_all("Employee", {"status": "Inactive"}, pluck="name")
+		# Chỉ chấm công cho người ĐANG làm việc. Bản gốc chỉ trừ `Inactive`, mà `status` trong bộ lọc
+		# Shift Assignment ở trên là trạng thái của PHÂN CA chứ không phải của nhân viên — nên người
+		# đã `Left` (nghỉ việc) hay `Suspended` (đình chỉ) mà phân ca chưa đóng vẫn bị chấm công, và
+		# bị chấm Vắng mỗi giờ. Trừ theo trạng thái NHÂN VIÊN, mọi trạng thái không phải Active.
+		not_working = frappe.db.get_all(
+			"Employee", {"name": ["in", list(assigned_employees)], "status": ["!=", "Active"]}, pluck="name"
+		)
 
-		return list(set(assigned_employees) - set(inactive_employees))
+		return list(set(assigned_employees) - set(not_working))
 
 	def get_holiday_list(self, employee: str) -> str:
 		holiday_list_name = self.holiday_list or get_holiday_list_for_employee(employee, False)
@@ -335,6 +340,14 @@ class ShiftType(Document):
 
 	def should_mark_attendance(self, employee: str, attendance_date: str) -> bool:
 		"""Determines whether attendance should be marked on holidays or not"""
+		from hrms.hr.period_lock import is_period_locked
+
+		if is_period_locked(employee, attendance_date):
+			# Kỳ đã chốt công thì ĐÓNG BĂNG: auto-attendance lặng lẽ bỏ qua thay vì ném lỗi. Ném ở
+			# đây là giết cả job `process_auto_attendance_for_all_shifts` cho mọi nhân viên còn lại,
+			# chỉ vì một kỳ đã khoá — mà khoá vốn có nghĩa là "không đụng nữa", không phải "hỏng".
+			return False
+
 		if self.mark_auto_attendance_on_holidays:
 			# no need to check if date is a holiday or not
 			# since attendance should be marked on all days

@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Tests for the attendance-code backfill patch. Records are created code-less (stripped after
 insert) to mimic pre-feature / auto-attendance rows, then backfilled."""
 
@@ -9,13 +8,14 @@ from frappe.utils import getdate
 
 from hrms.patches.v15_0.backfill_attendance_codes import backfill
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import test_employee
 
 
 class TestBackfillAttendanceCodes(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.emp = test_employee()
 
 	def _bare(self, day, status, leave_type=None, half_day_status=None):
 		"""Insert an attendance then strip its code fields, simulating a pre-feature record."""
@@ -54,15 +54,15 @@ class TestBackfillAttendanceCodes(PerTestRollback, FrappeTestCase):
 		self.assertEqual(self._code(n_leave).custom_attendance_code, "P")
 		self.assertEqual(self._code(n_leave).custom_work_credit, 0.0)
 		self.assertEqual(self._code(n_absent).custom_attendance_code, "V")
-		self.assertEqual(self._code(n_halfday).custom_attendance_code, "NN")
+		self.assertEqual(self._code(n_halfday).custom_attendance_code, "1/2X")
 		self.assertEqual(self._code(n_halfday).custom_work_credit, 0.5)
 
 	def test_backfill_preserves_existing_codes(self):
 		# a record that already carries a code must NOT be overwritten
 		n = self._bare(6, "Present")
-		frappe.db.set_value("Attendance", n, "custom_attendance_code", "NN", update_modified=False)
+		frappe.db.set_value("Attendance", n, "custom_attendance_code", "1/2X", update_modified=False)
 		backfill()
-		self.assertEqual(self._code(n).custom_attendance_code, "NN")
+		self.assertEqual(self._code(n).custom_attendance_code, "1/2X")
 
 	def test_dry_run_writes_nothing(self):
 		n = self._bare(7, "Present")

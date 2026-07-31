@@ -18,9 +18,21 @@ env:
     # `type X = ...` → SyntaxError trên Python 3.10). App này là HRMS v15 (pyproject ghim
     # frappe/erpnext >=15.0.0,<16.0.0), vì vậy ghim cứng nhánh upstream ở version-15.
     HR_BRANCH: version-15
+    # erpnext phải là bản CỦA MIYANO, không phải của frappe: bench thật chạy mvl26/erpnext, nên nếu
+    # CI cài frappe/erpnext thì nó đang kiểm một tổ hợp không ai deploy — sinh lỗi giả (ví dụ erpnext
+    # của frappe thêm AssetMovement.validate_transaction_date mà bản Miyano chưa có). Dùng nhánh
+    # version-15 chứ không phải nhánh feature đang chạy, để CI không phụ thuộc mục tiêu di động.
+    ERPNEXT_REPO: https://github.com/mvl26/erpnext
+    ERPNEXT_BRANCH: version-15
+    # frappe cung phai khop production: bench chay 15.112.0, con nhanh version-15 tren GitHub nay
+    # da la 15.116.1 va them chan `distinct(...)` trong db_query -> erpnext 15.83.0 cua Miyano vo
+    # o Repost Allowed Types. Ghim dung ban dang deploy. NHO NANG khi nang frappe tren bench.
+    FRAPPE_REPO: https://github.com/frappe/frappe
+    FRAPPE_BRANCH: v15.112.0
 
 concurrency:
-  group: develop-${{ github.event.number }}
+  # Truoc day ghim cung "develop" nen PR nham nhanh khac van dung chung mot nhom huy.
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -29,7 +41,6 @@ jobs:
     timeout-minutes: 60
     env:
       NODE_ENV: "production"
-      WITH_COVERAGE: ${{ github.event_name != 'pull_request' }}
 
     strategy:
       fail-fast: false
@@ -115,34 +126,12 @@ jobs:
           bash ${GITHUB_WORKSPACE}/.github/helper/install.sh
         env:
           BRANCH_TO_CLONE: ${{ env.HR_BRANCH }}
+          ERPNEXT_REPO: ${{ env.ERPNEXT_REPO }}
+          ERPNEXT_BRANCH: ${{ env.ERPNEXT_BRANCH }}
+          FRAPPE_REPO: ${{ env.FRAPPE_REPO }}
+          FRAPPE_BRANCH: ${{ env.FRAPPE_BRANCH }}
 
       - name: Run Tests
         run: cd ~/frappe-bench/ && bench --site test_site run-parallel-tests --app hrms --total-builds 2 --build-number ${{ matrix.container }}
         env:
           TYPE: server
-          CAPTURE_COVERAGE: ${{ github.event_name != 'pull_request' }}
-
-      - name: Upload coverage data
-        uses: actions/upload-artifact@v4
-        if: github.event_name != 'pull_request'
-        with:
-          name: coverage-${{ matrix.container }}
-          path: /home/runner/frappe-bench/sites/coverage.xml
-
-  coverage:
-    name: Coverage Wrap Up
-    needs: tests
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'pull_request' }}
-    steps:
-      - name: Clone
-        uses: actions/checkout@v2
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-
-      - name: Upload coverage data
-        uses: codecov/codecov-action@v2
-        with:
-          fail_ci_if_error: true
-          verbose: true

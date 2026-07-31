@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Bảng chấm công tháng — read-only monthly timekeeping sheet.
 
 Pivots by employee x day-of-month. Each cell is the mã công for that day:
@@ -9,7 +8,7 @@ Pivots by employee x day-of-month. Each cell is the mã công for that day:
 
 Totals columns sum per category: Công = actual worked công (Σ work_fraction), and the unworked
 remainder of each half goes to that code's own category — or to Vắng when the code is itself a
-"Công" code that only covers half a day (NN), so every attended day still adds up to a full công.
+"Công" code that only covers half a day (1/2X), so every attended day still adds up to a full công.
 Read-only: never writes, so it is safe against payroll and existing data.
 """
 
@@ -21,6 +20,8 @@ from frappe.utils import cint, flt, getdate
 from frappe.utils.nestedset import get_descendants_of
 
 from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
+
+from hrms.hr.attendance_legend import legend_html, legend_row
 
 Filters = frappe._dict
 
@@ -40,14 +41,16 @@ CATEGORY_HOLIDAY = "Nghỉ lễ"
 # in đậm. KHÔNG gồm Vắng / Không lương (không lương) và Nghỉ lễ (đếm riêng nếu cần).
 TOTAL_PAID = "Tổng công"
 
-# Cột tổng hợp hiển thị trên report (theo yêu cầu — gọn). Ốm/chăm con ốm/nghỉ bù đã gộp vào Tổng công
-# nên không có cột riêng; Vắng/Nghỉ lễ chỉ còn ký hiệu trong lưới. (category nội bộ, nhãn hiển thị)
+# Cột tổng hợp hiển thị trên report. Nghỉ bù do công ty trả nên đã gộp vào Tổng công; Ốm và Thai
+# sản KHÔNG gộp (BHXH chi trả — xem `is_paid_leave`) nên phải có cột riêng, nếu không số ngày đó
+# biến mất khỏi mọi cột tổng. Vắng/Nghỉ lễ chỉ còn ký hiệu trong lưới.
 REPORT_CATEGORIES = [
 	("Phép", "Phép năm"),
+	("Ốm", "Ốm / chăm con ốm"),
 	("Thai sản", "Thai sản"),
-	("Không lương", "Không lương"),
 	("Tai nạn LĐ", "Tai nạn lao động"),
 	("Việc riêng", "Nghỉ riêng"),
+	("Không lương", "Không lương"),
 ]
 
 
@@ -55,7 +58,7 @@ REPORT_CATEGORIES = [
 # Một nguồn màu duy nhất: report on-screen (formatter JS) và print format (Jinja) đều suy màu từ đây.
 # Không đụng dữ liệu/status/payroll — chỉ tô nền để trạng thái mỗi ngày đọc được bằng mắt.
 
-# category của Attendance Code → state màu. Mã có work_fraction ∈ (0,1) (1/2P, 1/2K, NN) được
+# category của Attendance Code → state màu. Mã có work_fraction ∈ (0,1) (1/2P, 1/2K, 1/2X) được
 # xử lý riêng thành "half" TRƯỚC khi tra bảng này, nên ở đây chỉ cần map theo category.
 CATEGORY_STATE = {
 	"Công": "work",
@@ -152,7 +155,7 @@ STATE_STYLE = {
 def day_state(symbol: str, code_map: dict) -> str | None:
 	"""State màu của một ô bảng công (thuần hiển thị; màu tra ở STATE_STYLE).
 
-	Ưu tiên: **có phần đi làm nửa buổi → 'half'** (bắt 1/2P, 1/2K, NN và ô ghép có nửa đi làm),
+	Ưu tiên: **có phần đi làm nửa buổi → 'half'** (bắt 1/2P, 1/2K, 1/2X và ô ghép có nửa đi làm),
 	rồi tới marker lịch ('-'/'NL'), rồi category của mã. Trả None cho ô trống (không tô)."""
 	if not symbol:
 		return None
@@ -218,14 +221,18 @@ def execute(filters: Filters | None = None) -> tuple:
 
 	columns = get_columns(days)
 	data = _rows_to_report_data(rows, days, code_map)
-	return columns, data
+	# Chú thích ký hiệu ra hai đường: khối chip màu ở `message` (đẹp, chỉ có trên màn hình) và ĐÚNG
+	# MỘT dòng cuối bảng (thuần văn bản) để nó theo được vào file Excel — `message` không vào file,
+	# mà dòng chỉ thêm lúc xuất thì bị `visible_idx` lọc mất.
+	data.append(legend_row())
+	return columns, data, legend_html()
 
 
 def get_code_map() -> dict:
 	"""{code: {category, work_fraction, is_paid, maps_to_status, leave_type}} for every Attendance Code."""
 	rows = frappe.get_all(
 		"Attendance Code",
-		fields=["name", "category", "work_fraction", "is_paid", "maps_to_status", "leave_type"],
+		fields=["name", "code_name", "category", "work_fraction", "is_paid", "maps_to_status", "leave_type"],
 	)
 	return {r.name: r for r in rows}
 
@@ -236,7 +243,14 @@ NON_PAID_LEAVE_CATEGORIES = ("Công", "Không lương", "Vắng")
 
 
 def is_paid_leave(code) -> bool:
-	"""Mã nghỉ CÓ LƯƠNG (Phép/Ốm/Chăm con ốm/Thai sản/TNLĐ/Nghỉ bù/Việc riêng) → phần nghỉ tính đủ công."""
+	"""Mã nghỉ mà DOANH NGHIỆP trả lương → ngày đó tính vào Tổng công.
+
+	Quyết định 2026-07-30: nghỉ do **BHXH chi trả** (ốm Đ.28, chăm con ốm Đ.25, thai sản Đ.39 Luật
+	BHXH) KHÔNG phải công của doanh nghiệp — người lao động nhận tiền từ quỹ BHXH, công ty không trả
+	lương ngày đó. Ba mã Ô/Cô/TS vì thế mang `is_paid = 0` trong fixtures và rơi khỏi Tổng công.
+
+	Ngược lại, **tai nạn lao động vẫn tính công**: Đ.38.3 Luật ATVSLĐ bắt người sử dụng lao động trả
+	đủ lương trong thời gian điều trị — "nghỉ chế độ" không đồng nghĩa "BHXH trả"."""
 	return bool(code and cint(code.is_paid) and code.category not in NON_PAID_LEAVE_CATEGORIES)
 
 
@@ -250,22 +264,31 @@ def _company_filter(filters: Filters) -> list | None:
 
 
 def get_employees(filters: Filters, start, end) -> list:
-	"""Roster to render: everyone employed at some point during the month (joined on/before
-	month-end and not relieved before month-start), optionally scoped to a company tree."""
+	"""Danh sách nhân viên dựng bảng công: người CÓ ĐI LÀM trong kỳ này.
+
+	Vào làm trước khi hết kỳ, và chưa nghỉ việc trước khi kỳ bắt đầu. Thêm điều kiện **trạng thái**:
+	chỉ `Active`, hoặc người đã ngừng làm việc NHƯNG có `relieving_date` rơi vào/sau đầu kỳ.
+
+	Nhánh thứ hai không được bỏ: nghỉ việc ngày 15 thì 15 ngày đầu tháng vẫn phải được trả. Loại
+	thẳng mọi người không `Active` là quỵt công đã làm. Ngược lại, người `Inactive`/`Suspended`/
+	`Left` mà không có ngày nghỉ việc thì không thuộc kỳ nào — họ mới là thứ phải bỏ đi.
+	"""
 	conds = [["Employee", "date_of_joining", "<=", end]]
 	companies = _company_filter(filters)
 	if companies:
 		conds.append(["Employee", "company", "in", companies])
-	return frappe.get_all(
+
+	rows = frappe.get_all(
 		"Employee",
 		filters=conds,
 		or_filters=[
 			["Employee", "relieving_date", "is", "not set"],
 			["Employee", "relieving_date", ">=", start],
 		],
-		fields=["name", "employee_name", "holiday_list", "relieving_date", "date_of_joining"],
+		fields=["name", "employee_name", "holiday_list", "relieving_date", "date_of_joining", "status"],
 		order_by="employee_name",
 	)
+	return [e for e in rows if e.status == "Active" or e.relieving_date]
 
 
 def get_attendances(filters: Filters, start, end) -> dict:
@@ -426,8 +449,8 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 					rest = (1 - wf) * 0.5  # phần không đi làm của nửa buổi này
 					if rest:
 						# Mã nghỉ (P, Ô, 1/2P…) ghi vào đúng loại của nó. Mã thuộc loại "Công" mà
-						# không làm đủ buổi (NN = làm nửa ngày) không nói nửa kia nghỉ vì gì, nên
-						# nửa đó là nghỉ không lý do -> Vắng. Thiếu nhánh này thì ngày NN chỉ quy ra
+						# không làm đủ buổi (1/2X = đi làm thiếu giờ) không nói nửa kia nghỉ vì gì, nên
+						# nửa đó là nghỉ không lý do -> Vắng. Thiếu nhánh này thì ngày 1/2X chỉ quy ra
 						# 0.5 công và dòng bảng công không cân về số ngày công của tháng.
 						bucket = c.category if c.category != "Công" else CATEGORY_UNEXCUSED
 						totals[bucket] = totals.get(bucket, 0.0) + rest

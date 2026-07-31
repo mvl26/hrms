@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Test engine lương MVL — oracle là ví dụ số thật trong docs/Cong_thuc_tinh_luong_MVL.md.
 
 Engine thuần nên test là plain unittest, chạy được cả ngoài Frappe. Vẫn nạp qua harness rollback.

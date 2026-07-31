@@ -1,7 +1,3 @@
-# Copyright (c) 2013, Frappe Technologies Pvt. Ltd. and contributors
-# For license information, please see license.txt
-
-
 import frappe
 from frappe import _
 from frappe.query_builder.functions import Extract
@@ -12,7 +8,13 @@ Filters = frappe._dict
 
 
 def execute(filters: Filters = None) -> tuple:
-	is_indian_company = erpnext.get_region(filters.get("company")) == "India"
+	# Cột PAN chỉ dựng được khi erpnext THỰC SỰ đã cài bộ regional India (nó tạo Employee.pan_number).
+	# Chỉ xét country là chưa đủ: bản erpnext của Miyano đã gỡ erpnext/regional/india/, nên công ty
+	# khai country=India vẫn không có cột đó và truy vấn vỡ với
+	# OperationalError (1054, "Unknown column 'pan_number' in 'SELECT'").
+	is_indian_company = erpnext.get_region(filters.get("company")) == "India" and frappe.get_meta(
+		"Employee"
+	).has_field("pan_number")
 	columns = get_columns(is_indian_company)
 	data = get_data(filters, is_indian_company)
 

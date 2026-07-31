@@ -72,7 +72,7 @@ Reuse `scratch/run_test.sh` from plan A (writes a `.py` harness, feeds the conso
 Create `hrms/hr/doctype/attendance/test_vn_half_day_classifier.py`:
 
 ```python
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
+# Copyright (c) 2026, Miyano Việt Nam.
 """VN auto morning/afternoon classifier + its Shift Type config fields."""
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -493,7 +493,7 @@ git commit -m "test(hr): gate — classified morning-only Half Day == native Hal
 Create/append `hrms/hr/test_working_hours.py`:
 
 ```python
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
+# Copyright (c) 2026, Miyano Việt Nam.
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import get_datetime
 

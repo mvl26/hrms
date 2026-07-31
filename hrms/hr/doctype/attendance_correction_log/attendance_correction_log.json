@@ -1,0 +1,196 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:ACL-{YY}{MM}-{#####}",
+ "creation": "2026-07-29 10:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "attendance",
+  "employee",
+  "employee_name",
+  "attendance_date",
+  "col_break_codes",
+  "old_code",
+  "new_code",
+  "sec_break_native",
+  "old_status",
+  "old_leave_type",
+  "old_half_day_status",
+  "col_break_native",
+  "new_status",
+  "new_leave_type",
+  "new_half_day_status",
+  "sec_break_reason",
+  "reason",
+  "corrected_by",
+  "corrected_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "attendance",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Ngày công",
+   "options": "Attendance",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "employee",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Nhân viên",
+   "options": "Employee",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "employee.employee_name",
+   "fieldname": "employee_name",
+   "fieldtype": "Data",
+   "label": "Tên nhân viên",
+   "read_only": 1
+  },
+  {
+   "fieldname": "attendance_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Ngày",
+   "read_only": 1
+  },
+  {
+   "fieldname": "col_break_codes",
+   "fieldtype": "Column Break",
+   "label": ""
+  },
+  {
+   "fieldname": "old_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Mã cũ",
+   "read_only": 1
+  },
+  {
+   "fieldname": "new_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Mã mới",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sec_break_native",
+   "fieldtype": "Section Break",
+   "label": "Trạng thái payroll trước / sau"
+  },
+  {
+   "fieldname": "old_status",
+   "fieldtype": "Data",
+   "label": "Status cũ",
+   "read_only": 1
+  },
+  {
+   "fieldname": "old_leave_type",
+   "fieldtype": "Data",
+   "label": "Loại nghỉ cũ",
+   "read_only": 1
+  },
+  {
+   "fieldname": "old_half_day_status",
+   "fieldtype": "Data",
+   "label": "Nửa ngày cũ",
+   "read_only": 1
+  },
+  {
+   "fieldname": "col_break_native",
+   "fieldtype": "Column Break",
+   "label": ""
+  },
+  {
+   "fieldname": "new_status",
+   "fieldtype": "Data",
+   "label": "Status mới",
+   "read_only": 1
+  },
+  {
+   "fieldname": "new_leave_type",
+   "fieldtype": "Data",
+   "label": "Loại nghỉ mới",
+   "read_only": 1
+  },
+  {
+   "fieldname": "new_half_day_status",
+   "fieldtype": "Data",
+   "label": "Nửa ngày mới",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sec_break_reason",
+   "fieldtype": "Section Break",
+   "label": "Lý do"
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "label": "Lý do điều chỉnh",
+   "reqd": 1
+  },
+  {
+   "fieldname": "corrected_by",
+   "fieldtype": "Link",
+   "label": "Người sửa",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "corrected_on",
+   "fieldtype": "Datetime",
+   "label": "Thời điểm sửa",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-29 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "HR",
+ "name": "Attendance Correction Log",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "HR Manager",
+   "share": 1
+  },
+  {
+   "create": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "HR User"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

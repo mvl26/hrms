@@ -1,6 +1,3 @@
-# Copyright (c) 2021, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
-
 import frappe
 from frappe import _
 from frappe.desk.form import assign_to
@@ -63,7 +60,9 @@ class EmployeeBoardingController(Document):
 					"doctype": "Task",
 					"project": self.project,
 					"subject": activity.activity_name + " : " + self.employee_name,
-					"description": activity.description,
+					# erpnext cua Miyano dat Task.description = bat buoc, nen hoat dong bo trong mo ta
+					# se lam vo ca quy trinh onboarding/separation. Lay ten hoat dong lam mo ta thay the.
+					"description": activity.description or activity.activity_name,
 					"department": self.department,
 					"company": self.company,
 					"task_weight": activity.task_weight,

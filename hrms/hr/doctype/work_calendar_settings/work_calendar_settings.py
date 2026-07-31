@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and contributors
-# For license information, please see license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Nguồn sự thật cho lịch làm việc — Holiday List chỉ là kết quả sinh ra từ đây.
 
 Vì sao cần: ngày nghỉ hàng tuần BẮT BUỘC phải nằm trong Holiday List (payroll, auto-attendance và

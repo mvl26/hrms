@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Unit tests for the VN attendance-code <-> native-status bridge (Attendance.before_validate).
 Codes are exercised in isolation (before_validate, no insert) so native validation such as
 check_leave_record does not mask the bridge's own output."""
@@ -9,13 +8,14 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import getdate
 
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import test_employee
 
 
 class TestAttendanceCodeBridge(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.emp = test_employee()
 
 	def _bridge(self, **codes):
 		doc = frappe.get_doc(
@@ -51,8 +51,8 @@ class TestAttendanceCodeBridge(PerTestRollback, FrappeTestCase):
 		self.assertEqual(d.custom_work_credit, 0.5)
 
 	def test_forward_single_half_day_worked_paid(self):
-		# NN = làm nửa ngày hưởng lương: Half Day, worked half present, no leave, công 0.5
-		d = self._bridge(custom_attendance_code="NN")
+		# 1/2X = đi làm thiếu giờ hưởng lương: Half Day, worked half present, no leave, công 0.5
+		d = self._bridge(custom_attendance_code="1/2X")
 		self.assertEqual(d.status, "Half Day")
 		self.assertEqual(d.half_day_status, "Present")
 		self.assertIn(d.leave_type, (None, ""))
@@ -256,7 +256,7 @@ class TestHalfDayLeaveCodeFullValidation(PerTestRollback, FrappeTestCase):
 	def test_plain_half_day_code_without_leave_still_absent(self):
 		# NN: worked half + unexcused (no leave_type) half -> must stay Absent (docks 0.5, matches native).
 		# Guards that the fix keys on leave_type and does not overpay NN.
-		d = self._insert(custom_attendance_code="NN")
+		d = self._insert(custom_attendance_code="1/2X")
 		self.assertEqual(d.status, "Half Day")
 		self.assertIn(d.leave_type, (None, ""))
 		self.assertEqual(d.half_day_status, "Absent")

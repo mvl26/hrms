@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Phase 2 GATE: prove that entering attendance via VN mã công (bridge) yields the SAME
 payroll figures (payment_days / absent_days / leave_without_pay) as entering the equivalent
 native status directly. If this holds, the attendance-code layer is payroll-neutral."""
@@ -85,7 +84,7 @@ class TestAttendanceCodePayrollInvariance(PerTestRollback, FrappeTestCase):
 		"Payroll Settings", {"payroll_based_on": "Attendance", "daily_wages_fraction_for_half_day": 0.5}
 	)
 	def test_half_day_code_payroll_matches_native(self):
-		"""Half-day codes (NN/1/2P/1/2K) map to native Half Day. Run BOTH the native and the
+		"""Half-day codes (1/2X/1/2P/1/2K) map to native Half Day. Run BOTH the native and the
 		code path through full validation so check_leave_record settles half_day_status the
 		same way for both — proving the code layer adds no payroll difference on half days."""
 		first_sunday = get_first_sunday()
@@ -95,10 +94,10 @@ class TestAttendanceCodePayrollInvariance(PerTestRollback, FrappeTestCase):
 			frappe.db.set_value("Employee", e, {"relieving_date": None, "status": "Active"})
 
 		date = add_days(first_sunday, 1)
-		# NN = làm nửa ngày; native equivalent is a plain Half Day. No leave application exists,
+		# 1/2X = đi làm thiếu giờ; native equivalent is a plain Half Day. No leave application exists,
 		# so check_leave_record forces half_day_status -> Absent identically on both paths.
 		mark_attendance(emp_native, date, "Half Day", half_day_status="Present")  # full validate
-		self._mark_by_code(emp_codes, date, "NN")
+		self._mark_by_code(emp_codes, date, "1/2X")
 
 		ss_native = make_employee_salary_slip(emp_native, "Monthly", "Invariance HD Native")
 		ss_codes = make_employee_salary_slip(emp_codes, "Monthly", "Invariance HD Codes")
@@ -146,15 +145,17 @@ class TestAttendanceCodePayrollInvariance(PerTestRollback, FrappeTestCase):
 				"out_time": f"{date} 12:00:00",
 			}
 		)
-		att.insert()  # classifier -> token đơn 1/2K -> Half Day (Nghỉ không lương)
+		att.insert()  # 4h < 8h tối thiểu -> mã 1/2X -> Half Day, KHÔNG gắn loại nghỉ
 		att.submit()
 		self.assertEqual(att.status, "Half Day")
-		self.assertEqual(att.custom_attendance_code, "1/2K")
+		self.assertEqual(att.custom_attendance_code, "1/2X")
 
 		ss_native = make_employee_salary_slip(emp_native, "Monthly", "Inv HD Native")
 		ss_class = make_employee_salary_slip(emp_class, "Monthly", "Inv HD Class")
-		# NET PAY BẤT BIẾN: cùng payment_days (0.5 bị trừ dù nửa kia là vắng hay không lương)
+		# Từ 2026-07-29 mã do máy chấm là 1/2X (không bịa ra đơn nghỉ không lương), nên ngày này
+		# GIỐNG HỆT một Half Day nhập tay: cùng payment_days, cùng absent_days, LWP bằng 0.
 		self.assertEqual(ss_class.payment_days, ss_native.payment_days)
-		# nhưng 0.5 đó nay là NGHỈ KHÔNG LƯƠNG (LWP), không phải Vắng — đúng ý X/K
-		self.assertEqual(flt(ss_class.leave_without_pay), 0.5)
-		self.assertEqual(flt(ss_class.absent_days), 0.0)
+		self.assertEqual(flt(ss_class.leave_without_pay), flt(ss_native.leave_without_pay))
+		self.assertEqual(flt(ss_class.absent_days), flt(ss_native.absent_days))
+		self.assertEqual(flt(ss_class.leave_without_pay), 0.0)
+		self.assertEqual(flt(ss_class.absent_days), 0.5)

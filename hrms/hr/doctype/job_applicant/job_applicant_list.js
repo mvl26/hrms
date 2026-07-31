@@ -1,6 +1,3 @@
-// Copyright (c) 2020, Frappe Technologies Pvt. Ltd. and Contributors
-// MIT License. See license.txt
-
 frappe.listview_settings["Job Applicant"] = {
 	add_fields: ["status"],
 	get_indicator: function (doc) {

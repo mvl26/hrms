@@ -1,6 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
-
+# Copyright (c) 2026, Miyano Việt Nam.
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import getdate
@@ -9,13 +7,14 @@ from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import test_employee
 
 
 class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.emp = test_employee()
 		cls.year, cls.month = 2099, 3  # far future to avoid colliding with any real/test data
 
 	def _mk(self, day, **codes):
@@ -44,11 +43,11 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 		return att
 
 	def _row(self, employee):
-		_, data = execute({"month": self.month, "year": self.year})
+		_, data, _msg = execute({"month": self.month, "year": self.year})
 		return next(r for r in data if r["employee"] == employee)
 
 	def _cat_labels(self):
-		columns, _ = execute({"month": self.month, "year": self.year})
+		columns, _data, _msg = execute({"month": self.month, "year": self.year})
 		return {c["label"]: c["fieldname"] for c in columns if c["fieldname"].startswith("cat_")}
 
 	def test_pivot_cells_and_tong_cong(self):
@@ -56,7 +55,7 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 		self._mk(6, custom_attendance_code="P")  # full annual leave (paid)
 		self._mk(7, custom_morning_code="X", custom_afternoon_code="P")  # half work / half leave
 
-		columns, data = execute({"month": self.month, "year": self.year})
+		columns, data, _msg = execute({"month": self.month, "year": self.year})
 		labels = {c["fieldname"]: c["label"] for c in columns}
 		self.assertEqual(labels["tong_cong"], "Tổng công")
 		self.assertEqual(labels["cat_0"], "Phép năm")
@@ -84,43 +83,58 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 		self.assertEqual(row["totals"]["Phép"], 1.0)
 
 	def test_report_columns_are_the_configured_set(self):
-		# cột tổng hợp đúng bộ đã cấu hình (gọn): Tổng công (đầu, in đậm) + Phép năm/Thai sản/Không
-		# lương/Tai nạn lao động/Nghỉ riêng. Ốm/chăm con ốm/nghỉ bù gộp Tổng công; Vắng/Nghỉ lễ chỉ ký hiệu.
-		columns, _ = execute({"month": self.month, "year": self.year})
+		# Tổng công (đầu, in đậm) + các cột loại nghỉ. Từ 2026-07-30 Ốm và Thai sản có cột RIÊNG vì
+		# chúng do BHXH chi trả nên không còn gộp vào Tổng công — không có cột thì số ngày đó biến
+		# mất khỏi mọi tổng. Nghỉ bù (công ty trả) vẫn gộp Tổng công; Vắng/Nghỉ lễ chỉ còn ký hiệu.
+		columns, _data, _msg = execute({"month": self.month, "year": self.year})
 		summary = [
 			c["label"] for c in columns if c["fieldname"] == "tong_cong" or c["fieldname"].startswith("cat_")
 		]
 		self.assertEqual(
 			summary,
-			["Tổng công", "Phép năm", "Thai sản", "Không lương", "Tai nạn lao động", "Nghỉ riêng"],
+			[
+				"Tổng công",
+				"Phép năm",
+				"Ốm / chăm con ốm",
+				"Thai sản",
+				"Tai nạn lao động",
+				"Nghỉ riêng",
+				"Không lương",
+			],
 		)
 
-	def test_paid_leave_counts_in_tong_cong_unpaid_does_not(self):
-		# ốm / thai sản là nghỉ CÓ LƯƠNG → tính đủ công vào Tổng công; không lương (K) thì không.
+	def test_only_leave_the_company_pays_for_counts_in_tong_cong(self):
+		"""Tổng công = ngày DOANH NGHIỆP trả lương.
+
+		Ốm và thai sản do BHXH chi trả (Đ.25/28/39 Luật BHXH) nên không phải công của công ty; nghỉ
+		không lương thì đương nhiên không. Ngược lại tai nạn lao động VẪN tính: Đ.38.3 Luật ATVSLĐ
+		bắt công ty trả đủ lương trong thời gian điều trị."""
 		self._mk(5, custom_attendance_code="Ô")
 		self._mk(6, custom_attendance_code="TS")
 		self._mk(7, custom_attendance_code="K")
+		self._mk(8, custom_attendance_code="P")
+		self._mk(9, custom_attendance_code="T")
 		row = self._row(self.emp)
-		self.assertEqual(row["tong_cong"], 2.0)  # Ô + TS được trả lương; K không
+		self.assertEqual(row["tong_cong"], 2.0, "chỉ P (phép năm) + T (TNLĐ) là công ty trả")
 
 	def test_single_half_day_code_totals(self):
 		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
 
 		labels = self._cat_labels()
-		self._mk(10, custom_attendance_code="NN")  # worked half, paid
+		self._mk(10, custom_attendance_code="1/2X")  # worked half, paid
 		self._mk(11, custom_attendance_code="1/2P")  # half work + half annual leave
 		self._mk(12, custom_attendance_code="1/2K")  # half work + half unpaid
 
 		row = self._row(self.emp)
-		self.assertEqual(row["day_10"], "NN")
+		self.assertEqual(row["day_10"], "1/2X")
 		self.assertEqual(row["day_11"], "1/2P")
 		self.assertEqual(row["day_12"], "1/2K")
-		# Tổng công (được trả lương) = NN 0.5 + 1/2P 1.0 (làm+phép) + 1/2K 0.5 (làm) = 2.0
+		# Tổng công (được trả lương) = 1/2X 0.5 + 1/2P 1.0 (làm+phép) + 1/2K 0.5 (làm) = 2.0
 		self.assertEqual(row["tong_cong"], 2.0)
 		# Phép năm leave-half of 1/2P = 0.5 ; Không lương leave-half of 1/2K = 0.5
 		self.assertEqual(row[labels["Phép năm"]], 0.5)
 		self.assertEqual(row[labels["Không lương"]], 0.5)
-		# NN nửa kia là nghỉ không lý do → Vắng (không còn cột; kiểm qua totals)
+		# 1/2X nửa kia là nghỉ không lý do → Vắng (không còn cột; kiểm qua totals)
 		srow = next(
 			r for r in get_sheet_rows({"month": self.month, "year": self.year}) if r["employee"] == self.emp
 		)
@@ -129,7 +143,7 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 	def test_a_half_day_code_still_accounts_for_the_whole_day(self):
 		"""Mỗi ngày có chấm công phải quy ra đủ 1 công trên bảng — không được bốc hơi nửa nào.
 
-		`NN` (làm nửa ngày) có work_fraction 0.5 nhưng category vẫn là "Công", nên nhánh cộng phần
+		`1/2X` (đi làm thiếu giờ) có work_fraction 0.5 nhưng category vẫn là "Công", nên nhánh cộng phần
 		nghỉ (chỉ chạy khi category != "Công") bỏ sót nửa không làm: ngày đó chỉ vào sổ 0.5 công và
 		dòng bảng công không cân về số ngày công của tháng.
 		"""
@@ -138,7 +152,7 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 			get_sheet_rows,
 		)
 
-		for day, code in ((10, "NN"), (11, "1/2P"), (12, "1/2K")):
+		for day, code in ((10, "1/2X"), (11, "1/2P"), (12, "1/2K")):
 			self._mk(day, custom_attendance_code=code)
 
 		srow = next(
@@ -275,7 +289,7 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 
 	def test_color_state_columns_not_rendered(self):
 		# "_state_*" chỉ là metadata cho formatter — KHÔNG được thành cột hiển thị
-		columns, _ = execute({"month": self.month, "year": self.year})
+		columns, _data, _msg = execute({"month": self.month, "year": self.year})
 		fieldnames = {c["fieldname"] for c in columns}
 		self.assertFalse(
 			any(fn.startswith("_state_") for fn in fieldnames), "state màu không được lộ thành cột"
@@ -293,7 +307,7 @@ class TestAttendanceColorState(PerTestRollback, FrappeTestCase):
 		return {
 			"X": c("Công", 1.0),
 			"CT": c("Công", 1.0),
-			"NN": c("Công", 0.5),
+			"1/2X": c("Công", 0.5),
 			"1/2P": c("Phép", 0.5),
 			"1/2K": c("Không lương", 0.5),
 			"P": c("Phép", 0.0),
@@ -316,7 +330,7 @@ class TestAttendanceColorState(PerTestRollback, FrappeTestCase):
 			"X": "work",
 			"CT": "work",
 			# có nửa đi làm → half (bất kể category của mã)
-			"NN": "half",
+			"1/2X": "half",
 			"1/2P": "half",
 			"1/2K": "half",
 			# nghỉ cả ngày → theo category
@@ -409,3 +423,141 @@ class TestAttendanceColorState(PerTestRollback, FrappeTestCase):
 		)
 
 		self.assertEqual(attendance_state_styles(), STATE_STYLE)
+
+
+class TestLegend(PerTestRollback, FrappeTestCase):
+	"""Chú thích ký hiệu: MỘT DÒNG, dùng chung, nằm trên bảng — không làm báo cáo dài ra."""
+
+	def test_the_grid_carries_exactly_one_legend_row_at_the_end(self):
+		"""Một dòng thôi, và ở cuối — nhiều hơn là báo cáo dài ra, không có thì file Excel mất nó."""
+		from hrms.hr.attendance_legend import is_legend_row
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
+
+		_columns, data, message = execute({"month": 6, "year": 2099})
+		self.assertTrue(message, "vẫn phải có khối chú thích màu trên bảng")
+		self.assertEqual(sum(1 for r in data if is_legend_row(r)), 1)
+		self.assertTrue(is_legend_row(data[-1]), "dòng chú thích phải ở cuối")
+		self.assertTrue(
+			all(r.get("employee") for r in data[:-1]),
+			"các dòng còn lại phải đều là nhân viên",
+		)
+
+	def test_the_legend_row_survives_the_excel_export_path(self):
+		"""Đường xuất file lọc dòng theo `visible_idx`, nên phải kiểm bằng chính hàm dựng file."""
+		from frappe.desk.query_report import build_xlsx_data, format_fields, run
+
+		filters = {"month": 7, "year": 2026, "company": frappe.db.get_value("Company", {}, "name")}
+		data = frappe._dict(run("Monthly Attendance Report", filters, ignore_prepared_report=True))
+		data.filters = filters
+		format_fields(data)
+		xlsx_data, _widths = build_xlsx_data(data, list(range(len(data.result))), include_indentation=0)
+
+		self.assertTrue(
+			any("Chú thích" in str(cell) for row in xlsx_data for cell in row),
+			"file Excel xuất ra phải có dòng chú thích ký hiệu",
+		)
+
+	def test_every_attendance_code_is_explained_in_one_line(self):
+		from hrms.hr.attendance_legend import legend_pairs, legend_text
+
+		codes = set(frappe.get_all("Attendance Code", pluck="name"))
+		explained = {c for c, _n in legend_pairs()}
+		self.assertTrue(codes <= explained, f"mã chưa có chú thích: {codes - explained}")
+		self.assertNotIn("\n", legend_text(), "chú thích phải gọn trong một dòng")
+
+	def test_calendar_markers_are_explained_too(self):
+		from hrms.hr.attendance_legend import legend_pairs
+
+		explained = {c for c, _n in legend_pairs()}
+		self.assertIn("-", explained)
+		self.assertIn("NL", explained)
+
+	def test_worked_codes_come_first_and_X_leads(self):
+		from hrms.hr.attendance_legend import legend_pairs
+
+		codes = [c for c, _n in legend_pairs()]
+		self.assertEqual(codes[0], "X", "X là ký hiệu gốc của bảng công nên đứng đầu")
+		self.assertLess(codes.index("X"), codes.index("V"), "đi làm phải xếp trước vắng")
+		self.assertLess(codes.index("P"), codes.index("1/2P"), "mã cả ngày trước mã nửa ngày")
+
+	def test_the_legend_is_shared_not_copied_per_report(self):
+		"""Một nguồn duy nhất: report chỉ gọi helper, không tự dựng danh sách mã."""
+		from hrms.hr.attendance_legend import legend_html
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
+
+		_columns, _data, message = execute({"month": 6, "year": 2099})
+		self.assertEqual(message, legend_html())
+
+	def test_each_symbol_wears_the_same_colour_as_its_cell_in_the_grid(self):
+		"""Chú thích phải là bảng màu luôn: chip lấy đúng state màu mà ô đó mang trong lưới."""
+		from hrms.hr.attendance_legend import legend_html
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
+			day_state,
+			get_code_map,
+		)
+
+		html = legend_html()
+		code_map = get_code_map()
+		for code in ("X", "1/2X", "P", "Ô", "K", "V"):
+			state = day_state(code, code_map)
+			self.assertIn(f"vn-lg-{state}", html, f"{code} phải mang lớp màu của state {state}")
+
+	def test_the_colours_come_from_the_shared_palette_not_hardcoded(self):
+		from hrms.hr.attendance_legend import legend_styles
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import STATE_STYLE
+
+		css = legend_styles()
+		for state, style in STATE_STYLE.items():
+			self.assertIn(f".vn-lg-{state}", css, f"thiếu lớp màu cho state {state}")
+			self.assertIn(style["bg"], css, f"{state}: màu nền sáng phải khớp bảng màu chung")
+			self.assertIn(style["bg_dark"], css, f"{state}: màu nền tối phải khớp bảng màu chung")
+
+	def test_dark_theme_is_handled_by_attribute_not_only_media_query(self):
+		"""Desk đổi theme bằng data-theme; chỉ dựa vào prefers-color-scheme là lệch màu."""
+		from hrms.hr.attendance_legend import legend_styles
+
+		self.assertIn('[data-theme="dark"]', legend_styles())
+
+
+class TestOnlyEmployedPeopleAreOnTheSheet(PerTestRollback, FrappeTestCase):
+	"""Bảng công / lương chỉ dựng cho người ĐANG làm việc trong kỳ.
+
+	Nhưng "không Active" không đồng nghĩa "bỏ hẳn": người nghỉ việc giữa tháng vẫn phải được trả
+	những ngày đã làm, nên họ phải còn trong bảng của chính tháng đó. Cái phải loại là người đã
+	ngừng hoạt động mà không thuộc kỳ nào cả.
+	"""
+
+	def mk_employee(self, ten, status, relieving=None, joining="2098-01-01"):
+		from erpnext.setup.doctype.employee.test_employee import make_employee
+
+		from hrms.tests.vn_test_utils import default_company
+
+		name = make_employee(f"{ten}@status.test", company=default_company(), date_of_joining=joining)
+		frappe.db.set_value("Employee", name, {"status": status, "relieving_date": relieving})
+		return name
+
+	def roster(self, month=5, year=2098):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
+
+		return {r["employee"] for r in get_sheet_rows({"month": month, "year": year})}
+
+	def test_an_active_employee_is_on_the_sheet(self):
+		emp = self.mk_employee("active_emp", "Active")
+		self.assertIn(emp, self.roster())
+
+	def test_an_inactive_employee_is_dropped(self):
+		emp = self.mk_employee("inactive_emp", "Inactive")
+		self.assertNotIn(emp, self.roster(), "nhân viên Inactive không được vào bảng công")
+
+	def test_a_suspended_employee_is_dropped(self):
+		emp = self.mk_employee("suspended_emp", "Suspended")
+		self.assertNotIn(emp, self.roster(), "nhân viên Suspended không được vào bảng công")
+
+	def test_someone_who_left_long_ago_is_dropped(self):
+		emp = self.mk_employee("left_old_emp", "Left", relieving="2098-02-28")
+		self.assertNotIn(emp, self.roster(), "nghỉ việc từ tháng 2 thì không còn trong bảng tháng 5")
+
+	def test_someone_who_left_mid_month_is_still_paid_for_that_month(self):
+		"""Đây là chỗ dễ sai nhất: loại thẳng mọi người không Active là quỵt công đã làm."""
+		emp = self.mk_employee("left_midmonth_emp", "Left", relieving="2098-05-15")
+		self.assertIn(emp, self.roster(), "nghỉ việc giữa tháng vẫn phải có mặt trong bảng tháng đó")

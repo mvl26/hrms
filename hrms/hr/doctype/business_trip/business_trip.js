@@ -1,6 +1,4 @@
-// Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-// For license information, please see license.txt
-
+// Copyright (c) 2026, Miyano Việt Nam.
 frappe.ui.form.on("Business Trip", {
 	refresh(frm) {
 		if (["Đã ra QĐ", "Hoàn tất"].includes(frm.doc.workflow_state)) {

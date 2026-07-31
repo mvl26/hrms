@@ -1,6 +1,3 @@
-// Copyright (c) 2016, Frappe Technologies Pvt. Ltd. and contributors
-// For license information, please see license.txt
-
 frappe.ui.form.on("Leave Block List", {
 	add_day_wise_dates: function (frm) {
 		let d = new frappe.ui.Dialog({

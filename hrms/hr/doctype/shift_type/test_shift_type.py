@@ -1,5 +1,3 @@
-# Copyright (c) 2018, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
 from datetime import datetime, timedelta
 
 import frappe
@@ -992,3 +990,79 @@ def make_shift_assignment(
 		shift_assignment.submit()
 
 	return shift_assignment
+
+
+class TestAutoAttendanceSkipsInactiveEmployees(FrappeTestCase):
+	"""Auto-attendance chỉ chấm cho người ĐANG làm việc.
+
+	Upstream mới chỉ trừ trạng thái `Inactive`, bỏ lọt `Left` và `Suspended` — người đã nghỉ việc
+	vẫn bị chấm công (và bị chấm Vắng) hằng giờ nếu Shift Assignment của họ chưa bị đóng."""
+
+	def setUp(self):
+		self.shift = "VN Status Shift (test)"
+		if not frappe.db.exists("Shift Type", self.shift):
+			frappe.get_doc(
+				{
+					"doctype": "Shift Type",
+					"__newname": self.shift,
+					"start_time": "08:00:00",
+					"end_time": "17:30:00",
+					"enable_auto_attendance": 1,
+				}
+			).insert()
+
+	def mk_employee(self, ten, status):
+		from erpnext.setup.doctype.employee.test_employee import make_employee
+
+		from hrms.tests.vn_test_utils import default_company
+
+		name = make_employee(f"{ten}@shiftstatus.test", company=default_company())
+		frappe.db.set_value("Employee", name, {"status": status, "default_shift": self.shift})
+		return name
+
+	def assigned(self):
+		return set(frappe.get_doc("Shift Type", self.shift).get_assigned_employees("2098-01-01", True))
+
+	def test_active_employee_is_processed(self):
+		self.assertIn(self.mk_employee("st_active", "Active"), self.assigned())
+
+	def test_inactive_employee_is_skipped(self):
+		self.assertNotIn(self.mk_employee("st_inactive", "Inactive"), self.assigned())
+
+	def test_employee_who_left_is_skipped(self):
+		self.assertNotIn(
+			self.mk_employee("st_left", "Left"), self.assigned(), "người đã nghỉ việc không được chấm công"
+		)
+
+	def test_suspended_employee_is_skipped(self):
+		self.assertNotIn(
+			self.mk_employee("st_susp", "Suspended"),
+			self.assigned(),
+			"người bị đình chỉ không được chấm công",
+		)
+
+	def assign_shift(self, employee):
+		"""Gán ca qua Shift Assignment — đường đi thật của nhân viên có ca riêng."""
+		frappe.get_doc(
+			{
+				"doctype": "Shift Assignment",
+				"employee": employee,
+				"shift_type": self.shift,
+				"start_date": "2098-01-01",
+				"company": frappe.db.get_value("Employee", employee, "company"),
+			}
+		).insert().submit()
+
+	def test_employee_who_left_is_skipped_even_with_an_open_shift_assignment(self):
+		"""Lỗ hổng thật: `get_assigned_employees` lọc `status` của SHIFT ASSIGNMENT chứ không phải của
+		NHÂN VIÊN, và chỉ trừ mỗi `Inactive`. Người đã nghỉ việc mà phân ca chưa đóng vẫn bị chấm."""
+		emp = self.mk_employee("st_left_assigned", "Left")
+		frappe.db.set_value("Employee", emp, "default_shift", None)
+		self.assign_shift(emp)
+		self.assertNotIn(emp, self.assigned())
+
+	def test_suspended_employee_is_skipped_even_with_an_open_shift_assignment(self):
+		emp = self.mk_employee("st_susp_assigned", "Suspended")
+		frappe.db.set_value("Employee", emp, "default_shift", None)
+		self.assign_shift(emp)
+		self.assertNotIn(emp, self.assigned())

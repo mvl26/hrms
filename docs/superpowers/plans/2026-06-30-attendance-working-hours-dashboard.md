@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Mọi file Python/JS mới mở đầu bằng header bản quyền giống file lân cận: `# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors` + `# License: GNU General Public License v3. See license.txt` (JS dùng `//`).
+- Mọi file Python/JS mới mở đầu bằng `# Copyright (c) 2026, Miyano Việt Nam.` (JS dùng `//`).
 - Hằng số nghỉ trưa: `LUNCH_BREAK_HOURS = 1.5` (giờ).
 - Status được trừ 1.5h (ngày đủ): `("Present", "Work From Home")`. `"Half Day"` → không trừ. Status khác → 0.
 - Nguồn giờ/ngày: `out_time − in_time` qua `frappe.utils.time_diff_in_hours(out_time, in_time)`; nếu thiếu in_time hoặc out_time → dùng trường `working_hours`.
@@ -33,8 +33,7 @@
 - [ ] **Step 1: Viết test fail** — tạo `hrms/hr/test_working_hours.py`
 
 ```python
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 
 from frappe.tests.utils import FrappeTestCase
 
@@ -79,8 +78,7 @@ Expected: FAIL — `ModuleNotFoundError` / `ImportError: cannot import name 'com
 - [ ] **Step 3: Viết `hrms/hr/working_hours.py` (phần lõi)**
 
 ```python
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 
 import frappe
 from frappe import _
@@ -715,8 +713,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 `hrms/hr/dashboard_chart_source/working_hours_by_week/working_hours_by_week.py`:
 
 ```python
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 
 import frappe
 from frappe import _
@@ -811,8 +808,7 @@ frappe.dashboards.chart_sources["Working Hours by Week"] = {
 `hrms/hr/dashboard_chart_source/working_hours_by_department/working_hours_by_department.py`:
 
 ```python
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 
 import frappe
 from frappe import _

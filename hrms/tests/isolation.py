@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# For license information, please see license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Cô lập từng test method — thứ `FrappeTestCase` KHÔNG cung cấp.
 
 `FrappeTestCase.setUpClass` chỉ đăng ký `cls.addClassCleanup(_rollback_db)`

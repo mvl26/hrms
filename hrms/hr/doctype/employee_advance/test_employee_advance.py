@@ -1,6 +1,3 @@
-# Copyright (c) 2017, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
-
 import frappe
 from frappe.tests.utils import FrappeTestCase, change_settings
 from frappe.utils import flt, nowdate

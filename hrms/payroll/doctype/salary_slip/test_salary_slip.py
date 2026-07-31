@@ -1,6 +1,3 @@
-# Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
-
 import calendar
 import random
 
@@ -1939,50 +1936,6 @@ class TestSalarySlip(FrappeTestCase):
 			expected_annual_taxable_amount + ssa_doc.taxable_earnings_till_date,
 		)
 		self.assertEqual(salary_slip.income_tax_deducted_till_date, salary_slip.current_month_income_tax)
-
-	def test_tax_payable_with_tax_relief_and_marginal_relief_limits(self):
-		from hrms.payroll.doctype.salary_structure.test_salary_structure import make_salary_structure
-		from hrms.regional.india.setup import setup
-
-		setup()
-
-		frappe.db.delete("Income Tax Slab", {"currency": "INR"})
-		emp = make_employee(
-			"test_employee_tax_relief@salary.com",
-			company="_Test Company",
-			date_of_joining="2021-01-01",
-		)
-
-		payroll_period = frappe.get_last_doc("Payroll Period", filters={"company": "_Test Company"})
-
-		create_tax_slab(payroll_period, effective_date=payroll_period.start_date, apply_tax_relief=True)
-
-		salary_structure_doc = make_salary_structure(
-			"Test Tax Relief",
-			"Monthly",
-			company="_Test Company",
-			employee=emp,
-			payroll_period=payroll_period,
-			test_tax=True,
-			base=65000,
-		)
-
-		salary_slip = make_salary_slip(
-			salary_structure_doc.name, employee=emp, posting_date=payroll_period.start_date
-		)
-
-		tax_relief_limit, marginal_relief_limit = frappe.db.get_value(
-			"Income Tax Slab", {"currency": "INR"}, ["tax_relief_limit", "marginal_relief_limit"]
-		)
-
-		# taxable income within marginal relief limit
-		self.assertGreater(marginal_relief_limit, salary_slip.annual_taxable_amount)
-
-		# tax payable is reduced to income excess over tax relief limit
-		total_income_tax = salary_slip.annual_taxable_amount - tax_relief_limit
-		total_income_tax += total_income_tax * 0.04  # add cess
-
-		self.assertEqual(salary_slip.total_income_tax, total_income_tax)
 
 
 class TestSalarySlipSafeEval(FrappeTestCase):

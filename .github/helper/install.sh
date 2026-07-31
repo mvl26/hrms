@@ -10,7 +10,11 @@ sudo apt install libcups2-dev redis-server mariadb-client
 
 pip install frappe-bench
 
-git clone https://github.com/frappe/frappe --branch "$BRANCH_TO_CLONE" --depth 1
+FRAPPE_REF="${FRAPPE_BRANCH:-$BRANCH_TO_CLONE}"
+git clone "${FRAPPE_REPO:-https://github.com/frappe/frappe}" --branch "$FRAPPE_REF" --depth 1
+# Clone theo TAG cho HEAD detached, ma `bench init --frappe-path` lai doc active_branch cua repo
+# local (bench/app.py) -> tao nhanh cuc bo tai dung commit do. Neu la ten nhanh thi day la no-op.
+git -C frappe checkout -q -B "$FRAPPE_REF"
 bench init --skip-assets --frappe-path ~/frappe --python "$(which python)" frappe-bench
 
 mkdir ~/frappe-bench/sites/test_site
@@ -41,7 +45,9 @@ sed -i 's/socketio:/# socketio:/g' Procfile
 sed -i 's/redis_socketio:/# redis_socketio:/g' Procfile
 
 bench get-app payments --branch ${BRANCH_TO_CLONE%"-hotfix"}
-bench get-app https://github.com/frappe/erpnext --branch "$BRANCH_TO_CLONE" --resolve-deps
+# erpnext: mac dinh van la cua frappe de script chay duoc ngoai CI; workflow ghi de bang
+# ERPNEXT_REPO/ERPNEXT_BRANCH de kiem dung ban erpnext Miyano deploy.
+bench get-app "${ERPNEXT_REPO:-https://github.com/frappe/erpnext}" --branch "${ERPNEXT_BRANCH:-$BRANCH_TO_CLONE}" --resolve-deps
 bench get-app https://github.com/frappe/lending --branch ${BRANCH_TO_CLONE%"-hotfix"}
 bench get-app hrms "${GITHUB_WORKSPACE}"
 bench setup requirements --dev

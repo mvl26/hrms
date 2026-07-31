@@ -1,6 +1,3 @@
-# Copyright (c) 2022, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
-
 import frappe
 from frappe import _
 from frappe.model.naming import set_name_by_naming_series

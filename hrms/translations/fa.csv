@@ -1427,7 +1427,6 @@ Income Tax Deducted Till Date,مالیات بر درآمد تا تاریخ کس�
 Income from Other Sources,درآمد از منابع دیگر,
 Incorrect Weightage Allocation,تخصیص وزن نادرست,
 "Indicates the number of leaves that cannot be encashed from the leave balance. E.g. with a leave balance of 10 and 4 Non-Encashable Leaves, you can encash 6, while the remaining 4 can be carried forward or expired",تعداد مرخصی‌هایی را نشان می دهد که نمی‌توان از مانده مرخصی بازخرید کرد. به عنوان مثال، با مانده مرخصی 10 و 4 مرخصی غیرقابل بازخرید، می‌توانید 6 مرخصی را بازخرید کنید، در حالی که 4 مرخصی باقی مانده را می‌توان انتقال به دوره بعد یا منقضی کرد,
-Install Frappe HR,نصب Frappe HR,
 Insufficient Balance,تراز ناکافی,
 Insufficient leave balance for Leave Type {0},موجودی مرخصی ناکافی برای نوع مرخصی {0},
 Interest,علاقه,

@@ -1,6 +1,3 @@
-# Copyright (c) 2020, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
-
 import frappe
 from frappe.tests.utils import FrappeTestCase, change_settings
 from frappe.utils import add_days, add_months, floor, flt, get_datetime, get_first_day, getdate
@@ -243,11 +240,41 @@ class TestGratuity(FrappeTestCase):
 		self.assertEqual(gratuity.status, "Unpaid")
 
 
-def setup_gratuity_rule(name: str) -> dict:
-	from hrms.regional.united_arab_emirates.setup import setup
+# Fixture rule cho test Gratuity, noi hoa tai day de test chay doc lap khong can
+# module thiet lap theo quoc gia nao.
+GRATUITY_RULE_FIXTURES = {
+	"Rule Under Limited Contract (UAE)": {
+		"calculate_gratuity_amount_based_on": "Sum of all previous slabs",
+		"slabs": [
+			{"from_year": 0, "to_year": 1, "fraction_of_applicable_earnings": 0},
+			{"from_year": 1, "to_year": 5, "fraction_of_applicable_earnings": 21 / 30},
+			{"from_year": 5, "to_year": 0, "fraction_of_applicable_earnings": 1},
+		],
+	},
+	"Rule Under Unlimited Contract on termination (UAE)": {
+		"calculate_gratuity_amount_based_on": "Current Slab",
+		"slabs": [
+			{"from_year": 0, "to_year": 1, "fraction_of_applicable_earnings": 0},
+			{"from_year": 1, "to_year": 5, "fraction_of_applicable_earnings": 21 / 30},
+			{"from_year": 5, "to_year": 0, "fraction_of_applicable_earnings": 1},
+		],
+	},
+}
 
+
+def setup_gratuity_rule(name: str) -> dict:
 	if not frappe.db.exists("Gratuity Rule", name):
-		setup()
+		spec = GRATUITY_RULE_FIXTURES[name]
+		frappe.get_doc(
+			{
+				"doctype": "Gratuity Rule",
+				"name": name,
+				"calculate_gratuity_amount_based_on": spec["calculate_gratuity_amount_based_on"],
+				"work_experience_calculation_method": "Take Exact Completed Years",
+				"minimum_year_for_gratuity": 1,
+				"gratuity_rule_slabs": spec["slabs"],
+			}
+		).insert(ignore_if_duplicate=True, ignore_permissions=True, ignore_mandatory=True)
 
 	rule = frappe.get_doc("Gratuity Rule", name)
 	rule.applicable_earnings_component = []

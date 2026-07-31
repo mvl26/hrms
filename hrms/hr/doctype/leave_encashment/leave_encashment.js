@@ -1,6 +1,3 @@
-// Copyright (c) 2018, Frappe Technologies Pvt. Ltd. and contributors
-// For license information, please see license.txt
-
 frappe.provide("erpnext.accounts.dimensions");
 
 frappe.ui.form.on("Leave Encashment", {

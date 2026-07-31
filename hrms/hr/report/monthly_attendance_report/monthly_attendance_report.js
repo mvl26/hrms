@@ -1,6 +1,4 @@
-// Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-// For license information, please see license.txt
-
+// Copyright (c) 2026, Miyano Việt Nam.
 frappe.query_reports["Monthly Attendance Report"] = {
 	filters: [
 		{
@@ -46,6 +44,37 @@ frappe.query_reports["Monthly Attendance Report"] = {
 	],
 
 	onload: function (report) {
+		// Luồng chấm công: BẢNG CÔNG (đang ở đây) -> soát công -> chốt công -> lương.
+		// Hai nút này là chặng nối; đứng ở báo cáo là đi tiếp được, không phải nhớ đường.
+		report.page.add_inner_button(__("Soát công"), () => {
+			const f = report.get_values();
+			frappe.route_options = {
+				month: String(f.month),
+				year: f.year,
+				company: f.company,
+				department: f.department,
+			};
+			frappe.set_route("attendance-review");
+		});
+
+		report.page.add_inner_button(__("Chốt công tháng"), () => {
+			const f = report.get_values();
+			frappe.call({
+				method: "hrms.hr.doctype.monthly_attendance_sheet.monthly_attendance_sheet.get_or_create_sheet",
+				args: {
+					month: String(f.month),
+					year: f.year,
+					company: f.company,
+					department: f.department,
+				},
+				freeze: true,
+				freeze_message: __("Đang mở bảng chốt công..."),
+				callback: (r) => {
+					if (r.message) frappe.set_route("Form", "Monthly Attendance Sheet", r.message);
+				},
+			});
+		});
+
 		// bảng màu do server định nghĩa (một nguồn duy nhất) — formatter chỉ tra, không tự phân loại
 		frappe.call({
 			method: "hrms.hr.report.monthly_attendance_report.monthly_attendance_report.get_color_map",

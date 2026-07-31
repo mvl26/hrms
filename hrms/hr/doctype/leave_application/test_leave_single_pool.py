@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Quỹ phép năm: đơn rút "Nghỉ phép năm" **bắt buộc chọn Loại nghỉ** — CHỈ còn "Nghỉ phép năm" → P.
 Nghỉ ốm / chăm con ốm KHÔNG rút quỹ phép năm (loại nghỉ riêng, có lương, đủ công). Nghỉ nửa ngày phải
 chọn buổi (Sáng/Chiều).
@@ -10,6 +9,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import test_employee
 
 
 class TestLeaveSinglePool(PerTestRollback, FrappeTestCase):
@@ -17,21 +17,9 @@ class TestLeaveSinglePool(PerTestRollback, FrappeTestCase):
 	def setUpClass(cls):
 		super().setUpClass()
 		cls.year = 2099
-		# Phải là nhân viên mà bảng công tháng THỰC SỰ render, không phải "Active" bất kỳ:
-		# get_employees() chỉ lấy người vào làm trước cuối kỳ và chưa nghỉ việc trước đầu kỳ.
-		# Site có sẵn dữ liệu (test_site của CI) dễ trả về người đã có relieving_date, khi đó
-		# get_sheet_rows không có dòng nào cho họ và test vỡ bằng StopIteration.
-		cls.emp = frappe.db.get_value(
-			"Employee",
-			{
-				"status": "Active",
-				"date_of_joining": ["<=", f"{cls.year}-01-01"],
-				"relieving_date": ["is", "not set"],
-			},
-			"name",
-		)
-		if not cls.emp:
-			raise AssertionError("site không có nhân viên đang làm việc nào để dựng bảng công")
+		# Tự tạo nhân viên: tra "Active" bất kỳ chỉ chạy được trên site có sẵn dữ liệu; trên
+		# test_site của CI, class trước rollback xong là không còn ai và get_value trả None.
+		cls.emp = test_employee()
 		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
 
 	def _alloc(self, leave_type, days):
@@ -105,8 +93,9 @@ class TestLeaveSinglePool(PerTestRollback, FrappeTestCase):
 				self._leave_app("Nghỉ phép năm", f"{self.year}-03-06", f"{self.year}-03-06", reason=reason)
 
 	def test_sick_via_own_leave_type_does_not_touch_annual_pool(self):
-		# nghỉ ốm nộp bằng loại nghỉ riêng "Nghỉ ốm": KHÔNG giảm quỹ phép năm, có lương (is_lwp=0),
-		# bảng công vẫn hiện Ô (bridge reverse suy mã), và đếm vào Tổng công (đủ công).
+		# nghỉ ốm nộp bằng loại nghỉ riêng "Nghỉ ốm": KHÔNG giảm quỹ phép năm, bảng công vẫn hiện Ô
+		# (bridge reverse suy mã) — nhưng KHÔNG vào Tổng công: BHXH chi trả ngày đó, doanh nghiệp
+		# không trả lương (quyết định 2026-07-30). Hai chuyện tách bạch: không trừ quỹ phép ≠ có công.
 		from hrms.hr.doctype.leave_application.leave_application import get_leave_balance_on
 		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
 
@@ -119,11 +108,12 @@ class TestLeaveSinglePool(PerTestRollback, FrappeTestCase):
 		att = self._att(la)
 		self.assertEqual(att.leave_type, "Nghỉ ốm")
 		self.assertEqual(att.custom_attendance_code, "Ô")
-		self.assertEqual(frappe.db.get_value("Leave Type", "Nghỉ ốm", "is_lwp"), 0)  # có lương
-		# đủ công: ngày ốm tính vào Tổng công (số ngày được trả lương)
+		self.assertEqual(frappe.db.get_value("Leave Type", "Nghỉ ốm", "is_ppl"), 1)  # BHXH trả, công ty không
+		# ngày ốm KHÔNG vào Tổng công (BHXH trả), nhưng vẫn được đếm ở cột "Ốm" để không biến mất
 		row = next(r for r in get_sheet_rows({"month": 3, "year": self.year}) if r["employee"] == self.emp)
 		self.assertEqual(row["days"][6], "Ô")
-		self.assertGreaterEqual(row["totals"].get("Tổng công", 0), 1.0)
+		self.assertEqual(row["totals"].get("Tổng công", 0), 0.0, "ngày BHXH trả không phải công công ty")
+		self.assertEqual(row["totals"].get("Ốm", 0), 1.0, "nhưng phải hiện ở cột Ốm")
 
 	def test_pool_requires_reason(self):
 		# đơn rút quỹ phép năm KHÔNG chọn Loại nghỉ → chặn (field bắt buộc).

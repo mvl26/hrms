@@ -24,10 +24,10 @@ export default defineConfig({
 			},
 			manifest: {
 				display: "standalone",
-				name: "Frappe HR",
-				short_name: "Frappe HR",
+				name: "Miyano HR",
+				short_name: "Miyano HR",
 				start_url: "/hrms",
-				description: "Everyday HR & Payroll operations at your fingertips",
+				description: "Nhân sự & chấm công Miyano trong tầm tay",
 				theme_color: "#ffffff",
 				icons: [
 					{

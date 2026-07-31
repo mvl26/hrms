@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# For license information, please see license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Business Trip (Business Trip) — a multi-person trip request driven by a Frappe Workflow
 (Nháp -> Chờ COO duyệt -> COO đã duyệt -> Đã ra QĐ -> Hoàn tất). Desk-only; never touches
 Attendance or payroll. Trip expenses are separate per-traveler Expense Claims linked back here."""

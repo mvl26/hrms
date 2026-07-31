@@ -1,7 +1,3 @@
-# Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
-
-
 from datetime import datetime, timedelta
 
 import frappe
@@ -20,7 +16,16 @@ from frappe.utils import (
 	nowdate,
 )
 
+from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
+from erpnext.setup.doctype.holiday_list.holiday_list import is_holiday
+
 import hrms
+from hrms.hr.doctype.attendance.vn_day_classifier import (
+	DEFAULT_LUNCH_END,
+	DEFAULT_LUNCH_START,
+	classify_day,
+	resolve_lunch_window,
+)
 from hrms.hr.doctype.shift_assignment.shift_assignment import has_overlapping_timings
 from hrms.hr.utils import (
 	get_holiday_dates_for_employee,
@@ -61,6 +66,10 @@ class Attendance(Document):
 		self.apply_vn_half_day_classifier()
 		self.apply_attendance_code_bridge()
 		self.set_lunch_flag()
+		# Ghi lại Ý ĐỊNH trước khi validate chạy. check_leave_record sẽ ép half_day_status="Absent"
+		# khi không có Leave Application; restore_code_driven_half_day_status chỉ được hoàn tác ĐÚNG
+		# lần ép đó, tuyệt đối không đè giá trị "Absent" do người gọi cố ý đặt (payroll đọc field này).
+		self.flags.vn_half_day_status_intent = self.half_day_status
 
 	def set_lunch_flag(self):
 		"""Miyano: ghi cờ ăn trưa (custom_lunch) từ checkin của ngày này — nguồn duy nhất cho số buổi
@@ -87,27 +96,59 @@ class Attendance(Document):
 		carried by leave_type (paid leaves aren't in payroll's LWP map; unpaid ones dock via it).
 		Forcing Absent makes get_half_absent_days dock an extra 0.5 — over-deducting a paid half
 		(1/2P) and double-deducting an unpaid half (1/2K). When a code drove this Half Day and set
-		a leave_type, restore the worked half to Present. NN (no leave_type) is left Absent so it
+		a leave_type, restore the worked half to Present. 1/2X (no leave_type) is left Absent so it
 		still docks 0.5 exactly like a native Half Day."""
 		code_driven = (
 			self.get("custom_attendance_code")
 			or self.get("custom_morning_code")
 			or self.get("custom_afternoon_code")
 		)
-		if code_driven and self.status == "Half Day" and self.leave_type and not self.leave_application:
+		if (
+			code_driven
+			and self.status == "Half Day"
+			and self.leave_type
+			and not self.leave_application
+			# chỉ khi chính check_leave_record vừa lật Present -> Absent; nếu người gọi đặt "Absent"
+			# ngay từ đầu (nửa ngày nghỉ KHÔNG hưởng công) thì giữ nguyên, nếu không payment_days
+			# bị cộng thêm 0,5 cho mỗi ngày như vậy.
+			and self.flags.get("vn_half_day_status_intent") == "Present"
+		):
 			self.half_day_status = "Present"
 
-	# module-level fallbacks for shifts that enable the split but leave a config field blank
-	VN_DEFAULT_LUNCH_START = timedelta(hours=12)
-	VN_DEFAULT_LUNCH_END = timedelta(hours=13, minutes=30)
-	VN_DEFAULT_MIN_FRACTION = 0.5
-	VN_DEFAULT_GRACE_MINUTES = 15
+	# fallbacks for shifts that enable the split but leave a config field blank
+	# (giờ nghỉ trưa: một nguồn duy nhất trong `vn_day_classifier`, xem `resolve_lunch_window`)
+	VN_DEFAULT_LUNCH_START = DEFAULT_LUNCH_START
+	VN_DEFAULT_LUNCH_END = DEFAULT_LUNCH_END
+	VN_DEFAULT_FLEX_BAND_MINUTES = 180
+	VN_DEFAULT_MIN_WORK_HOURS = 8.0
+
+	def get_split_shift_config(self):
+		"""Cấu hình ca cho luật chấm công VN, hoặc None nếu ca không bật tách buổi.
+
+		Đọc PHÒNG THỦ: 3 field giờ linh hoạt là custom field (fixtures), site chưa migrate thì
+		chưa có → bỏ qua chúng và coi như tắt giờ linh hoạt, tức hành vi y hệt trước đây."""
+		meta = frappe.get_meta("Shift Type")
+		fields = ["start_time", "end_time", "custom_split_half_day", "custom_lunch_start", "custom_lunch_end"]
+		fields += [
+			f
+			for f in ("custom_flexible_shift", "custom_flex_band_minutes", "custom_min_work_hours")
+			if meta.has_field(f)
+		]
+		cfg = frappe.db.get_value("Shift Type", self.shift, fields, as_dict=True)
+		if not cfg or not cint(cfg.custom_split_half_day) or not (cfg.start_time and cfg.end_time):
+			return None
+		return cfg
+
+	def falls_on_holiday(self) -> bool:
+		"""Ngày chấm công có nằm trong Holiday List của nhân viên không (T7/CN/lễ)."""
+		holiday_list = get_holiday_list_for_employee(self.employee, raise_exception=False)
+		return bool(holiday_list) and is_holiday(holiday_list, getdate(self.attendance_date))
 
 	def apply_vn_half_day_classifier(self):
-		"""For a shift that opts into VN split-half-day, derive morning/afternoon codes + a
-		lunch-excluded net working_hours from the day's in/out, so the code bridge produces the
-		correct status/công. Gated + a no-op unless: shift set with custom_split_half_day=1,
-		in/out present, no manual code, and status not On Leave."""
+		"""Chấm mã công + giờ net từ giờ vào/ra theo luật ca trượt & đủ giờ (`vn_day_classifier`).
+
+		Chỉ chạy khi: ca có bật `custom_split_half_day`, có đủ in/out, chưa có mã nhập tay, ngày
+		không thuộc diện nghỉ phép, và **không phải ngày nghỉ**. Xem spec §4.2."""
 		if not self.get("shift") or not self.get("in_time") or not self.get("out_time"):
 			return
 		if (
@@ -122,55 +163,30 @@ class Attendance(Document):
 			# rewrite leave_type from the leave-less "V" code and silently drop the employee's leave.
 			return
 
-		cfg = frappe.db.get_value(
-			"Shift Type",
-			self.shift,
-			[
-				"start_time",
-				"end_time",
-				"custom_split_half_day",
-				"custom_lunch_start",
-				"custom_lunch_end",
-				"custom_half_day_min_fraction",
-				"custom_half_day_grace_minutes",
-			],
-			as_dict=True,
-		)
-		if not cfg or not cint(cfg.custom_split_half_day) or not (cfg.start_time and cfg.end_time):
+		cfg = self.get_split_shift_config()
+		if not cfg:
+			return
+		if self.falls_on_holiday():
+			# Ngày nghỉ (T7/CN/lễ): auto-attendance vốn đã bỏ qua, nhưng bản ghi vẫn có thể sinh ra
+			# từ nhập tay / Yêu cầu chấm công. Đem khung ca ngày thường ra chấm thì người đi làm ngày
+			# nghỉ bị quy thành V hoặc nửa công — đúng thứ user báo. Ngày nghỉ KHÔNG tự chấm mã.
 			return
 
-		midnight = datetime.combine(getdate(self.attendance_date), datetime.min.time())
-		lunch_start = cfg.custom_lunch_start or self.VN_DEFAULT_LUNCH_START
-		lunch_end = cfg.custom_lunch_end or self.VN_DEFAULT_LUNCH_END
-		m_start, m_end = midnight + cfg.start_time, midnight + lunch_start
-		a_start, a_end = midnight + lunch_end, midnight + cfg.end_time
-		in_t, out_t = get_datetime(self.in_time), get_datetime(self.out_time)
-		grace = timedelta(minutes=cint(cfg.custom_half_day_grace_minutes) or self.VN_DEFAULT_GRACE_MINUTES)
-		min_frac = flt(cfg.custom_half_day_min_fraction) or self.VN_DEFAULT_MIN_FRACTION
-
-		def overlap_hours(lo, hi, w_lo, w_hi):
-			start, end = max(lo, w_lo), min(hi, w_hi)
-			return max(0.0, (end - start).total_seconds() / 3600.0)
-
-		m_net = overlap_hours(in_t, out_t, m_start, m_end)
-		a_net = overlap_hours(in_t, out_t, a_start, a_end)
-		m_dur = (m_end - m_start).total_seconds() / 3600.0
-		a_dur = (a_end - a_start).total_seconds() / 3600.0
-		# coverage uses a grace-expanded interval (tolerate small late-in / early-out); net hours do not
-		m_cov = (overlap_hours(in_t - grace, out_t + grace, m_start, m_end) / m_dur) if m_dur else 0.0
-		a_cov = (overlap_hours(in_t - grace, out_t + grace, a_start, a_end) / a_dur) if a_dur else 0.0
-
-		self.working_hours = round(m_net + a_net, 2)
-		worked_m, worked_a = m_cov >= min_frac, a_cov >= min_frac
-		if worked_m and worked_a:
-			self.custom_attendance_code = "X"  # cả ngày đi làm → MỘT mã đơn (không lưu X/X thừa)
-		elif worked_m or worked_a:
-			# làm nửa buổi → nửa còn lại nghỉ KHÔNG LƯƠNG. Mã CHUẨN là token đơn "1/2K" (không tách X/K):
-			# vẫn ra Half Day + "Nghỉ không lương" (is_lwp=1) + half_day_status Present → trừ đúng 0.5,
-			# payroll BẤT BIẾN so với X/K. Không phân biệt sáng/chiều ở phần hiển thị (theo quy ước mã).
-			self.custom_attendance_code = "1/2K"
-		else:
-			self.custom_attendance_code = "V"  # vắng cả ngày (không đi làm buổi nào) → không lương
+		band = cfg.get("custom_flex_band_minutes")
+		lunch_start, lunch_end = resolve_lunch_window(cfg.custom_lunch_start, cfg.custom_lunch_end)
+		self.working_hours, self.custom_attendance_code = classify_day(
+			get_datetime(self.in_time),
+			get_datetime(self.out_time),
+			day=datetime.combine(getdate(self.attendance_date), datetime.min.time()),
+			start_time=cfg.start_time,
+			end_time=cfg.end_time,
+			lunch_start=lunch_start,
+			lunch_end=lunch_end,
+			flexible=bool(cint(cfg.get("custom_flexible_shift"))),
+			# 0 nghĩa là "tắt trượt" (khác với bỏ trống → dùng mặc định)
+			band_minutes=self.VN_DEFAULT_FLEX_BAND_MINUTES if band is None else cint(band),
+			min_work_hours=flt(cfg.get("custom_min_work_hours")) or self.VN_DEFAULT_MIN_WORK_HOURS,
+		)
 
 	def apply_attendance_code_bridge(self):
 		"""Two-way bridge between VN attendance codes (mã công) and the native status fields
@@ -197,7 +213,7 @@ class Attendance(Document):
 
 	def clear_stale_work_code_on_leave(self):
 		"""Ngày do NGHỈ PHÉP dẫn dắt (có leave_application, status On Leave/Half Day) mà mã đang là mã ĐI
-		LÀM (category "Công": X/CT/NN…) là mã CŨ sót từ lần auto-attendance chấm Present TRƯỚC khi áp đơn
+		LÀM (category "Công": X/CT/1/2X…) là mã CŨ sót từ lần auto-attendance chấm Present TRƯỚC khi áp đơn
 		nghỉ. Giữ lại thì forward-bridge sẽ lật status về Present (mã X → Present) → mất nửa/cả ngày nghỉ.
 		Bỏ mã sót để reverse suy lại đúng từ leave_type (vd nghỉ phép nửa ngày → 1/2P). Mã nghỉ / tách đúng
 		(morning là mã nghỉ) được giữ nguyên."""
@@ -230,7 +246,7 @@ class Attendance(Document):
 
 		# công đi làm thực tế = Σ work_fraction (worked-công fraction) of each half x 0.5.
 		# work_fraction already excludes non-working codes (P/Ô/K = 0), so no category filter needed;
-		# this also lets a single half-day code (NN/1/2P/1/2K, work_fraction 0.5) count its worked half.
+		# this also lets a single half-day code (1/2X/1/2P/1/2K, work_fraction 0.5) count its worked half.
 		self.custom_work_credit = sum(flt(c.work_fraction) * 0.5 for c in (m, a))
 		# single display code only when the whole day is one code
 		self.custom_attendance_code = morning if morning == afternoon else None
@@ -239,9 +255,12 @@ class Attendance(Document):
 			self.status = m.maps_to_status
 			self.leave_type = m.leave_type if m.maps_to_status in ("On Leave", "Half Day") else None
 			if m.maps_to_status == "Half Day":
-				# a single Half-Day code (NN/1/2P/1/2K): worked half is present, the other half is
-				# leave (if leave_type set) or unpaid absence (NN). Mirrors native Half-Day entry.
-				self.half_day_status = "Present"
+				# a single Half-Day code (1/2X/1/2P/1/2K): worked half is present, the other half is
+				# leave (if leave_type set) or unpaid absence (1/2X). Mirrors native Half-Day entry.
+				# CHỈ điền khi còn trống: bản ghi lưu lần đầu đã được suy ngược ra mã, nên lần lưu
+				# sau (submit) sẽ đi nhánh xuôi này lần nữa — đè lên đây sẽ xoá mất half_day_status
+				# mà người gọi cố ý đặt là "Absent", cộng oan 0,5 ngày vào payment_days.
+				self.half_day_status = self.half_day_status or "Present"
 			else:
 				# non-Half-Day status: half_day_status is meaningless -> clear any stale value the
 				# threshold path (auto-attendance) may have pre-set before the code reclassified it.

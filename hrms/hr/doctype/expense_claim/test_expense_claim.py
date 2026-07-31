@@ -1,6 +1,3 @@
-# Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors and Contributors
-# See license.txt
-
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import flt, nowdate, random_string
@@ -49,7 +46,15 @@ class TestExpenseClaim(FrappeTestCase):
 
 		task = frappe.new_doc("Task")
 		task.update(
-			dict(doctype="Task", subject="_Test Project Task 1", status="Open", project=project)
+			# erpnext của Miyano đặt Task.description = bắt buộc (bản của frappe thì không),
+			# nên phải điền, nếu không insert vỡ với MandatoryError.
+			dict(
+				doctype="Task",
+				subject="_Test Project Task 1",
+				description="_Test Project Task 1",
+				status="Open",
+				project=project,
+			)
 		).insert()
 		task = task.name
 

@@ -863,3 +863,24 @@ Monthly Attendance Sheet Detail,Chi tiết Bảng Công Tháng
 Business Trip,Công Tác
 Business Trip Traveler,Người đi công tác
 Monthly Attendance Report,Bảng chấm công tháng
+Employee Working Hours,Giờ làm việc nhân viên
+Avg Hours / Day,TB giờ/ngày
+Avg In Time,Giờ vào TB
+Avg Out Time,Giờ ra TB
+Weekday,Thứ
+View,Xem
+Summary,Tổng hợp
+Detail,Chi tiết
+Include Employees Who Left,Gồm cả nhân viên đã nghỉ việc
+Mon,T2
+Tue,T3
+Wed,T4
+Thu,T5
+Fri,T6
+Sat,T7
+Sun,CN
+Total Presence Hours,Tổng giờ có mặt
+Days At Office,Số ngày có mặt
+Employees At Office,Số NV có mặt
+Presence Hours,Giờ có mặt
+Credited Hours,Giờ tính công

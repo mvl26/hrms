@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# For license information, please see license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Bảng Công Tháng — submittable monthly timekeeping sheet, one per đơn vị / tháng.
 
 A READ-ONLY snapshot: `populate_from_attendance` fills the child rows from the shared
@@ -19,6 +18,43 @@ class MonthlyAttendanceSheet(Document):
 	def validate(self):
 		self.set_period_dates()
 		self.check_duplicate()
+
+	def before_submit(self):
+		self.warn_about_unreviewed_days()
+
+	def warn_about_unreviewed_days(self):
+		"""Chốt công là hành động KHOÁ kỳ — sau đó không sửa được nữa nếu không huỷ bảng. Nên trước
+		khi khoá, nói thẳng còn bao nhiêu ô đang mang cờ bất thường (vắng, thiếu giờ, ngày trống,
+		chỉ 1 lượt chấm, chấm vào ngày nghỉ). Chỉ CẢNH BÁO, không chặn: có những ngày vắng là đúng
+		thật, và người chốt mới là người quyết."""
+		from hrms.hr.attendance_review import flag_labels, get_review_grid
+
+		grid = get_review_grid(
+			{
+				"month": self.month,
+				"year": self.year,
+				"company": self.company,
+				"include_company_descendants": self.include_company_descendants,
+				**({"department": self.department} if self.department else {}),
+			}
+		)
+		counts = {}
+		for day_flags in grid["flags"].values():
+			for flags in day_flags.values():
+				for f in flags:
+					counts[f] = counts.get(f, 0) + 1
+		if not counts:
+			return
+
+		labels = flag_labels()
+		detail = ", ".join(f"{labels.get(f, f)}: {n}" for f, n in sorted(counts.items()))
+		frappe.msgprint(
+			_(
+				"Bảng công còn {0} ô chưa xử lý ({1}). Chốt xong sẽ KHOÁ kỳ, muốn sửa phải huỷ bảng này."
+			).format(sum(counts.values()), detail),
+			title=_("Còn ô bất thường"),
+			indicator="orange",
+		)
 
 	def set_period_dates(self):
 		year, month = cint(self.year), cint(self.month)
@@ -40,6 +76,60 @@ class MonthlyAttendanceSheet(Document):
 		existing = frappe.db.get_value("Monthly Attendance Sheet", filters, "name")
 		if existing:
 			frappe.throw(_("Đã có Bảng công tháng {0} cho đơn vị/tháng này.").format(existing))
+
+	@frappe.whitelist()
+	def create_salary_slips(self) -> dict:
+		"""Chặng cuối của luồng: từ bảng đã chốt sang phiếu lương.
+
+		Lấy đúng danh sách nhân viên trong bảng (không quét lại DB — bảng đã chốt mới là bản quyền
+		lực), rồi với từng người:
+
+		- chưa có phiếu → tạo mới (cổng `sheet_gate` sẽ đối soát ngay lúc validate);
+		- có phiếu NHÁP → lưu lại để nó lấy lại số công mới nhất ("fetch data nếu có thay đổi");
+		- có phiếu ĐÃ SUBMIT → không đụng, chỉ báo lại. Sửa số đã trả là việc phải làm có chủ đích,
+		  không thể là tác dụng phụ của một nút bấm.
+		"""
+		if self.docstatus != 1:
+			frappe.throw(_("Phải chốt công (submit) trước khi tính lương."))
+
+		created, refreshed, submitted, failed = [], [], [], []
+		for row in self.employees:
+			existing = frappe.db.get_value(
+				"Salary Slip",
+				{
+					"employee": row.employee,
+					"start_date": self.from_date,
+					"end_date": self.to_date,
+					"docstatus": ["<", 2],
+				},
+				["name", "docstatus"],
+				as_dict=True,
+			)
+			try:
+				if existing and existing.docstatus == 1:
+					submitted.append(existing.name)
+					continue
+				if existing:
+					doc = frappe.get_doc("Salary Slip", existing.name)
+					doc.save()  # validate chạy lại → số công cập nhật theo bảng vừa chốt
+					refreshed.append(doc.name)
+					continue
+				doc = frappe.new_doc("Salary Slip")
+				doc.employee = row.employee
+				doc.company = self.company
+				doc.start_date = self.from_date
+				doc.end_date = self.to_date
+				doc.insert()
+				created.append(doc.name)
+			except Exception as e:
+				failed.append(f"{row.employee_name or row.employee}: {str(e)[:200]}")
+
+		return {
+			"created": created,
+			"refreshed": refreshed,
+			"submitted": submitted,
+			"failed": failed,
+		}
 
 	@frappe.whitelist()
 	def populate_from_attendance(self):
@@ -86,3 +176,36 @@ class MonthlyAttendanceSheet(Document):
 					row[category_field[cat]] = val
 			self.append("employees", row)
 		return len(self.employees)
+
+
+@frappe.whitelist()
+def get_or_create_sheet(
+	month: int | str, year: int | str, company: str, department: str | None = None
+) -> str:
+	"""Mở bảng chốt công của kỳ này, tạo mới nếu chưa có — dùng cho nút "Chốt công" trên báo cáo.
+
+	Không tự submit: chốt công là hành động khoá kỳ, phải do người dùng bấm sau khi nhìn dữ liệu."""
+	filters = {
+		"company": company,
+		"month": str(month),
+		"year": cint(year),
+		"docstatus": ["<", 2],
+		"department": department if department else ["is", "not set"],
+	}
+	existing = frappe.db.get_value("Monthly Attendance Sheet", filters, "name")
+	if existing:
+		return existing
+
+	doc = frappe.get_doc(
+		{
+			"doctype": "Monthly Attendance Sheet",
+			"company": company,
+			"month": str(month),
+			"year": cint(year),
+			"department": department or None,
+		}
+	)
+	doc.insert()
+	doc.populate_from_attendance()
+	doc.save()
+	return doc.name

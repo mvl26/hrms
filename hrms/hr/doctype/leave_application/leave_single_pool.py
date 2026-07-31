@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Miyano — quỹ phép năm.
 
 CHỈ "Nghỉ phép năm" trừ vào quỹ phép năm (Frappe tự chặn khi hết). Đơn nghỉ ``leave_type =
@@ -8,7 +7,7 @@ CHỈ "Nghỉ phép năm" trừ vào quỹ phép năm (Frappe tự chặn khi h�
     Nghỉ phép năm → P
 
 **Nghỉ ốm / chăm con ốm KHÔNG trừ quỹ phép năm** (nghỉ CÓ LƯƠNG, ĐỦ CÔNG): nộp bằng loại nghỉ riêng
-(``Nghỉ ốm`` / ``Nghỉ chăm con ốm``, is_lwp=0) hoặc ghi thẳng mã công Ô/Cô — bridge reverse-derive tự
+(``Nghỉ ốm`` / ``Nghỉ chăm con ốm`` — BHXH trả, công ty không tính lương) hoặc ghi thẳng mã công Ô/Cô — bridge reverse-derive tự
 đặt mã, payroll trả đủ. Thai sản/việc riêng cưới-tang/TNLĐ/nghỉ bù cũng là loại riêng hưởng lương
 KHÔNG trừ quỹ; K không lương.
 

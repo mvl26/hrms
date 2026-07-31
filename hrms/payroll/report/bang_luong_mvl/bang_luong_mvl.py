@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# For license information, please see license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Bảng lương MVL — CỘT GIỐNG HỆT file Excel gốc (docs/Cong_thuc_tinh_luong_MVL.md).
 
 Đọc thẳng Salary Slip ĐÃ SUBMIT dùng MỘT trong các cấu trúc MVL (mỗi loại lương một cấu trúc) trong kỳ.
