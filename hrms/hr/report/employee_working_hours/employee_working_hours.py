@@ -20,16 +20,11 @@ import frappe
 from frappe import _
 from frappe.utils import cint, get_datetime, get_first_day, get_last_day, getdate
 
-from hrms.hr.doctype.attendance.attendance import Attendance as AttendanceDoc
-from hrms.hr.doctype.attendance.vn_day_classifier import overlap_hours
+from hrms.hr.doctype.attendance.vn_day_classifier import overlap_hours, resolve_lunch_window
 from hrms.hr.working_hours import compute_net_hours
 
 # nhãn thứ trong tuần theo chỉ số `date.weekday()` (0 = Thứ Hai)
 WEEKDAY_LABELS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-
-# khung nghỉ trưa mặc định khi ca không cấu hình — cùng nguồn với bộ chấm mã công VN
-DEFAULT_LUNCH_START = AttendanceDoc.VN_DEFAULT_LUNCH_START
-DEFAULT_LUNCH_END = AttendanceDoc.VN_DEFAULT_LUNCH_END
 
 # ngày đã chấm là nghỉ thì dù có punch lẻ cũng không tính là ngày làm việc ở văn phòng
 NON_PRESENCE_STATUSES = ("Absent", "On Leave")
@@ -95,24 +90,18 @@ def get_split_shift_names():
 
 
 def get_lunch_window_map():
-	"""{ca: (giờ bắt đầu nghỉ trưa, giờ kết thúc)} cho những ca có cấu hình riêng HỢP LỆ.
+	"""{ca: khung nghỉ trưa} — cùng luật với bộ chấm mã công (`resolve_lunch_window`).
 
-	Đọc phòng thủ hai lớp:
-	- hai field này là custom field (fixtures), site chưa migrate thì chưa có;
-	- ca tạo mới mà không nhập giờ trưa bị Frappe điền giờ hiện tại vào cả hai field, thành một
-	  khung rộng 0 giây (ví dụ 11:25:08 → 11:25:08). Khung như vậy là rác, phải rơi về mặc định,
-	  nếu không cả ngày làm sẽ không bị trừ nghỉ trưa.
+	Đọc phòng thủ: hai field này là custom field (fixtures), site chưa migrate thì chưa có.
 	"""
 	meta = frappe.get_meta("Shift Type")
 	if not (meta.has_field("custom_lunch_start") and meta.has_field("custom_lunch_end")):
 		return {}
 
-	windows = {}
-	for shift in frappe.get_all("Shift Type", fields=["name", "custom_lunch_start", "custom_lunch_end"]):
-		start, end = shift.custom_lunch_start, shift.custom_lunch_end
-		if start and end and end > start:
-			windows[shift.name] = (start, end)
-	return windows
+	return {
+		shift.name: resolve_lunch_window(shift.custom_lunch_start, shift.custom_lunch_end)
+		for shift in frappe.get_all("Shift Type", fields=["name", "custom_lunch_start", "custom_lunch_end"])
+	}
 
 
 def presence_hours(in_time, out_time, attendance_date, lunch_start=None, lunch_end=None):
@@ -129,12 +118,8 @@ def presence_hours(in_time, out_time, attendance_date, lunch_start=None, lunch_e
 		return 0.0
 
 	day = datetime.combine(getdate(attendance_date), datetime.min.time())
-	lunch = overlap_hours(
-		in_time,
-		out_time,
-		day + (lunch_start or DEFAULT_LUNCH_START),
-		day + (lunch_end or DEFAULT_LUNCH_END),
-	)
+	lunch_start, lunch_end = resolve_lunch_window(lunch_start, lunch_end)
+	lunch = overlap_hours(in_time, out_time, day + lunch_start, day + lunch_end)
 	present = (out_time - in_time).total_seconds() / 3600.0
 	return round(max(present - lunch, 0.0), 2)
 

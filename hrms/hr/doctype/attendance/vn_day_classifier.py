@@ -26,6 +26,23 @@ CODE_FULL_DAY = "X"  # đủ giờ → đủ công
 CODE_SHORT_HOURS = "1/2X"  # có đi làm nhưng thiếu giờ → nửa công
 CODE_ABSENT = "V"  # không có mặt phút nào trong khung ca → vắng
 
+# nghỉ trưa mặc định khi ca không cấu hình được khung hợp lệ
+DEFAULT_LUNCH_START = timedelta(hours=12)
+DEFAULT_LUNCH_END = timedelta(hours=13, minutes=30)
+
+
+def resolve_lunch_window(start, end) -> tuple[timedelta, timedelta]:
+	"""Khung nghỉ trưa dùng được, hoặc mặc định 12:00-13:30 nếu cấu hình ca vô nghĩa.
+
+	Không chỉ bắt giá trị trống: Shift Type tạo mới mà không nhập giờ nghỉ trưa bị Frappe điền
+	GIỜ HIỆN TẠI vào cả hai field, thành khung rộng 0 giây (ví dụ 11:25:08 → 11:25:08). Khung đó
+	tồn tại nên `... or DEFAULT` không bắt được, mà lại làm cả ngày không bị trừ phút nghỉ trưa
+	nào → ca cấu hình sai tính DƯ 1,5h công mỗi ngày.
+	"""
+	if start and end and end > start:
+		return start, end
+	return DEFAULT_LUNCH_START, DEFAULT_LUNCH_END
+
 
 def overlap_hours(a_start: datetime, a_end: datetime, b_start: datetime, b_end: datetime) -> float:
 	"""Số giờ giao nhau của hai khoảng thời gian (0 nếu không giao hoặc khoảng rỗng/âm)."""

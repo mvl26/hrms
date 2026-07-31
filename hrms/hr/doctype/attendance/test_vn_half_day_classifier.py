@@ -6,6 +6,8 @@ Bản thân LUẬT (ca trượt, giờ net, X / 1/2X / V) được test đầy �
 dưới dạng hàm thuần — không cần DB. Ở đây chỉ kiểm phần ráp nối.
 """
 
+from datetime import timedelta
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
@@ -148,3 +150,70 @@ class TestVNHalfDayLogic(PerTestRollback, FrappeTestCase):
 		self.assertIsNone(doc.leave_type)
 		self.assertEqual(doc.half_day_status, "Absent")
 		self.assertEqual(doc.custom_work_credit, 0.5)
+
+
+class TestLunchWindowFallback(PerTestRollback, FrappeTestCase):
+	"""Khung nghỉ trưa rác của ca phải rơi về mặc định 12:00-13:30.
+
+	Shift Type tạo mới mà không nhập giờ nghỉ trưa bị Frappe điền GIỜ HIỆN TẠI vào cả
+	`custom_lunch_start` lẫn `custom_lunch_end` (ví dụ 11:25:08 → 11:25:08). Khung rộng 0 giây đó
+	làm `classify_day` không trừ phút nghỉ trưa nào: ngày 08:00-17:30 được tính 9,5h thay vì 8,0h,
+	tức ca cấu hình sai sẽ tính DƯ giờ công. `... or VN_DEFAULT_LUNCH_START` không bắt được vì giá
+	trị có tồn tại, chỉ là vô nghĩa.
+	"""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.emp = test_employee()
+		cls.day = frappe.utils.getdate("2099-03-04")  # thứ Tư, ngày thường
+
+	def test_resolve_keeps_a_valid_window(self):
+		from hrms.hr.doctype.attendance.vn_day_classifier import resolve_lunch_window
+
+		window = (timedelta(hours=11, minutes=30), timedelta(hours=12, minutes=30))
+		self.assertEqual(resolve_lunch_window(*window), window)
+
+	def test_resolve_falls_back_on_meaningless_windows(self):
+		from hrms.hr.doctype.attendance.vn_day_classifier import (
+			DEFAULT_LUNCH_END,
+			DEFAULT_LUNCH_START,
+			resolve_lunch_window,
+		)
+
+		default = (DEFAULT_LUNCH_START, DEFAULT_LUNCH_END)
+		now = timedelta(hours=11, minutes=25, seconds=8)
+		self.assertEqual(resolve_lunch_window(now, now), default)  # rộng 0 giây (Frappe điền now)
+		self.assertEqual(resolve_lunch_window(timedelta(hours=14), timedelta(hours=12)), default)
+		self.assertEqual(resolve_lunch_window(None, None), default)
+		self.assertEqual(resolve_lunch_window(timedelta(hours=12), None), default)
+
+	def test_shift_with_degenerate_lunch_window_still_deducts_lunch(self):
+		shift = "VN Broken Lunch (test)"
+		if not frappe.db.exists("Shift Type", shift):
+			frappe.get_doc(
+				{
+					"doctype": "Shift Type",
+					"__newname": shift,
+					"start_time": "08:00:00",
+					"end_time": "17:30:00",
+					"custom_split_half_day": 1,
+					"custom_lunch_start": "11:25:08",
+					"custom_lunch_end": "11:25:08",
+				}
+			).insert()
+
+		doc = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": self.day,
+				"shift": shift,
+				"in_time": f"{self.day} 08:00:00",
+				"out_time": f"{self.day} 17:30:00",
+			}
+		)
+		doc.before_validate()
+
+		self.assertEqual(doc.working_hours, 8.0)  # 9,5h - 1,5h mặc định, KHÔNG phải 9,5h
+		self.assertEqual(doc.custom_attendance_code, "X")
