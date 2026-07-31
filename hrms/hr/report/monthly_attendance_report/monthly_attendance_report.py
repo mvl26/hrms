@@ -265,22 +265,31 @@ def _company_filter(filters: Filters) -> list | None:
 
 
 def get_employees(filters: Filters, start, end) -> list:
-	"""Roster to render: everyone employed at some point during the month (joined on/before
-	month-end and not relieved before month-start), optionally scoped to a company tree."""
+	"""Danh sách nhân viên dựng bảng công: người CÓ ĐI LÀM trong kỳ này.
+
+	Vào làm trước khi hết kỳ, và chưa nghỉ việc trước khi kỳ bắt đầu. Thêm điều kiện **trạng thái**:
+	chỉ `Active`, hoặc người đã ngừng làm việc NHƯNG có `relieving_date` rơi vào/sau đầu kỳ.
+
+	Nhánh thứ hai không được bỏ: nghỉ việc ngày 15 thì 15 ngày đầu tháng vẫn phải được trả. Loại
+	thẳng mọi người không `Active` là quỵt công đã làm. Ngược lại, người `Inactive`/`Suspended`/
+	`Left` mà không có ngày nghỉ việc thì không thuộc kỳ nào — họ mới là thứ phải bỏ đi.
+	"""
 	conds = [["Employee", "date_of_joining", "<=", end]]
 	companies = _company_filter(filters)
 	if companies:
 		conds.append(["Employee", "company", "in", companies])
-	return frappe.get_all(
+
+	rows = frappe.get_all(
 		"Employee",
 		filters=conds,
 		or_filters=[
 			["Employee", "relieving_date", "is", "not set"],
 			["Employee", "relieving_date", ">=", start],
 		],
-		fields=["name", "employee_name", "holiday_list", "relieving_date", "date_of_joining"],
+		fields=["name", "employee_name", "holiday_list", "relieving_date", "date_of_joining", "status"],
 		order_by="employee_name",
 	)
+	return [e for e in rows if e.status == "Active" or e.relieving_date]
 
 
 def get_attendances(filters: Filters, start, end) -> dict:

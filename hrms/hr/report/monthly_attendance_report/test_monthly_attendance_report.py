@@ -519,3 +519,47 @@ class TestLegend(PerTestRollback, FrappeTestCase):
 		from hrms.hr.attendance_legend import legend_styles
 
 		self.assertIn('[data-theme="dark"]', legend_styles())
+
+
+class TestOnlyEmployedPeopleAreOnTheSheet(PerTestRollback, FrappeTestCase):
+	"""Bảng công / lương chỉ dựng cho người ĐANG làm việc trong kỳ.
+
+	Nhưng "không Active" không đồng nghĩa "bỏ hẳn": người nghỉ việc giữa tháng vẫn phải được trả
+	những ngày đã làm, nên họ phải còn trong bảng của chính tháng đó. Cái phải loại là người đã
+	ngừng hoạt động mà không thuộc kỳ nào cả.
+	"""
+
+	def mk_employee(self, ten, status, relieving=None, joining="2098-01-01"):
+		from erpnext.setup.doctype.employee.test_employee import make_employee
+
+		from hrms.tests.vn_test_utils import default_company
+
+		name = make_employee(f"{ten}@status.test", company=default_company(), date_of_joining=joining)
+		frappe.db.set_value("Employee", name, {"status": status, "relieving_date": relieving})
+		return name
+
+	def roster(self, month=5, year=2098):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
+
+		return {r["employee"] for r in get_sheet_rows({"month": month, "year": year})}
+
+	def test_an_active_employee_is_on_the_sheet(self):
+		emp = self.mk_employee("active_emp", "Active")
+		self.assertIn(emp, self.roster())
+
+	def test_an_inactive_employee_is_dropped(self):
+		emp = self.mk_employee("inactive_emp", "Inactive")
+		self.assertNotIn(emp, self.roster(), "nhân viên Inactive không được vào bảng công")
+
+	def test_a_suspended_employee_is_dropped(self):
+		emp = self.mk_employee("suspended_emp", "Suspended")
+		self.assertNotIn(emp, self.roster(), "nhân viên Suspended không được vào bảng công")
+
+	def test_someone_who_left_long_ago_is_dropped(self):
+		emp = self.mk_employee("left_old_emp", "Left", relieving="2098-02-28")
+		self.assertNotIn(emp, self.roster(), "nghỉ việc từ tháng 2 thì không còn trong bảng tháng 5")
+
+	def test_someone_who_left_mid_month_is_still_paid_for_that_month(self):
+		"""Đây là chỗ dễ sai nhất: loại thẳng mọi người không Active là quỵt công đã làm."""
+		emp = self.mk_employee("left_midmonth_emp", "Left", relieving="2098-05-15")
+		self.assertIn(emp, self.roster(), "nghỉ việc giữa tháng vẫn phải có mặt trong bảng tháng đó")

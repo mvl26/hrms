@@ -328,10 +328,15 @@ class ShiftType(Document):
 			)
 			assigned_employees = set(assigned_employees + default_shift_employees)
 
-		# exclude inactive employees
-		inactive_employees = frappe.db.get_all("Employee", {"status": "Inactive"}, pluck="name")
+		# Chỉ chấm công cho người ĐANG làm việc. Bản gốc chỉ trừ `Inactive`, mà `status` trong bộ lọc
+		# Shift Assignment ở trên là trạng thái của PHÂN CA chứ không phải của nhân viên — nên người
+		# đã `Left` (nghỉ việc) hay `Suspended` (đình chỉ) mà phân ca chưa đóng vẫn bị chấm công, và
+		# bị chấm Vắng mỗi giờ. Trừ theo trạng thái NHÂN VIÊN, mọi trạng thái không phải Active.
+		not_working = frappe.db.get_all(
+			"Employee", {"name": ["in", list(assigned_employees)], "status": ["!=", "Active"]}, pluck="name"
+		)
 
-		return list(set(assigned_employees) - set(inactive_employees))
+		return list(set(assigned_employees) - set(not_working))
 
 	def get_holiday_list(self, employee: str) -> str:
 		holiday_list_name = self.holiday_list or get_holiday_list_for_employee(employee, False)
