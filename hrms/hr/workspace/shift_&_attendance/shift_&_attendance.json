@@ -211,6 +211,16 @@
   {
    "hidden": 0,
    "is_query_report": 1,
+   "label": "Gi\u1edd l\u00e0m vi\u1ec7c nh\u00e2n vi\u00ean",
+   "link_count": 0,
+   "link_to": "Employee Working Hours",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
    "label": "Shift Attendance",
    "link_count": 0,
    "link_to": "Shift Attendance",
@@ -249,7 +259,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-07-24 08:59:47.529182",
+ "modified": "2026-07-31 10:55:39.159043",
  "modified_by": "Administrator",
  "module": "HR",
  "name": "Shift & Attendance",
