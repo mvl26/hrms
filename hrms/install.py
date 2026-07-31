@@ -5,22 +5,21 @@ from hrms.setup import after_install as setup
 
 def after_install():
 	try:
-		print("Setting up Frappe HR...")
+		print("Đang cài đặt Miyano HR...")
 		setup()
 
-		# Fork defaults: Công Tác workflow + COO role + fixture master-data integrity check.
+		# Mặc định nội bộ: Công Tác workflow + COO role + fixture master-data integrity check.
 		from hrms.setup_vn_defaults import ensure_defaults
 
 		ensure_defaults()
 
-		click.secho("Thank you for installing Frappe HR!", fg="green")
+		click.secho("Đã cài đặt Miyano HR thành công!", fg="green")
 
 	except Exception as e:
-		BUG_REPORT_URL = "https://github.com/frappe/hrms/issues/new"
 		click.secho(
-			"Installation for Frappe HR app failed due to an error."
-			" Please try re-installing the app or"
-			f" report the issue on {BUG_REPORT_URL} if not resolved.",
+			"Cài đặt Miyano HR thất bại do lỗi."
+			" Vui lòng thử cài lại hoặc"
+			" báo cho bộ phận CNTT (info@miyano.com.vn) nếu chưa khắc phục được.",
 			fg="bright_red",
 		)
 		raise e
