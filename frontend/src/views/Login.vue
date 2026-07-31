@@ -3,7 +3,7 @@
 		<ion-content class="ion-padding">
 			<div class="flex h-screen w-screen flex-col justify-center bg-white">
 				<div class="flex flex-col mx-auto gap-3 items-center">
-					<FrappeHRLogo class="h-8 w-8" />
+					<MiyanoLogo class="h-8 w-8" />
 					<div class="text-3xl font-semibold text-gray-900 text-center">
 						{{ __("Đăng nhập Miyano HR") }}
 					</div>
@@ -109,7 +109,7 @@ import { IonPage, IonContent } from "@ionic/vue"
 import { inject, reactive, ref } from "vue"
 import { Input, Button, ErrorMessage, Dialog, createResource } from "frappe-ui"
 
-import FrappeHRLogo from "@/components/icons/FrappeHRLogo.vue"
+import MiyanoLogo from "@/components/icons/MiyanoLogo.vue"
 
 const email = ref(null)
 const password = ref(null)

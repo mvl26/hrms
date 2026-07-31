@@ -9,7 +9,7 @@ required_apps = ["frappe/erpnext"]
 add_to_apps_screen = [
 	{
 		"name": "hrms",
-		"logo": "/assets/hrms/images/frappe-hr-logo.svg",
+		"logo": "/assets/hrms/images/miyano-hr-logo.png",
 		"title": "Miyano HR",
 		"route": "/app/hr",
 		"has_permission": "hrms.hr.utils.check_app_permission",
