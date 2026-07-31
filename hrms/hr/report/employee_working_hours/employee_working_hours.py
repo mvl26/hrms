@@ -3,19 +3,36 @@
 """Báo cáo giờ làm việc: giờ vào / giờ ra / tổng giờ / TB giờ mỗi ngày của nhân viên đang làm việc.
 
 Chỉ ĐỌC Attendance đã duyệt (`docstatus = 1`) — không ghi gì, nên payroll-neutral theo định nghĩa.
-Giờ của mỗi ngày dùng lại nguyên `hrms.hr.working_hours.compute_net_hours` (trừ 1,5h nghỉ trưa cho
-ngày công đủ, giữ nguyên nửa ngày, ca tách buổi đã là giờ net) để số liệu khớp với bảng chấm công
-và dashboard giờ làm. Xem `spec/employee-working-hours-report.md`.
+
+**Giờ ở báo cáo này là giờ CÓ MẶT, không phải giờ quy công.** `Attendance.working_hours` của ca
+tách buổi chỉ cộng phần giờ nằm trong khung ca (`vn_day_classifier.classify_day`), nên người ở lại
+tới 19:30 vẫn chỉ được ghi 8h — dùng con số đó thì "TB giờ/ngày" hoá ra là công tháng chứ không
+phải thời gian thật ở văn phòng. Vì vậy giờ mỗi ngày được tính lại từ giờ vào/ra: (ra - vào) trừ
+phần giao với khung nghỉ trưa của ca. Giờ quy công vẫn giữ ở cột riêng để đối chiếu bảng chấm công.
+
+Ngày không có giờ vào/ra (WFH, yêu cầu chấm công, nhập tay) không phải ngày làm ở văn phòng → 0 giờ
+và không vào mẫu số TB. Xem `spec/employee-working-hours-report.md`.
 """
+
+from datetime import datetime
 
 import frappe
 from frappe import _
 from frappe.utils import cint, get_datetime, get_first_day, get_last_day, getdate
 
+from hrms.hr.doctype.attendance.attendance import Attendance as AttendanceDoc
+from hrms.hr.doctype.attendance.vn_day_classifier import overlap_hours
 from hrms.hr.working_hours import compute_net_hours
 
 # nhãn thứ trong tuần theo chỉ số `date.weekday()` (0 = Thứ Hai)
 WEEKDAY_LABELS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+# khung nghỉ trưa mặc định khi ca không cấu hình — cùng nguồn với bộ chấm mã công VN
+DEFAULT_LUNCH_START = AttendanceDoc.VN_DEFAULT_LUNCH_START
+DEFAULT_LUNCH_END = AttendanceDoc.VN_DEFAULT_LUNCH_END
+
+# ngày đã chấm là nghỉ thì dù có punch lẻ cũng không tính là ngày làm việc ở văn phòng
+NON_PRESENCE_STATUSES = ("Absent", "On Leave")
 
 
 def execute(filters=None):
@@ -77,8 +94,53 @@ def get_split_shift_names():
 	return set(frappe.get_all("Shift Type", filters={"custom_split_half_day": 1}, pluck="name"))
 
 
+def get_lunch_window_map():
+	"""{ca: (giờ bắt đầu nghỉ trưa, giờ kết thúc)} cho những ca có cấu hình riêng HỢP LỆ.
+
+	Đọc phòng thủ hai lớp:
+	- hai field này là custom field (fixtures), site chưa migrate thì chưa có;
+	- ca tạo mới mà không nhập giờ trưa bị Frappe điền giờ hiện tại vào cả hai field, thành một
+	  khung rộng 0 giây (ví dụ 11:25:08 → 11:25:08). Khung như vậy là rác, phải rơi về mặc định,
+	  nếu không cả ngày làm sẽ không bị trừ nghỉ trưa.
+	"""
+	meta = frappe.get_meta("Shift Type")
+	if not (meta.has_field("custom_lunch_start") and meta.has_field("custom_lunch_end")):
+		return {}
+
+	windows = {}
+	for shift in frappe.get_all("Shift Type", fields=["name", "custom_lunch_start", "custom_lunch_end"]):
+		start, end = shift.custom_lunch_start, shift.custom_lunch_end
+		if start and end and end > start:
+			windows[shift.name] = (start, end)
+	return windows
+
+
+def presence_hours(in_time, out_time, attendance_date, lunch_start=None, lunch_end=None):
+	"""Giờ thực sự có mặt: (giờ ra - giờ vào) trừ phần giao với khung nghỉ trưa.
+
+	KHÔNG cắt theo khung ca — ở lại sau giờ tan ca vẫn được tính. Thiếu giờ vào hoặc giờ ra thì
+	không xác định được thời gian có mặt → 0.
+	"""
+	if not (in_time and out_time):
+		return 0.0
+
+	in_time, out_time = get_datetime(in_time), get_datetime(out_time)
+	if out_time <= in_time:
+		return 0.0
+
+	day = datetime.combine(getdate(attendance_date), datetime.min.time())
+	lunch = overlap_hours(
+		in_time,
+		out_time,
+		day + (lunch_start or DEFAULT_LUNCH_START),
+		day + (lunch_end or DEFAULT_LUNCH_END),
+	)
+	present = (out_time - in_time).total_seconds() / 3600.0
+	return round(max(present - lunch, 0.0), 2)
+
+
 def get_daily_rows(filters, employees=None):
-	"""Một dòng cho mỗi ngày có Attendance đã duyệt, kèm giờ net của ngày đó."""
+	"""Một dòng cho mỗi ngày có Attendance đã duyệt, kèm giờ có mặt và giờ quy công của ngày đó."""
 	filters = prepare_filters(filters)
 	if employees is None:
 		employees = get_employees(filters)
@@ -87,6 +149,7 @@ def get_daily_rows(filters, employees=None):
 
 	employee_map = {e.name: e for e in employees}
 	split_shifts = get_split_shift_names()
+	lunch_windows = get_lunch_window_map()
 
 	Attendance = frappe.qb.DocType("Attendance")
 	query = (
@@ -115,7 +178,13 @@ def get_daily_rows(filters, employees=None):
 	rows = []
 	for record in query.run(as_dict=True):
 		employee = employee_map[record.employee]
-		hours = compute_net_hours(
+		lunch_start, lunch_end = lunch_windows.get(record.shift or "", (None, None))
+		hours = 0.0
+		if record.status not in NON_PRESENCE_STATUSES:
+			hours = presence_hours(
+				record.in_time, record.out_time, record.attendance_date, lunch_start, lunch_end
+			)
+		credited_hours = compute_net_hours(
 			record.status,
 			record.in_time,
 			record.out_time,
@@ -136,6 +205,7 @@ def get_daily_rows(filters, employees=None):
 				"in_minutes": clock_minutes(record.in_time),
 				"out_minutes": clock_minutes(record.out_time),
 				"hours": hours,
+				"credited_hours": credited_hours,
 			}
 		)
 
@@ -191,13 +261,13 @@ def get_report_summary(daily_rows):
 
 	return [
 		{
-			"label": _("Total Hours"),
+			"label": _("Total Presence Hours"),
 			"value": total_hours,
 			"datatype": "Float",
 			"indicator": "Blue",
 		},
 		{
-			"label": _("Employees With Hours"),
+			"label": _("Employees At Office"),
 			"value": employees,
 			"datatype": "Int",
 			"indicator": "Green",
@@ -266,13 +336,13 @@ def get_summary_columns():
 			"width": 160,
 		},
 		{
-			"label": _("Days With Hours"),
+			"label": _("Days At Office"),
 			"fieldname": "days_counted",
 			"fieldtype": "Int",
 			"width": 130,
 		},
 		{
-			"label": _("Total Hours"),
+			"label": _("Total Presence Hours"),
 			"fieldname": "total_hours",
 			"fieldtype": "Float",
 			"precision": 2,
@@ -353,10 +423,17 @@ def get_detail_columns():
 			"width": 90,
 		},
 		{
-			"label": _("Net Hours"),
+			"label": _("Presence Hours"),
 			"fieldname": "hours",
 			"fieldtype": "Float",
 			"precision": 2,
-			"width": 90,
+			"width": 110,
+		},
+		{
+			"label": _("Credited Hours"),
+			"fieldname": "credited_hours",
+			"fieldtype": "Float",
+			"precision": 2,
+			"width": 110,
 		},
 	]

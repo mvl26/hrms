@@ -1,6 +1,8 @@
 # Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
 # License: GNU General Public License v3. See license.txt
 
+import unittest
+
 import frappe
 from frappe import _
 from frappe.tests.utils import FrappeTestCase
@@ -53,11 +55,33 @@ def make_attendance(
 		doc.working_hours = (
 			working_hours if working_hours is not None else time_diff_in_hours(doc.out_time, doc.in_time)
 		)
+	elif working_hours is not None:
+		doc.working_hours = working_hours
 	doc.insert()
 	if submit:
 		doc.submit()
 	doc.reload()
 	return doc
+
+
+def make_split_shift(name, **kwargs):
+	"""Ca tách buổi 08:00-17:30 — giờ quy công của ca này bị cap ở khung ca."""
+	if not frappe.get_meta("Shift Type").has_field("custom_split_half_day"):
+		raise unittest.SkipTest("site chưa có custom field custom_split_half_day (fixtures)")
+
+	shift = frappe.get_doc(
+		{
+			"doctype": "Shift Type",
+			"__newname": name,
+			"start_time": "08:00:00",
+			"end_time": "17:30:00",
+			"custom_split_half_day": 1,
+			"custom_lunch_start": "12:00:00",
+			"custom_lunch_end": "13:30:00",
+		}
+	)
+	shift.update(kwargs)
+	return shift.insert().name
 
 
 def base_filters(**overrides):
@@ -71,7 +95,7 @@ def base_filters(**overrides):
 
 
 class TestEmployeeWorkingHoursDaily(PerTestRollback, FrappeTestCase):
-	"""Giờ của từng ngày — phải dùng đúng công thức net của `working_hours.compute_net_hours`."""
+	"""Giờ của từng ngày — giờ CÓ MẶT tính từ giờ vào/ra, không phải giờ quy công của bảng chấm công."""
 
 	def test_present_full_day_deducts_lunch_break(self):
 		employee = make_employee("ewh_present@miyano.test", company=default_company())
@@ -134,31 +158,90 @@ class TestEmployeeWorkingHoursDaily(PerTestRollback, FrappeTestCase):
 
 		self.assertEqual([str(r["attendance_date"]) for r in rows], [MONDAY])
 
-	def test_split_shift_hours_are_not_lunch_deducted_twice(self):
-		"""Ca tách buổi lưu `working_hours` ĐÃ là giờ net — report phải dùng thẳng."""
-		if not frappe.get_meta("Shift Type").has_field("custom_split_half_day"):
-			self.skipTest("site chưa có custom field custom_split_half_day (fixtures)")
+	def test_hours_are_actual_presence_not_capped_by_shift(self):
+		"""Giờ của report là giờ CÓ MẶT thật, không phải giờ quy công đã cap ở khung ca.
 
-		shift = frappe.get_doc(
-			{
-				"doctype": "Shift Type",
-				"__newname": "EWH Split Shift",
-				"start_time": "08:00:00",
-				"end_time": "17:30:00",
-				"custom_split_half_day": 1,
-			}
-		).insert()
-
+		`Attendance.working_hours` của ca tách buổi chỉ cộng phần nằm trong khung ca (xem
+		`vn_day_classifier.classify_day`), nên người ở lại tới 19:30 vẫn chỉ được ghi 8h. Lấy con
+		số đó làm giờ trung bình thì TB thành "giờ quy công", không phải giờ ở văn phòng.
+		"""
+		shift = make_split_shift("EWH Split Shift")
 		employee = make_employee("ewh_split@miyano.test", company=default_company())
-		attendance = make_attendance(
-			employee, MONDAY, in_time="08:00:00", out_time="17:30:00", shift=shift.name
-		)
+		attendance = make_attendance(employee, MONDAY, in_time="08:00:00", out_time="19:30:00", shift=shift)
 
 		row = get_daily_rows(base_filters(employee=employee))[0]
 
-		# giờ của report = giờ net ca tách đã lưu, KHÔNG trừ trưa thêm lần nữa
-		self.assertEqual(row["hours"], round(attendance.working_hours, 2))
-		self.assertNotEqual(row["hours"], round(attendance.working_hours - 1.5, 2))
+		# có mặt 08:00->19:30 = 11,5h, trừ 1,5h nghỉ trưa = 10,0h
+		self.assertEqual(row["hours"], 10.0)
+		# giờ quy công vẫn giữ nguyên con số của bảng chấm công (bị cap ở khung ca 08:00-17:30)
+		self.assertEqual(attendance.working_hours, 8.0)
+		self.assertEqual(row["credited_hours"], 8.0)
+
+	def test_day_without_punch_has_no_presence_hours(self):
+		"""Ngày được trả công nhưng không có giờ vào/ra (WFH, yêu cầu chấm công, nhập tay) không
+		phải ngày làm ở văn phòng → 0 giờ và không vào mẫu số TB."""
+		employee = make_employee("ewh_nopunch@miyano.test", company=default_company())
+		make_attendance(employee, MONDAY, status="Work From Home", working_hours=8.0)
+
+		rows = get_daily_rows(base_filters(employee=employee))
+		summary = get_summary_rows(base_filters(employee=employee))
+
+		self.assertEqual(rows[0]["hours"], 0.0)
+		self.assertEqual(summary[0]["days_counted"], 0)
+		self.assertEqual(summary[0]["avg_hours"], 0.0)
+
+	def test_absent_day_with_punch_is_excluded(self):
+		"""Ngày đã chấm là vắng thì dù có punch lẻ cũng không tính là ngày làm việc."""
+		employee = make_employee("ewh_absent_punch@miyano.test", company=default_company())
+		make_attendance(employee, MONDAY, status="Absent", in_time="08:00:00", out_time="17:30:00")
+
+		rows = get_daily_rows(base_filters(employee=employee))
+
+		self.assertEqual(rows[0]["hours"], 0.0)
+
+	def test_lunch_deducted_only_when_presence_overlaps_it(self):
+		employee = make_employee("ewh_lunch@miyano.test", company=default_company())
+		make_attendance(employee, MONDAY, in_time="08:00:00", out_time="11:00:00")  # về trước trưa
+		make_attendance(employee, TUESDAY, in_time="13:30:00", out_time="17:30:00")  # vào sau trưa
+
+		rows = get_daily_rows(base_filters(employee=employee))
+		hours = {str(r["attendance_date"]): r["hours"] for r in rows}
+
+		self.assertEqual(hours[MONDAY], 3.0)  # không chạm giờ trưa -> không trừ
+		self.assertEqual(hours[TUESDAY], 4.0)
+
+	def test_degenerate_shift_lunch_window_falls_back_to_default(self):
+		"""Ca tạo mới không nhập giờ trưa bị Frappe điền giờ hiện tại vào cả hai field (khung rộng
+		0 giây). Khung rác đó phải rơi về mặc định 12:00-13:30, không thì cả ngày không bị trừ trưa."""
+		meta = frappe.get_meta("Shift Type")
+		if not (meta.has_field("custom_lunch_start") and meta.has_field("custom_lunch_end")):
+			self.skipTest("site chưa có custom field giờ nghỉ trưa của ca (fixtures)")
+
+		shift = make_split_shift(
+			"EWH Broken Lunch", custom_lunch_start="11:25:08", custom_lunch_end="11:25:08"
+		)
+		employee = make_employee("ewh_badlunch@miyano.test", company=default_company())
+		make_attendance(employee, MONDAY, in_time="08:00:00", out_time="17:30:00", shift=shift)
+
+		row = get_daily_rows(base_filters(employee=employee))[0]
+
+		self.assertEqual(row["hours"], 8.0)  # 9,5h - 1,5h mặc định
+
+	def test_lunch_window_comes_from_shift_config(self):
+		"""Khung nghỉ trưa lấy theo cấu hình ca, không hard-code 12:00-13:30."""
+		meta = frappe.get_meta("Shift Type")
+		if not (meta.has_field("custom_lunch_start") and meta.has_field("custom_lunch_end")):
+			self.skipTest("site chưa có custom field giờ nghỉ trưa của ca (fixtures)")
+
+		shift = make_split_shift(
+			"EWH Lunch Shift", custom_lunch_start="11:30:00", custom_lunch_end="12:30:00"
+		)
+		employee = make_employee("ewh_lunchcfg@miyano.test", company=default_company())
+		make_attendance(employee, MONDAY, in_time="08:00:00", out_time="17:30:00", shift=shift)
+
+		row = get_daily_rows(base_filters(employee=employee))[0]
+
+		self.assertEqual(row["hours"], 8.5)  # 9,5h - 1,0h nghỉ trưa của ca
 
 
 class TestEmployeeWorkingHoursSummary(PerTestRollback, FrappeTestCase):
@@ -281,6 +364,7 @@ class TestEmployeeWorkingHoursReport(PerTestRollback, FrappeTestCase):
 				"in_time",
 				"out_time",
 				"hours",
+				"credited_hours",
 			],
 		)
 		self.assertEqual(len(data), 2)
@@ -294,6 +378,6 @@ class TestEmployeeWorkingHoursReport(PerTestRollback, FrappeTestCase):
 		_columns, _data, _none, _chart, report_summary = execute(base_filters(employee=employee))
 
 		by_label = {card["label"]: card["value"] for card in report_summary}
-		self.assertEqual(by_label[_("Total Hours")], 14.0)
-		self.assertEqual(by_label[_("Employees With Hours")], 1)
+		self.assertEqual(by_label[_("Total Presence Hours")], 14.0)
+		self.assertEqual(by_label[_("Employees At Office")], 1)
 		self.assertEqual(by_label[_("Avg Hours / Day")], 7.0)

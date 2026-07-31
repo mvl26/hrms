@@ -39,20 +39,28 @@ viên** (quy ước đặt tên: tên/fieldname tiếng Anh, label tiếng Việ
 
 ### 3.2 Nguồn dữ liệu & công thức
 
-Đọc **Attendance** `docstatus = 1` trong khoảng ngày, KHÔNG đọc Employee Checkin thô — để số liệu
-khớp 100% với bảng chấm công và dashboard giờ làm.
+Đọc **Attendance** `docstatus = 1` trong khoảng ngày (không đọc Employee Checkin thô — `in_time` /
+`out_time` của Attendance đã là punch đầu/cuối trong ngày, đã qua xử lý ca).
 
-Giờ của một ngày = **`hrms.hr.working_hours.compute_net_hours`** dùng lại nguyên vẹn:
+**Giờ ở báo cáo này là giờ CÓ MẶT, không phải giờ quy công.** `Attendance.working_hours` do
+`vn_day_classifier.classify_day` tính chỉ cộng phần giờ **nằm trong khung ca**
+(`overlap_hours(in, out, w_start, w_end)`), nên người ở lại tới 19:30 vẫn chỉ được ghi 8h. Lấy con
+số đó làm mẫu số thì "TB giờ/ngày" hoá ra là **công tháng**, không phải thời gian thật ở văn phòng
+— đúng lỗi HR báo 2026-07-31.
 
-| Trạng thái | Cách tính |
-|---|---|
-| Present / Work From Home | `(out − in)` (hoặc `working_hours` nếu thiếu in/out) **− 1,5h nghỉ trưa**, sàn 0 |
-| Half Day | `(out − in)` — không trừ trưa |
-| Absent / On Leave | 0 |
-| Ca có `custom_split_half_day` | dùng thẳng `working_hours` (đã là giờ net) — không trừ trưa lần hai |
+| Trường hợp | Giờ có mặt | Giờ tính công (cột đối chiếu) |
+|---|---|---|
+| Có cả giờ vào và giờ ra | `(ra − vào) −` phần giao với khung nghỉ trưa, **không cắt theo khung ca** | `compute_net_hours` |
+| Thiếu giờ vào hoặc giờ ra (WFH, yêu cầu chấm công, nhập tay) | 0 — không xác định được thời gian ở văn phòng | `compute_net_hours` |
+| Trạng thái Absent / On Leave | 0 kể cả khi có punch lẻ | 0 |
 
-Không đưa thêm hằng số giờ ca (12:00 / 13:30 của đoạn JS chạy tay) vào code: `Attendance.in_time`
-/ `out_time` đã qua xử lý ca, kể cả ca trượt ±3h.
+Khung nghỉ trưa lấy theo `custom_lunch_start` / `custom_lunch_end` của ca, mặc định
+**12:00–13:30** (`Attendance.VN_DEFAULT_LUNCH_START/END`). Ca tạo mới mà không nhập giờ trưa bị
+Frappe điền **giờ hiện tại** vào cả hai field (khung rộng 0 giây) → coi là rác, rơi về mặc định.
+
+Đối chiếu thực tế 7/2026: TB/ngày của report khớp công cụ JS đang dùng tới 0,01h
+(8,25/8,26 · 8,47/8,48 · 8,52/8,52 · 8,34/8,34 · 8,32/8,32); chỉ lệch ở ngày về giữa giờ trưa —
+report trừ phần đã bước vào giờ nghỉ, công cụ JS thì không.
 
 ### 3.3 Filter
 
@@ -71,21 +79,25 @@ Không hard-code danh sách nhân viên loại trừ (đoạn JS chạy tay lo�
 **Summary** — 1 dòng / nhân viên, liệt kê **mọi nhân viên Active** khớp filter, *kể cả người 0
 giờ* (để thấy ngay ai không chấm công):
 
-`Nhân viên | Tên | Phòng ban | Số ngày có chấm giờ | Tổng giờ | TB giờ/ngày | Giờ vào TB | Giờ ra TB`
+`Nhân viên | Tên | Phòng ban | Số ngày có mặt | Tổng giờ có mặt | TB giờ/ngày | Giờ vào TB | Giờ ra TB`
 
 **Detail** — 1 dòng / nhân viên / ngày, chỉ những ngày có Attendance:
 
-`Nhân viên | Tên | Ngày | Thứ | Ca | Trạng thái | Giờ vào | Giờ ra | Số giờ`
+`Nhân viên | Tên | Ngày | Thứ | Ca | Trạng thái | Giờ vào | Giờ ra | Giờ có mặt | Giờ tính công`
 
-Ba thẻ tóm tắt (report summary): Tổng giờ · Số nhân viên có chấm giờ · TB giờ/ngày toàn kỳ.
+Cột **Giờ tính công** đứng cạnh **Giờ có mặt** để soát chênh lệch với bảng chấm công (ví dụ ngày
+07:55→19:38: có mặt 10,2h nhưng chỉ 8h được quy công).
+
+Ba thẻ tóm tắt (report summary): Tổng giờ có mặt · Số NV có mặt · TB giờ/ngày toàn kỳ.
 
 ### 3.5 Quy ước tính
 
-- **Số ngày có chấm giờ** = số ngày có giờ net > 0. Ngày nghỉ / vắng / 0 giờ **không** vào mẫu số.
-- **TB giờ/ngày** = Tổng giờ ÷ Số ngày có chấm giờ; bằng 0 khi mẫu số bằng 0 (không chia 0).
-- **Giờ vào TB / Giờ ra TB** = trung bình giờ đồng hồ của các ngày có giờ net > 0, hiển thị `HH:MM`.
+- **Số ngày có mặt** = số ngày có giờ có mặt > 0, tức ngày thực sự làm ở văn phòng. Ngày nghỉ,
+  ngày WFH, ngày được trả công nhưng không có punch **không** vào mẫu số.
+- **TB giờ/ngày** = Tổng giờ có mặt ÷ Số ngày có mặt; bằng 0 khi mẫu số bằng 0 (không chia 0).
+- **Giờ vào TB / Giờ ra TB** = trung bình giờ đồng hồ của các ngày có mặt, hiển thị `HH:MM`.
   Ca qua đêm đọc theo giờ đồng hồ (giới hạn đã biết, Miyano dùng ca hành chính).
-- Gọi là **"ngày có chấm giờ"**, cố ý tránh chữ "công" để không lẫn với công tính lương.
+- Gọi là **"ngày có mặt"**, cố ý tránh chữ "công" để không lẫn với công tính lương.
 
 ### 3.6 Ràng buộc
 
@@ -95,9 +107,12 @@ Ba thẻ tóm tắt (report summary): Tổng giờ · Số nhân viên có chấ
 ## 4. Tiêu chí chấp nhận
 
 1. Present 08:00→17:30 ra **8,0h** (9,5h gross − 1,5h trưa).
-2. Half Day 08:00→12:00 ra **4,0h** (không trừ trưa).
-3. Absent / On Leave ra **0h** và **không** vào mẫu số TB.
-4. Ca `custom_split_half_day` **không** bị trừ trưa lần hai.
+2. Half Day 08:00→12:00 ra **4,0h** (không chạm giờ trưa nên không trừ).
+3. Absent / On Leave ra **0h** và **không** vào mẫu số TB, kể cả khi có punch.
+4. Ca tách buổi 08:00–17:30, có mặt 08:00→19:30 ra **10,0h** giờ có mặt và **8,0h** giờ tính công
+   — giờ có mặt KHÔNG bị cap ở khung ca.
+4b. Ngày không có giờ vào/ra ra **0h** và không vào mẫu số.
+4c. Khung nghỉ trưa rác của ca (start = end) rơi về mặc định 12:00–13:30.
 5. Nhân viên Active không có Attendance nào trong kỳ vẫn hiện ở Summary với 0 giờ, TB 0.
 6. TB giờ/ngày = tổng ÷ số ngày có giờ > 0 (ví dụ 8 + 6 + 0 → 2 ngày, TB 7,0).
 7. Filter khoảng ngày / phòng ban / nhân viên / ca lọc đúng; ngoài khoảng không lọt vào.

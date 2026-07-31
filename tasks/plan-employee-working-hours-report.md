@@ -6,6 +6,12 @@
 > **STATUS 2026-07-31 — XONG.** 17 test xanh; tổng giờ 7/2026 = 829,8h khớp 100% với number
 > card `get_total_working_hours_card`. Report + link workspace đã nạp lên site miyano (chưa
 > `bench migrate` — nạp riêng lẻ để không kéo theo các thay đổi khác đang chờ deploy).
+>
+> **SỬA 2026-07-31 (HR báo TB sai):** giờ của report từng lấy `Attendance.working_hours` — con số
+> đã bị `classify_day` cap ở khung ca, tức GIỜ QUY CÔNG, nên TB thành công tháng chứ không phải
+> giờ ở văn phòng (99/131 ngày lệch). Nay tính lại giờ CÓ MẶT từ giờ vào/ra, thêm cột đối chiếu
+> "Giờ tính công", và bỏ ngày không có punch khỏi mẫu số. 22 test xanh; TB khớp công cụ JS của HR
+> tới 0,01h.
 
 **Goal:** Script Report `Employee Working Hours` cho HR xem giờ vào / giờ ra / tổng giờ / TB giờ
 mỗi ngày của toàn bộ nhân viên Active, hai chế độ Summary và Detail.
