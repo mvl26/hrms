@@ -268,7 +268,7 @@ class TestSubmitWarnsAboutUnreviewedDays(PerTestRollback, FrappeTestCase):
 		).insert().submit()
 
 		doc = self.sheet()
-		frappe.message_log = []
+		frappe.local.message_log = []
 		doc.submit()
 
 		messages = " ".join(str(m) for m in frappe.message_log)

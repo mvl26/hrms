@@ -34,13 +34,22 @@ FLAG_NO_RECORD = "NO_RECORD"  # ngày làm việc mà không có bản ghi công
 FLAG_CHECKIN_ON_HOLIDAY = "CHECKIN_ON_HOLIDAY"  # ngày nghỉ nhưng có người chấm công
 FLAG_ABSENT = "ABSENT"  # vắng không lý do
 
-FLAG_LABEL = {
-	FLAG_SINGLE_PUNCH: _("Chỉ có 1 lượt chấm"),
-	FLAG_SHORT_HOURS: _("Thiếu giờ so với quy định"),
-	FLAG_NO_RECORD: _("Ngày làm việc không có bản ghi"),
-	FLAG_CHECKIN_ON_HOLIDAY: _("Ngày nghỉ nhưng có chấm công"),
-	FLAG_ABSENT: _("Vắng không lý do"),
-}
+
+def flag_labels() -> dict:
+	"""Nhãn hiển thị của từng cờ bất thường.
+
+	Là HÀM chứ không phải hằng số ở module level: `_()` chạy lúc import sẽ đóng băng bản dịch theo
+	ngôn ngữ của tiến trình đầu tiên và dùng chung cho mọi site/người dùng sau đó. Dịch lúc gọi thì
+	mỗi request nhận đúng ngôn ngữ của mình.
+	"""
+	return {
+		FLAG_SINGLE_PUNCH: _("Chỉ có 1 lượt chấm"),
+		FLAG_SHORT_HOURS: _("Thiếu giờ so với quy định"),
+		FLAG_NO_RECORD: _("Ngày làm việc không có bản ghi"),
+		FLAG_CHECKIN_ON_HOLIDAY: _("Ngày nghỉ nhưng có chấm công"),
+		FLAG_ABSENT: _("Vắng không lý do"),
+	}
+
 
 SHORT_HOURS_CODE = "1/2X"
 ABSENT_CODE = "V"
@@ -109,7 +118,7 @@ def attendance_names(employees: list, start, end) -> dict:
 
 
 @frappe.whitelist()
-def get_review_grid(filters=None) -> dict:
+def get_review_grid(filters: str | dict | None = None) -> dict:
 	"""Lưới soát công của một tháng: hàng nhân viên x cột ngày, kèm cờ bất thường từng ô.
 
 	Trả `{rows: [...], flags: {employee: {day: [flag]}}, flag_labels: {...}}`. `rows` chính là
@@ -120,7 +129,7 @@ def get_review_grid(filters=None) -> dict:
 
 	rows = get_sheet_rows(filters)
 	if not rows:
-		return {"rows": [], "flags": {}, "flag_labels": FLAG_LABEL, "days_in_month": 0}
+		return {"rows": [], "flags": {}, "flag_labels": flag_labels(), "days_in_month": 0}
 
 	from calendar import monthrange
 
@@ -171,7 +180,7 @@ def get_review_grid(filters=None) -> dict:
 
 	# `days_in_month` để giao diện vẽ TRỌN tháng: `row["days"]` không có khoá cho ngày thiếu bản ghi,
 	# vẽ theo nó thì đúng những ô cần soát nhất lại không có chỗ để hiện.
-	return {"rows": rows, "flags": flags, "flag_labels": FLAG_LABEL, "days_in_month": last}
+	return {"rows": rows, "flags": flags, "flag_labels": flag_labels(), "days_in_month": last}
 
 
 def payroll_snapshot(doc) -> dict:
@@ -238,7 +247,7 @@ def apply_correction(attendance: str, code: str, reason: str | None = None) -> d
 
 
 @frappe.whitelist()
-def apply_corrections_bulk(corrections) -> dict:
+def apply_corrections_bulk(corrections: str | list) -> dict:
 	"""Áp nhiều điều chỉnh trong một lượt. `corrections` là list `{attendance, code, reason}`."""
 	if isinstance(corrections, str):
 		corrections = json.loads(corrections)

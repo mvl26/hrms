@@ -28,7 +28,7 @@ class MonthlyAttendanceSheet(Document):
 		khi khoá, nói thẳng còn bao nhiêu ô đang mang cờ bất thường (vắng, thiếu giờ, ngày trống,
 		chỉ 1 lượt chấm, chấm vào ngày nghỉ). Chỉ CẢNH BÁO, không chặn: có những ngày vắng là đúng
 		thật, và người chốt mới là người quyết."""
-		from hrms.hr.attendance_review import FLAG_LABEL, get_review_grid
+		from hrms.hr.attendance_review import flag_labels, get_review_grid
 
 		grid = get_review_grid(
 			{
@@ -47,7 +47,8 @@ class MonthlyAttendanceSheet(Document):
 		if not counts:
 			return
 
-		detail = ", ".join(f"{FLAG_LABEL.get(f, f)}: {n}" for f, n in sorted(counts.items()))
+		labels = flag_labels()
+		detail = ", ".join(f"{labels.get(f, f)}: {n}" for f, n in sorted(counts.items()))
 		frappe.msgprint(
 			_(
 				"Bảng công còn {0} ô chưa xử lý ({1}). Chốt xong sẽ KHOÁ kỳ, muốn sửa phải huỷ bảng này."
@@ -179,7 +180,9 @@ class MonthlyAttendanceSheet(Document):
 
 
 @frappe.whitelist()
-def get_or_create_sheet(month, year, company, department=None) -> str:
+def get_or_create_sheet(
+	month: int | str, year: int | str, company: str, department: str | None = None
+) -> str:
 	"""Mở bảng chốt công của kỳ này, tạo mới nếu chưa có — dùng cho nút "Chốt công" trên báo cáo.
 
 	Không tự submit: chốt công là hành động khoá kỳ, phải do người dùng bấm sau khi nhìn dữ liệu."""
