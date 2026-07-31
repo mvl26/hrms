@@ -99,7 +99,24 @@ def shift_employees(shift, start, end):
 		pluck="employee",
 	)
 	default = frappe.get_all("Employee", filters={"default_shift": shift}, pluck="name")
-	return sorted(set(assigned) | set(default))
+	trong_ca = set(assigned) | set(default)
+	if not trong_ca:
+		return []
+
+	# Chỉ dựng lại công cho người ĐANG làm việc. Người `Left`/`Inactive`/`Suspended` mà không có
+	# ngày nghỉ việc thì không thuộc kỳ nào — dựng lại công cho họ là đẻ ra dữ liệu từ hư không.
+	# Ai có `relieving_date` thì GIỮ: nghỉ việc giữa kỳ, những ngày đã làm vẫn phải được dựng lại,
+	# nếu không là mất công của họ (`get_employees` của report và Payroll Entry cùng luật này).
+	da_nghi = frappe.get_all(
+		"Employee",
+		filters={
+			"name": ["in", list(trong_ca)],
+			"status": ["!=", "Active"],
+			"relieving_date": ["is", "not set"],
+		},
+		pluck="name",
+	)
+	return sorted(trong_ca - set(da_nghi))
 
 
 def snapshot(start, end, employees):
