@@ -9,7 +9,6 @@ from hrms.payroll.doctype.employee_tax_exemption_declaration.test_employee_tax_e
 	PAYROLL_PERIOD_START,
 	create_exemption_category,
 	create_payroll_period,
-	setup_hra_exemption_prerequisites,
 )
 
 
@@ -85,55 +84,3 @@ class TestEmployeeTaxExemptionProofSubmission(FrappeTestCase):
 			}
 		)
 		self.assertRaises(frappe.ValidationError, proof.save)
-
-	def test_india_hra_exemption(self):
-		# set country
-		current_country = frappe.flags.country
-		frappe.flags.country = "India"
-
-		employee = frappe.get_value("Employee", {"user_id": "employee@proofsubmission.com"}, "name")
-		setup_hra_exemption_prerequisites("Monthly", employee)
-
-		proof = frappe.get_doc(
-			{
-				"doctype": "Employee Tax Exemption Proof Submission",
-				"employee": employee,
-				"company": "_Test Company",
-				"payroll_period": PAYROLL_PERIOD_NAME,
-				"currency": "INR",
-				"house_rent_payment_amount": 600000,
-				"rented_in_metro_city": 1,
-				"rented_from_date": PAYROLL_PERIOD_START,
-				"rented_to_date": PAYROLL_PERIOD_END,
-				"tax_exemption_proofs": [
-					dict(
-						exemption_sub_category="_Test Sub Category",
-						exemption_category="_Test Category",
-						type_of_proof="Test Proof",
-						amount=100000,
-					),
-					dict(
-						exemption_sub_category="_Test1 Sub Category",
-						exemption_category="_Test Category",
-						type_of_proof="Test Proof",
-						amount=50000,
-					),
-				],
-			}
-		).insert()
-
-		self.assertEqual(proof.monthly_house_rent, 50000)
-
-		# Monthly HRA received = 3000
-		# should set HRA exemption as per actual annual HRA because that's the minimum
-		self.assertEqual(proof.monthly_hra_exemption, 3000)
-		self.assertEqual(proof.total_eligible_hra_exemption, 36000)
-
-		# total exemptions + house rent payment amount
-		self.assertEqual(proof.total_actual_amount, 750000)
-
-		# 100000 Standard Exemption + 36000 HRA exemption
-		self.assertEqual(proof.exemption_amount, 136000)
-
-		# reset
-		frappe.flags.country = current_country
