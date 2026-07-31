@@ -882,3 +882,50 @@ Nhờ chủ sở hữu kiểm tra `http://miyano:8080/hrms` (hoặc site thật 
 2. **Xoá** `CODE_OF_CONDUCT.md`.
 
 **Nếu một task hỏng giữa chừng:** `git checkout -- .` để về mốc sạch của task đó (các task trước đã commit nên an toàn), rồi điều tra. Không chồng sửa chữa lên trạng thái nửa vời.
+
+---
+
+## Kết quả thực thi (2026-07-31)
+
+Toàn bộ 7 task đã chạy xong trên nhánh `feat/skip-attendance-diag`, mỗi task một commit.
+
+### Bằng chứng kiểm chứng
+
+| Cổng | Kết quả |
+|---|---|
+| `git grep -i "GNU General Public"` | **0** |
+| `git grep "Frappe Technologies"` | **0** |
+| `git grep -i "Frappe HR"` | **0** |
+| `frappehr.com` / `frappecloud` / `docs.frappe.io/hr` / `github.com/frappe/hrms` | **0** |
+| `pre-commit run --all-files` | pass toàn bộ 8 hook |
+| `bench build --app hrms` | xanh, cả hai SPA |
+| Hook `app_title` trên site thật | `Miyano HR` |
+| Hook `hourly_long` | `process_auto_attendance_for_all_shifts` còn nguyên |
+| **Bộ test (harness rollback)** | **152 chạy / 0 fail / 113 error — GIỐNG HỆT trước và sau, từng tên test** |
+| **Bất biến payroll** | **6 phiếu lương đã nộp, `diff` trước/sau rỗng** |
+
+### Ghi chú về 113 error
+
+Đây **không phải** hồi quy. Chạy đúng harness đó trên commit `3f56ee1` (mốc trước mọi thay đổi) cho **cùng 152/0/113**, và `diff` danh sách tên test lỗi giữa hai lần chạy là **rỗng**. Nguyên nhân: site `miyano` là PROD nên không có `_Test Company`, mà harness chặn `commit` nên `before_tests` không tạo được fixture đó → 59 `LinkValidationError` + 52 `DoesNotExistError` đều là `Could not find Company: _Test Company`.
+
+Mốc trong Global Constraints (190/0/9) lấy từ lần chạy trước với danh sách module khác, nên con số tuyệt đối không so trực tiếp được. Phép so **trước/sau cùng harness** mới là bằng chứng có giá trị.
+
+### Khác biệt so với kế hoạch ban đầu
+
+1. **Task 1 đụng 524 file, không phải 516.** Chênh 8 file dùng `Copyright (c) …, Frappe and Contributors` — không có chữ "Technologies" nên grep theo tên công ty bỏ sót, regex `.*Frappe.*` bắt đúng. Cả 8 đều là file thượng nguồn.
+2. **Task 4 KHÔNG xoá `setup_gratuity_rule`** như kế hoạch dự định. Đó là hàm phụ trợ, không phải test — xoá sẽ vỡ 4 test Gratuity mà doctype Gratuity thì được giữ lại. Thay vào đó nội hoá định nghĩa 2 Gratuity Rule vào chính file test.
+3. **Task 4 gỡ thêm hạ tầng regional đã chết theo:** `run_regional_setup`, `delete_company_fixtures`, `get_error_message` — cả ba thành no-op khi package `hrms.regional` biến mất.
+4. **Task 3 phải bind `:src` runtime** trong `MiyanoLogo.vue`. Dùng `src` tĩnh làm Rollup cố phân giải `/assets/...` lúc build và fail — phát hiện qua `bench build`.
+5. **Phát sinh: gỡ `hrms/subscription_utils.py`** (180 dòng). Toàn bộ là logic thuê bao SaaS cho bản `frappehr.com` của Frappe Cloud: `update_erpnext_access` chặn ngay bằng `endswith(".frappehr.com")` nên luôn no-op trên miyano; `has_subscription` gọi ra `frappecloud.com` kèm secret key; `get_add_on_details` là endpoint `allow_guest=True` trả về số nhân viên đang làm việc cho người gọi **chưa đăng nhập**.
+
+### Còn lại (cố ý giữ)
+
+- **Hạ tầng CI** (`.github/helper/install.sh`, `ci.yml`, `linters.yml`, `.gitmodules`) vẫn clone `frappe/frappe`, `frappe/erpnext`, `frappe/semgrep-rules`, `frappe-ui` — đó là **phụ thuộc nền tảng bắt buộc**, gỡ là hỏng CI.
+- **Mọi tham chiếu Frappe Framework** trong code và tài liệu (`frappe.db`, doctype, Workflow, `@frappe.whitelist`, `bench`) — mô tả kỹ thuật đúng.
+- **Spec/plan của chính việc bóc tách này** vẫn nhắc tên cũ, vì không nhắc thì chúng vô nghĩa.
+- `docs.erpnext.com` trong module onboarding HR và một video YouTube hướng dẫn Data Import — không thuộc thương hiệu Frappe HR; chủ sở hữu quyết định sau nếu muốn gỡ.
+
+### Việc cần con người làm
+
+- **Khởi động lại app trên miyano** (supervisor + `gunicorn --preload`) để `hooks.py` mới có hiệu lực — Claude không tự làm được.
+- **Xác nhận trực quan** sau khi khởi động lại: app switcher hiện "Miyano HR" kèm logo Miyano, màn đăng nhập PWA, favicon.
