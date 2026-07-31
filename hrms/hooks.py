@@ -16,33 +16,13 @@ add_to_apps_screen = [
 	}
 ]
 
-# Includes in <head>
-# ------------------
-
-# include js, css files in header of desk.html
-# app_include_css = "/assets/hrms/css/hrms.css"
+# Nạp vào <head> của desk
 app_include_js = [
 	"hrms.bundle.js",
 ]
 app_include_css = "hrms.bundle.css"
 
-# website
-
-# include js, css files in header of web template
-# web_include_css = "/assets/hrms/css/hrms.css"
-# web_include_js = "/assets/hrms/js/hrms.js"
-
-# include custom scss in every website theme (without file extension ".scss")
-# website_theme_scss = "hrms/public/scss/website"
-
-# include js, css files in header of web form
-# webform_include_js = {"doctype": "public/js/doctype.js"}
-# webform_include_css = {"doctype": "public/css/doctype.css"}
-
-# include js in page
-# page_js = {"page" : "public/js/file.js"}
-
-# include js in doctype views
+# Script bổ sung cho form của từng doctype
 doctype_js = {
 	"Employee": "public/js/erpnext/employee.js",
 	"Company": "public/js/erpnext/company.js",
@@ -53,37 +33,18 @@ doctype_js = {
 	"Delivery Trip": "public/js/erpnext/delivery_trip.js",
 	"Bank Transaction": "public/js/erpnext/bank_transaction.js",
 }
-# doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
-# doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
-# doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
-
-# Home Pages
-# ----------
-
-# application home page (will override Website Settings)
-# home_page = "login"
-
-# website user home page (by Role)
-# role_home_page = {
-# 	"Role": "home_page"
-# }
 
 calendars = ["Leave Application"]
 
-# Generators
-# ----------
-
-# automatically create page for each record of this doctype
+# Tự sinh trang web cho từng bản ghi của doctype này
 website_generators = ["Job Opening"]
 
 website_route_rules = [
 	{"from_route": "/hrms/<path:app_path>", "to_route": "hrms"},
 	{"from_route": "/hr/<path:app_path>", "to_route": "roster"},
 ]
-# Jinja
-# ----------
 
-# add methods and filters to jinja environment
+# Hàm và bộ lọc bổ sung cho môi trường Jinja
 jinja = {
 	"methods": [
 		"hrms.utils.get_country",
@@ -93,10 +54,7 @@ jinja = {
 	],
 }
 
-# Installation
-# ------------
-
-# before_install = "hrms.install.before_install"
+# Cài đặt
 after_install = [
 	"hrms.install.after_install",
 	# MVL payroll: đóng gói cấu hình lương (component + 6 cấu trúc theo loại + custom fields + tham số)
@@ -115,52 +73,17 @@ after_migrate = [
 
 setup_wizard_complete = "hrms.subscription_utils.update_erpnext_access"
 
-# Uninstallation
-# ------------
-
+# Gỡ cài đặt
 before_uninstall = "hrms.uninstall.before_uninstall"
-# after_uninstall = "hrms.uninstall.after_uninstall"
 
-# Integration Setup
-# ------------------
-# To set up dependencies/integrations with other apps
-# Name of the app being installed is passed as an argument
-
-# before_app_install = "hrms.utils.before_app_install"
+# Tích hợp: chạy khi một app khác được cài / gỡ (tên app truyền vào làm tham số)
 after_app_install = "hrms.setup.after_app_install"
-
-# Integration Cleanup
-# -------------------
-# To clean up dependencies/integrations with other apps
-# Name of the app being uninstalled is passed as an argument
-
 before_app_uninstall = "hrms.setup.before_app_uninstall"
-# after_app_uninstall = "hrms.utils.after_app_uninstall"
 
-# Desk Notifications
-# ------------------
-# See frappe.core.notifications.get_notification_config
-
-# notification_config = "hrms.notifications.get_notification_config"
-
-# Permissions
-# -----------
-# Permissions evaluated in scripted ways
-
-# permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
-
+# Phân quyền
 has_upload_permission = {"Employee": "erpnext.setup.doctype.employee.employee.has_upload_permission"}
 
-# DocType Class
-# ---------------
-# Override standard doctype classes
-
+# Ghi đè lớp doctype chuẩn
 override_doctype_class = {
 	"Employee": "hrms.overrides.employee_master.EmployeeMaster",
 	"Timesheet": "hrms.overrides.employee_timesheet.EmployeeTimesheet",
@@ -168,9 +91,7 @@ override_doctype_class = {
 	"Project": "hrms.overrides.employee_project.EmployeeProject",
 }
 
-# Document Events
-# ---------------
-# Hook on document methods and events
+# Tác dụng phụ liên doctype: bám vào phương thức/sự kiện của tài liệu
 
 doc_events = {
 	"Expense Claim": {
@@ -262,9 +183,7 @@ doc_events = {
 	"Task": {"on_update": "hrms.controllers.employee_boarding_controller.update_task"},
 }
 
-# Scheduled Tasks
-# ---------------
-
+# Tác vụ nền theo lịch
 scheduler_events = {
 	"all": [
 		"hrms.hr.doctype.interview.interview.send_interview_reminder",
@@ -309,18 +228,13 @@ accounting_dimension_doctypes = [
 
 bank_reconciliation_doctypes = ["Expense Claim"]
 
-# Testing
-# -------
-
+# Kiểm thử
 before_tests = "hrms.tests.test_utils.before_tests"
 
-# Overriding Methods
-# -----------------------------
-
-# get matching queries for Bank Reconciliation
+# Truy vấn khớp lệnh cho Đối soát ngân hàng
 get_matching_queries = "hrms.hr.utils.get_matching_queries"
 
-# ERPNext doctypes for Global Search
+# Doctype của ERPNext đưa vào Tìm kiếm toàn cục
 global_search_doctypes = {
 	"Default": [
 		{"doctype": "Salary Slip", "index": 19},
@@ -335,13 +249,8 @@ global_search_doctypes = {
 	],
 }
 
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "hrms.event.get_events"
-# }
-#
-# each overriding function accepts a `data` argument;
-# generated from the base implementation of the doctype dashboard,
-# along with any modifications made in other Frappe apps
+# Mỗi hàm ghi đè nhận tham số `data` — sinh từ bản dựng gốc của dashboard doctype,
+# kèm mọi sửa đổi mà các app khác đã áp lên nó.
 override_doctype_dashboards = {
 	"Employee": "hrms.overrides.dashboard_overrides.get_dashboard_for_employee",
 	"Holiday List": "hrms.overrides.dashboard_overrides.get_dashboard_for_holiday_list",
@@ -351,50 +260,7 @@ override_doctype_dashboards = {
 	"Bank Account": "hrms.overrides.dashboard_overrides.get_dashboard_for_bank_account",
 }
 
-# exempt linked doctypes from being automatically cancelled
-#
-# auto_cancel_exempted_doctypes = ["Auto Repeat"]
-
 ignore_links_on_delete = ["PWA Notification"]
-
-# User Data Protection
-# --------------------
-
-# user_data_fields = [
-# 	{
-# 		"doctype": "{doctype_1}",
-# 		"filter_by": "{filter_by}",
-# 		"redact_fields": ["{field_1}", "{field_2}"],
-# 		"partial": 1,
-# 	},
-# 	{
-# 		"doctype": "{doctype_2}",
-# 		"filter_by": "{filter_by}",
-# 		"partial": 1,
-# 	},
-# 	{
-# 		"doctype": "{doctype_3}",
-# 		"strict": False,
-# 	},
-# 	{
-# 		"doctype": "{doctype_4}"
-# 	}
-# ]
-
-# Authentication and authorization
-# --------------------------------
-
-# auth_hooks = [
-# 	"hrms.auth.validate"
-# ]
-
-# Translation
-# --------------------------------
-
-# Make link fields search translated document names for these DocTypes
-# Recommended only for DocTypes which have limited documents with untranslated names
-# For example: Role, Gender, etc.
-# translated_search_doctypes = []
 
 company_data_to_be_ignored = [
 	"Salary Component Account",
