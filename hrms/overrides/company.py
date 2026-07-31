@@ -10,58 +10,10 @@ def make_company_fixtures(doc, method=None):
 	if not frappe.flags.country_change:
 		return
 
-	run_regional_setup(doc.country)
-	make_salary_components(doc.country)
+	make_salary_components()
 
 
-def delete_company_fixtures():
-	countries = frappe.get_all(
-		"Company",
-		distinct="True",
-		pluck="country",
-	)
-
-	for country in countries:
-		try:
-			module_name = f"hrms.regional.{frappe.scrub(country)}.setup.uninstall"
-			frappe.get_attr(module_name)()
-		except (ImportError, AttributeError):
-			# regional file or method does not exist
-			pass
-		except Exception as e:
-			frappe.log_error("Unable to delete country fixtures for Miyano HR")
-			msg = _("Failed to delete defaults for country {0}.").format(frappe.bold(country))
-			msg += "<br><br>" + _("{0}: {1}").format(frappe.bold(_("Error")), get_error_message(e))
-			frappe.throw(msg, title=_("Country Fixture Deletion Failed"))
-
-
-def run_regional_setup(country):
-	try:
-		module_name = f"hrms.regional.{frappe.scrub(country)}.setup.setup"
-		frappe.get_attr(module_name)()
-	except ImportError:
-		pass
-	except Exception as e:
-		frappe.log_error("Unable to setup country fixtures for Miyano HR")
-		msg = _("Failed to setup defaults for country {0}.").format(frappe.bold(country))
-		msg += "<br><br>" + _("{0}: {1}").format(frappe.bold(_("Error")), get_error_message(e))
-		frappe.throw(msg, title=_("Country Setup failed"))
-
-
-def get_error_message(error) -> str:
-	try:
-		message_log = frappe.message_log.pop() if frappe.message_log else str(error)
-		if isinstance(message_log, str):
-			error_message = json.loads(message_log).get("message")
-		else:
-			error_message = message_log.get("message")
-	except Exception:
-		error_message = message_log
-
-	return error_message
-
-
-def make_salary_components(country):
+def make_salary_components():
 	docs = []
 
 	file_name = "salary_components.json"
@@ -70,9 +22,6 @@ def make_salary_components(country):
 	if not frappe.db.exists("Salary Component", "Basic"):
 		file_path = frappe.get_app_path("hrms", "payroll", "data", file_name)
 		docs.extend(json.loads(read_data_file(file_path)))
-
-	file_path = frappe.get_app_path("hrms", "regional", frappe.scrub(country), "data", file_name)
-	docs.extend(json.loads(read_data_file(file_path)))
 
 	for d in docs:
 		try:
