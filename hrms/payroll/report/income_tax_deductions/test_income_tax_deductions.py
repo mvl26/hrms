@@ -61,7 +61,10 @@ class TestIncomeTaxDeductions(FrappeTestCase):
 			"posting_date": posting_date,
 			"it_amount": 7732.0,
 			"gross_pay": 78000.0,
-			"pan_number": None,
 		}
+		# Cột PAN chỉ có khi erpnext đã cài regional India (tạo Employee.pan_number). Bản erpnext
+		# của Miyano đã gỡ bộ đó, nên báo cáo bỏ cột này và hàng kết quả không mang khoá pan_number.
+		if frappe.get_meta("Employee").has_field("pan_number"):
+			expected_data["pan_number"] = None
 
 		self.assertEqual(result[1][0], expected_data)
