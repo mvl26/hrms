@@ -49,7 +49,15 @@ class TestExpenseClaim(FrappeTestCase):
 
 		task = frappe.new_doc("Task")
 		task.update(
-			dict(doctype="Task", subject="_Test Project Task 1", status="Open", project=project)
+			# erpnext của Miyano đặt Task.description = bắt buộc (bản của frappe thì không),
+			# nên phải điền, nếu không insert vỡ với MandatoryError.
+			dict(
+				doctype="Task",
+				subject="_Test Project Task 1",
+				description="_Test Project Task 1",
+				status="Open",
+				project=project,
+			)
 		).insert()
 		task = task.name
 
