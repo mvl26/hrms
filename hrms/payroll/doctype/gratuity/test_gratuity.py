@@ -240,8 +240,8 @@ class TestGratuity(FrappeTestCase):
 		self.assertEqual(gratuity.status, "Unpaid")
 
 
-# Fixture rule cho test Gratuity. Truoc day lay tu hrms.regional.united_arab_emirates,
-# module do da bi go; dinh nghia duoc noi hoa tai day de test Gratuity van chay doc lap.
+# Fixture rule cho test Gratuity, noi hoa tai day de test chay doc lap khong can
+# module thiet lap theo quoc gia nao.
 GRATUITY_RULE_FIXTURES = {
 	"Rule Under Limited Contract (UAE)": {
 		"calculate_gratuity_amount_based_on": "Sum of all previous slabs",

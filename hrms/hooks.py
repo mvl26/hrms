@@ -71,8 +71,6 @@ after_migrate = [
 	"hrms.vn_payroll.setup_mvl.ensure_mvl_defaults",
 ]
 
-setup_wizard_complete = "hrms.subscription_utils.update_erpnext_access"
-
 # Gỡ cài đặt
 before_uninstall = "hrms.uninstall.before_uninstall"
 
