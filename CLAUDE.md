@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-This repo is the **in-house customization and deployment of Frappe HR (HRMS) v15 for one company: Miyano.** It is not an upstream contribution and not a product for resale — it starts from upstream Frappe HR and layers Miyano's Vietnamese HR / timekeeping / payroll rules on top. Customizations exist to serve this one deployment.
+This repo is **Miyano HR — Miyano Việt Nam's in-house HR, timekeeping and payroll system.** It is private software for one deployment: not open source, not a product for resale. It runs on the Frappe Framework + ERPNext (v15), and encodes Miyano's Vietnamese HR / timekeeping / payroll rules.
 
 - One app inside a bench: **run all `bench` commands from the bench root `/home/miyano/frappe-bench`**, not from `apps/hrms`. Depends on `frappe` + `erpnext` (`required_apps` in `hooks.py`; versions pinned in `pyproject.toml`).
 - **`miyano` is Miyano's live site and holds real HR/payroll data** — treat it as production-like, never a scratch site.
-- **Stay upstream-mergeable:** keep changes additive and `git revert`-able, and don't fork behavior upstream already tests. Integration branch is `version-15`; feature work happens on `feat/*` (upstream's `develop` is blocked by pre-commit).
+- **Miyano self-maintains:** this repo no longer tracks any upstream. Changes need not preserve merge compatibility, but must stay `git revert`-able and ship with tests. The trade-off, accepted deliberately: any security fix published for the upstream HR app must be found and applied by Miyano itself. Integration branch is `version-15`; feature work happens on `feat/*`.
 
 ## Working on the `miyano` site safely (read before running anything)
 

@@ -275,7 +275,7 @@ git commit -m "test(hr): prove code N bridges + stays payroll-neutral (invarianc
 Create/append `test_bang_cham_cong_thang.py` next to the report:
 
 ```python
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
+# Copyright (c) 2026, Miyano Việt Nam.
 """Report markers: rest day '-', holiday 'NL', post-relieving '-'."""
 from hrms.hr.report.bang_cham_cong_thang.bang_cham_cong_thang import (
 	MARKER_HOLIDAY,
@@ -429,7 +429,7 @@ git commit -m "feat(hr): bang cong thang — add 'Viec rieng' totals column + pr
 Create `hrms/tests/test_setup_vn_holiday.py`:
 
 ```python
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
+# Copyright (c) 2026, Miyano Việt Nam.
 """Tests for the on-demand VN Holiday List generator (weekly-off + solar public holidays;
 Tết/Giỗ Tổ are entered manually). Runs via the rollback harness — writes are rolled back."""
 
