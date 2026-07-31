@@ -24,7 +24,7 @@ jobs:
           npx commitlint --verbose --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
 
   linter:
-    name: 'Frappe Linter'
+    name: 'Miyano Linter'
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
 
