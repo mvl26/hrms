@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """CỔNG LƯƠNG — buộc phiếu lương phải khớp Bảng Công Tháng đã chốt.
 
 Yêu cầu là "lương lấy số từ bảng đã chốt". Cách rẻ và an toàn hơn hẳn việc đổi nguồn đọc của

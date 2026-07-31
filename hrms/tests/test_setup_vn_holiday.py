@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Tests for the on-demand VN Holiday List generator (weekly-off + solar public holidays;
 Tết/Giỗ Tổ are entered manually). Runs via the rollback harness — writes are rolled back."""
 

@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Bước SOÁT CÔNG — mắt xích còn thiếu giữa "máy sinh công" và "chốt công".
 
 Trước bước này, HR muốn sửa một ngày công phải Cancel → Amend từng bản ghi (không field nào cho

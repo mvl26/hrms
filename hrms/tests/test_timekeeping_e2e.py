@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """End-to-end scenario tests for the VN timekeeping → payroll chain (Miyano).
 
 Self-contained: every test builds its own employees / attendance / check-ins, so it runs both in

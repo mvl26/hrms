@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Luật chấm công một ngày của Miyano: **ca trượt theo giờ vào** + **đủ giờ mới đủ công**.
 
 Tách khỏi `attendance.py` và giữ THUẦN (không chạm DB, không biết Document là gì) để luật này

@@ -1,6 +1,3 @@
-// Copyright (c) 2016, Frappe Technologies Pvt. Ltd. and contributors
-// For license information, please see license.txt
-
 frappe.ui.form.on("Journal Entry", {
 	setup(frm) {
 		frm.ignore_doctypes_on_cancel_all.push("Salary Withholding");

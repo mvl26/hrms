@@ -1,7 +1,3 @@
-# Copyright (c) 2022, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
-
-
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 

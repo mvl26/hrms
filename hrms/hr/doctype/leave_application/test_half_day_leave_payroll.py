@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Nghỉ phép nửa ngày KHÔNG được trừ lương thêm lần nữa.
 
 Nửa ngày nghỉ phép năm là nghỉ CÓ LƯƠNG, nửa còn lại nhân viên đi làm ⇒ ngày đó phải trả đủ công.

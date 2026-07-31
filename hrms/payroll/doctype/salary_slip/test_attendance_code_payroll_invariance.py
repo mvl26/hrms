@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Phase 2 GATE: prove that entering attendance via VN mã công (bridge) yields the SAME
 payroll figures (payment_days / absent_days / leave_without_pay) as entering the equivalent
 native status directly. If this holds, the attendance-code layer is payroll-neutral."""

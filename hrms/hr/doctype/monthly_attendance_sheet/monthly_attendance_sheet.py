@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# For license information, please see license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Bảng Công Tháng — submittable monthly timekeeping sheet, one per đơn vị / tháng.
 
 A READ-ONLY snapshot: `populate_from_attendance` fills the child rows from the shared

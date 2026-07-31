@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """On-demand VN annual-leave entitlement helpers (spec/leave-entitlement-vn.md).
 
 Grants every active employee an annual-leave balance per Điều 113/114 BLLĐ 2019:

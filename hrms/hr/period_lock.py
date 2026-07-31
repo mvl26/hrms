@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """KHOÁ KỲ — làm cho "chốt công" thật sự có hiệu lực.
 
 Trước đây Bảng Công Tháng chỉ là ảnh chụp: chốt và ký xong vẫn sửa được Attendance, lương đổi

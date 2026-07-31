@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Miyano — số buổi ăn trưa ghi nhận per-Attendance (nguồn duy nhất).
 
 Cờ `custom_lunch` tính từ checkin (đúng luật cũ), report/Bảng Công Tháng/phiếu lương đều đếm từ cờ.

@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Ai được lập phiếu lương: chỉ người ĐANG làm việc, cộng người nghỉ việc giữa kỳ.
 
 Bản gốc của `get_filtered_employees` chỉ loại trạng thái `Inactive`, nên nhân viên đã `Left`

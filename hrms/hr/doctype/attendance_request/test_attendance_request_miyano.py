@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Miyano — tách bạch Yêu cầu chấm công khỏi Đơn xin nghỉ.
 
 Kênh Attendance Request được mở lại (đã từng khoá) có DUYỆT bởi quản lý trực tiếp, và ghi mã công

@@ -1,6 +1,3 @@
-// Copyright (c) 2016, Frappe Technologies Pvt. Ltd. and contributors
-// For license information, please see license.txt
-
 frappe.ui.form.on("Training Result", {
 	training_event: function (frm) {
 		if (frm.doc.training_event && !frm.doc.docstatus) {

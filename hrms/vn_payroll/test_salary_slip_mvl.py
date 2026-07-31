@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Tích hợp: Salary Slip dùng structure MVL → engine gán component + net_pay đúng.
 
 Tự dựng NV + SSA + chấm công đủ tháng, chạy qua harness rollback. Tháng 6/2099 không có Holiday List

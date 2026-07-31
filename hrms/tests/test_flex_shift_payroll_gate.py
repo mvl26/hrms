@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """CỔNG BẤT BIẾN LƯƠNG cho luật ca trượt + đủ giờ (spec §8) — chạy trên DỮ LIỆU THẬT của site.
 
 Khác với test đơn vị (dựng dữ liệu giả), cổng này lấy đúng những ngày công đang có trên site,

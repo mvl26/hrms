@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Miyano — Yêu cầu chấm công (Attendance Request) mở lại: có DUYỆT + ghi mã công riêng.
 
 Kênh này khác **Đơn xin nghỉ**: dành cho ngày nhân viên VẪN làm việc / phải tính có mặt — làm tại

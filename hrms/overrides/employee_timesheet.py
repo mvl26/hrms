@@ -1,6 +1,3 @@
-# Copyright (c) 2022, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
-
 from frappe.utils.data import flt
 
 from erpnext.projects.doctype.timesheet.timesheet import Timesheet

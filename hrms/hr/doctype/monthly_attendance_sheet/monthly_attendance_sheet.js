@@ -1,5 +1,4 @@
-// Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-// For license information, please see license.txt
+// Copyright (c) 2026, Miyano Việt Nam.
 //
 // Chặng 3-4 của luồng chấm công: CHỐT CÔNG -> LƯƠNG.
 // Nháp thì lấy dữ liệu + quay lại soát; đã chốt thì đi tiếp sang phiếu lương.

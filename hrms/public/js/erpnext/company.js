@@ -1,6 +1,3 @@
-// Copyright (c) 2022, Frappe Technologies Pvt. Ltd. and contributors
-// For license information, please see license.txt
-
 frappe.ui.form.on("Company", {
 	refresh: function (frm) {
 		frm.set_query("default_expense_claim_payable_account", function () {

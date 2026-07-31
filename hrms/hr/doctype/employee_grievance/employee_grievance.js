@@ -1,6 +1,3 @@
-// Copyright (c) 2021, Frappe Technologies Pvt. Ltd. and contributors
-// For license information, please see license.txt
-
 frappe.ui.form.on("Employee Grievance", {
 	setup: function (frm) {
 		frm.set_query("grievance_against_party", function () {

@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Luật chấm công theo GIỜ + ca trượt (`vn_day_classifier.classify_day`).
 
 Đây là hàm THUẦN (không chạm DB) nên test được đầy đủ mọi nhánh mà không cần custom field đã

@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Quỹ phép năm: đơn rút "Nghỉ phép năm" **bắt buộc chọn Loại nghỉ** — CHỈ còn "Nghỉ phép năm" → P.
 Nghỉ ốm / chăm con ốm KHÔNG rút quỹ phép năm (loại nghỉ riêng, có lương, đủ công). Nghỉ nửa ngày phải
 chọn buổi (Sáng/Chiều).

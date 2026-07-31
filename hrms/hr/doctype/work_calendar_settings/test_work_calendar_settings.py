@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Chính sách lịch làm việc là nguồn sự thật; Holiday List là kết quả sinh ra từ nó.
 
 Chạy qua harness rollback — mọi thay đổi đều được rollback.

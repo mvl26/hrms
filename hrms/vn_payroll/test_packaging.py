@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Đóng gói: cấu hình MVL tự có khi cài/migrate app, và phiếu lương render được."""
 
 import frappe

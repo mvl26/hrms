@@ -1,5 +1,4 @@
-// Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-// License: GNU General Public License v3. See license.txt
+// Copyright (c) 2026, Miyano Việt Nam.
 //
 // Trang SOÁT CÔNG THÁNG — mắt xích HR thiếu bấy lâu.
 //

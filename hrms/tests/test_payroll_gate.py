@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Tooling for the prod payroll sign-off gates (tasks/plan-prod-deploy.md T1 + T4)."""
 
 import json

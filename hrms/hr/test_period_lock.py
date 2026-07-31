@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Khoá kỳ: chốt công rồi thì ngày công trong kỳ không thêm/sửa/huỷ được nữa."""
 
 import frappe

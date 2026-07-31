@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Test báo cáo Bảng Lương MVL — gom Salary Slip đã submit thành bảng lương đủ cột + dòng tổng."""
 
 import frappe

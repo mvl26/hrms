@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Báo cáo giờ làm việc: giờ vào / giờ ra / tổng giờ / TB giờ mỗi ngày của nhân viên đang làm việc.
 
 Chỉ ĐỌC Attendance đã duyệt (`docstatus = 1`) — không ghi gì, nên payroll-neutral theo định nghĩa.

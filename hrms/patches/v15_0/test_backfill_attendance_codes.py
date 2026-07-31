@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Tests for the attendance-code backfill patch. Records are created code-less (stripped after
 insert) to mimic pre-feature / auto-attendance rows, then backfilled."""
 

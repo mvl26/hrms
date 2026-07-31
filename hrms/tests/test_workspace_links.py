@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Bất biến của Workspace: thẻ/phím tắt chỉ hiện khi có mặt trong `content`, link phải trỏ đi đâu đó.
 
 Workspace lưu nội dung ở HAI chỗ: bảng con `links`/`shortcuts` (dữ liệu) và chuỗi JSON `content`

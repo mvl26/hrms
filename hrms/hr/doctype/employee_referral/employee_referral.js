@@ -1,6 +1,3 @@
-// Copyright (c) 2021, Frappe Technologies Pvt. Ltd. and contributors
-// For license information, please see license.txt
-
 frappe.ui.form.on("Employee Referral", {
 	refresh: function (frm) {
 		if (frm.doc.docstatus === 1 && frm.doc.status === "Pending") {

@@ -1,6 +1,3 @@
-// Copyright (c) 2022, Frappe Technologies Pvt. Ltd. and Contributors
-// License: GNU General Public License v3. See license.txt
-
 frappe.ui.form.on("Attendance", {
 	refresh(frm) {
 		if (frm.doc.__islocal && !frm.doc.attendance_date) {

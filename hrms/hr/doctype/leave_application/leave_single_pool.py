@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Miyano — quỹ phép năm.
 
 CHỈ "Nghỉ phép năm" trừ vào quỹ phép năm (Frappe tự chặn khi hết). Đơn nghỉ ``leave_type =

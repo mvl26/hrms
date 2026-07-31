@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Bước soát công: cờ bất thường, lưới soát, và cửa ghi `apply_correction` (+ khoá kỳ)."""
 
 import frappe

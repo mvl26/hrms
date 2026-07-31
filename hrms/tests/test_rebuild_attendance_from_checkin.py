@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Công cụ dựng lại Attendance từ checkin — bất biến quan trọng nhất là KHÔNG đụng ngày nghỉ phép."""
 
 import datetime

@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# For license information, please see license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Cầu nối engine MVL vào Salary Slip.
 
 Chạy ở `doc_events["Salary Slip"]["validate"]` — SAU khi controller đã tính payment_days /

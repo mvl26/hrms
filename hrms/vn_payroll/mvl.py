@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# For license information, please see license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Engine tính lương MVL (Miyano) — thuần Python, KHÔNG đụng DB.
 
 Oracle là các ví dụ số thật trong `docs/Cong_thuc_tinh_luong_MVL.md` (trích từ bảng lương 06/2026).

@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Nhật ký điều chỉnh công — vết BẤT BIẾN của mọi lần HR sửa một ngày công ở bước soát.
 
 Bước soát công cho phép HR đè lên kết quả máy chấm, mà những field bị đè (`status`,

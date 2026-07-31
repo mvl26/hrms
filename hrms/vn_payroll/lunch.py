@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# For license information, please see license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Số ngày ăn trưa tại công ty — suy từ checkin, KHÁC số công.
 
 Quy tắc (khớp công thức HR): một ngày tính ăn trưa khi ngày đó là ngày công (Present / Half Day) VÀ

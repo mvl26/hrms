@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Chú thích ký hiệu mã công — MỘT DÒNG, dùng chung cho mọi báo cáo chấm công.
 
 Bản in Bảng Công Tháng vẫn luôn có chú thích ở cuối tờ. Đây là bản dùng chung cho báo cáo trên

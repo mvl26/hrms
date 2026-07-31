@@ -1,6 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
-
+# Copyright (c) 2026, Miyano Việt Nam.
 from datetime import timedelta
 
 import frappe

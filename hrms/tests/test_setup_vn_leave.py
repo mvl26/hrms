@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Tests for the VN annual-leave entitlement layer (spec/leave-entitlement-vn.md).
 Runs via the rollback harness — writes are rolled back, never committed."""
 

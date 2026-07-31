@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Integrity tests for the seeded VN timekeeping master data (Leave Type anchors +
 Attendance Codes). These assert the fixtures shipped by the app resolve correctly."""
 

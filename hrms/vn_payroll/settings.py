@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# For license information, please see license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Đọc `MVL Payroll Settings` (Single) thành MVLConfig cho engine."""
 
 import frappe

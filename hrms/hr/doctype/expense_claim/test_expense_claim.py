@@ -1,6 +1,3 @@
-# Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors and Contributors
-# See license.txt
-
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import flt, nowdate, random_string

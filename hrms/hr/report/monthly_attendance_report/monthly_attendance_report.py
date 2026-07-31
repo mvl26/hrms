@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Bảng chấm công tháng — read-only monthly timekeeping sheet.
 
 Pivots by employee x day-of-month. Each cell is the mã công for that day:

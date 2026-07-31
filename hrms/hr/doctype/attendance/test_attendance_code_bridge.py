@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Unit tests for the VN attendance-code <-> native-status bridge (Attendance.before_validate).
 Codes are exercised in isolation (before_validate, no insert) so native validation such as
 check_leave_record does not mask the bridge's own output."""

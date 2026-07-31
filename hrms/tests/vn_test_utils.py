@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# For license information, please see license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Tiện ích dùng chung cho test của lớp bản địa hoá VN (Miyano)."""
 
 import frappe

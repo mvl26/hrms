@@ -1,5 +1,4 @@
-# Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and Contributors
-# See license.txt
+# Copyright (c) 2026, Miyano Việt Nam.
 """Tầng Document của bộ phân loại VN: chốt chặn, đọc cấu hình ca, và chuỗi mã → field payroll.
 
 Bản thân LUẬT (ca trượt, giờ net, X / 1/2X / V) được test đầy đủ ở `test_vn_day_classifier.py`
