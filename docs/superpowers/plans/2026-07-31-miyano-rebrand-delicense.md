@@ -710,7 +710,11 @@ Thay câu hiện tại:
 bằng:
 > This repo is **Miyano HR — Miyano Việt Nam's in-house HR, timekeeping and payroll system.** It is private software for one deployment: not open source, not a product for resale. It runs on the Frappe Framework + ERPNext (v15).
 
-Đồng thời gỡ dòng nói nhánh tích hợp phải "stay upstream-mergeable" nếu Miyano không còn theo thượng nguồn nữa — **hỏi lại chủ sở hữu trước khi gỡ**, vì đó là quyết định quy trình chứ không phải thương hiệu.
+**Gỡ hẳn** nguyên tắc "Stay upstream-mergeable" (chủ sở hữu đã quyết: Miyano tự bảo trì từ nay, không còn theo thượng nguồn). Thay bằng nguyên tắc thay thế:
+
+> **Miyano tự bảo trì:** repo này không còn theo thượng nguồn. Thay đổi không cần giữ tương thích merge, nhưng vẫn phải `git revert`-được và đi kèm test. Đổi lại: mọi lỗ hổng bảo mật Frappe HR vá sau này, Miyano phải tự phát hiện và tự vá.
+
+Giữ nguyên phần nói nhánh tích hợp là `version-15` và feature work trên `feat/*`.
 
 - [ ] **Step 2: Sửa 4 file `.md` còn chứa `Frappe Technologies`**
 
@@ -732,9 +736,14 @@ git grep -in "frappe hr" -- '*.md'
 
 Xử lý từng chỗ theo nguyên tắc phân biệt ở trên.
 
-- [ ] **Step 4: Quyết định số phận `CODE_OF_CONDUCT.md`**
+- [ ] **Step 4: Xoá `CODE_OF_CONDUCT.md`**
 
-File này là quy tắc ứng xử cộng đồng mã nguồn mở của Frappe. App nội bộ không có cộng đồng đóng góp bên ngoài → đề xuất xoá. **Hỏi chủ sở hữu** trước khi xoá (họ chưa chọn mục này ở vòng hỏi trước).
+```bash
+cd /home/miyano/frappe-bench/apps/hrms
+git rm CODE_OF_CONDUCT.md
+```
+
+Quy tắc ứng xử cộng đồng mã nguồn mở của Frappe, trỏ về kênh liên hệ của họ. App nội bộ không có cộng đồng đóng góp bên ngoài (chủ sở hữu đã quyết xoá, nhất quán với việc xoá issue template ở Task 5).
 
 - [ ] **Step 5: Kiểm chứng toàn repo**
 
@@ -868,8 +877,8 @@ Nhờ chủ sở hữu kiểm tra `http://miyano:8080/hrms` (hoặc site thật 
 
 **Chụp mốc payroll TRƯỚC khi bắt đầu Task 1** (xem Task 7 Step 6) — quên là phải `git stash` mới lấy lại được.
 
-**Hai điểm cần hỏi chủ sở hữu, không tự quyết:**
-1. Task 6 Step 1 — có gỡ nguyên tắc "stay upstream-mergeable" khỏi `CLAUDE.md` không?
-2. Task 6 Step 4 — có xoá `CODE_OF_CONDUCT.md` không?
+**Hai quyết định đã chốt với chủ sở hữu (2026-07-31):**
+1. **Gỡ** nguyên tắc "stay upstream-mergeable" — Miyano tự bảo trì, không còn theo thượng nguồn. Hệ quả đã được nêu và chấp nhận: mọi bản vá bảo mật Frappe HR sau này Miyano phải tự phát hiện và tự vá.
+2. **Xoá** `CODE_OF_CONDUCT.md`.
 
 **Nếu một task hỏng giữa chừng:** `git checkout -- .` để về mốc sạch của task đó (các task trước đã commit nên an toàn), rồi điều tra. Không chồng sửa chữa lên trạng thái nửa vời.
