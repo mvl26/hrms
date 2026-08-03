@@ -146,7 +146,11 @@ khung ca trượt ra khỏi giờ trưa — không phụ thuộc giả định n
 Với biên ±3h và trưa 12:00–13:30: khung ca luôn bắt đầu ≤ 11:00 và kết thúc ≥ 14:30 ⇒ giờ trưa luôn
 nằm trọn trong khung ⇒ luôn trừ đủ 1,5h.
 
-Giờ làm **ngoài khung ca trượt không được cộng** — đó là chủ ý: làm thêm không tự biến thành công.
+Giờ làm **ngoài khung ca trượt không được cộng vào phần TÍNH CÔNG** — đó là chủ ý: làm thêm không
+tự biến thành công.
+
+> ⚠️ **§12 sửa lại phần này**: công thức trên chỉ còn dùng cho `counted` (giờ tính công). Số ghi vào
+> `working_hours` nay là **giờ làm thực tế**, không bị khung ca cắt.
 
 ### 4.3 Mã công
 
