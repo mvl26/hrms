@@ -276,6 +276,17 @@ class TestAttendanceXlsx(PerTestRollback, FrappeTestCase):
 		finally:
 			frappe.local.response = response
 
+	def test_download_says_plainly_when_called_without_a_period(self):
+		"""Bị gọi nhầm từ báo cáo khác (Salary Register, 2026-08-03) thì phải nói rõ là gọi nhầm.
+
+		`execute()` ném "Please select month and year" — đọc log một mình không lần ra được là nút
+		Export của báo cáo NÀO gọi sai."""
+		from hrms.hr.attendance_xlsx import download
+
+		with self.assertRaises(frappe.ValidationError) as caught:
+			download(filters=frappe.as_json({}))
+		self.assertIn("Bảng chấm công tháng", str(caught.exception))
+
 	# ── luật chia cụm cột (thuần hàm, không cần dữ liệu) ─────────────────────────────────────
 
 	def test_legend_splits_into_column_groups(self):

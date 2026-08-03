@@ -370,6 +370,11 @@ def download(filters=None, visible_idx=None):
 	frappe.permissions.can_export("Attendance", raise_exception=True)
 
 	filters = frappe.parse_json(filters) or {}
+	# Endpoint này chỉ phục vụ Bảng chấm công tháng. Nói thẳng ra khi bị gọi nhầm: `execute()` sẽ
+	# ném "Please select month and year", đọc một mình không lần ra được là nút Export của báo cáo
+	# NÀO gọi sai (đã mất công lần một lần, 2026-08-03).
+	if not (cint(filters.get("month")) and cint(filters.get("year"))):
+		frappe.throw(_("Thiếu tháng/năm: đường xuất Excel này chỉ dùng cho báo cáo Bảng chấm công tháng."))
 	columns, data, _message = execute(filters)
 
 	# lọc theo dòng đang hiện trên màn hình TRƯỚC khi bỏ dòng chú thích cũ: chỉ số client gửi lên

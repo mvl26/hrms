@@ -1,4 +1,7 @@
 // Copyright (c) 2026, Miyano Việt Nam.
+// Tên báo cáo viết thẳng chứ không đặt hằng số ở top-level: `frappe.dom.eval` chèn file này
+// thành <script> chạy ở phạm vi TOÀN CỤC, và Custom Report dẫn xuất sẽ nạp lại — `const` gặp
+// lần eval thứ hai là vỡ `SyntaxError: already been declared`, kéo sập cả script báo cáo.
 frappe.query_reports["Monthly Attendance Report"] = {
 	filters: [
 		{
@@ -164,9 +167,22 @@ frappe.query_reports["Monthly Attendance Report"] = {
 		});
 
 		// Export mặc định của Frappe dựng file qua `make_xlsx()` — đường đó không có chỗ móc để tô
-		// màu nên file ra trắng trơn, mất sạch 10 màu trạng thái của bảng. Ghi đè ở mức INSTANCE
-		// (không vá prototype) để chỉ báo cáo này đổi đường xuất, mọi report khác giữ nguyên.
-		report.export_report = () => vn_export_dialog(report);
+		// màu nên file ra trắng trơn, mất sạch 10 màu trạng thái của bảng.
+		//
+		// CẨN THẬN: `frappe.query_report` là MỘT instance dùng chung cho MỌI query report —
+		// `load_report()` chỉ đổi `report_name` chứ không dựng lại object. Ghi đè thẳng
+		// `export_report` vì thế rò sang mọi báo cáo khác trong cùng phiên: mở bảng chấm công rồi
+		// sang Salary Register bấm Export là gọi nhầm vào đây (lỗi "Please select month and year",
+		// 2026-08-03). Nên phải bọc MỘT LẦN và luôn kiểm tên báo cáo lúc bấm.
+		if (!report._vn_export_patched) {
+			report._vn_export_patched = true;
+			const fallback = report.export_report.bind(report); // bản gốc trên prototype
+			report.export_report = function () {
+				if (this.report_name === "Monthly Attendance Report")
+					return vn_export_dialog(this);
+				return fallback();
+			};
+		}
 
 		// bảng màu do server định nghĩa (một nguồn duy nhất) — formatter chỉ tra, không tự phân loại
 		frappe.call({
