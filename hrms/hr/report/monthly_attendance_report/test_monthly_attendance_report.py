@@ -334,8 +334,9 @@ class TestAttendanceColorState(PerTestRollback, FrappeTestCase):
 			"1/2P": "half",
 			"1/2K": "half",
 			# nghỉ cả ngày → theo category
-			"P": "leave",
-			"KH": "leave",  # việc riêng / kết hôn (mặc định gộp phép/vàng)
+			# Phép năm cùng màu tím với 1/2P: nghỉ phép là nghỉ phép, cả ngày hay nửa ngày.
+			"P": "half",
+			"KH": "leave",  # việc riêng / kết hôn — giữ vàng, KHÔNG theo phép năm
 			"Ô": "sick",
 			"Cô": "sick",
 			"TS": "sick",
@@ -364,7 +365,8 @@ class TestAttendanceColorState(PerTestRollback, FrappeTestCase):
 		self.assertEqual(day_state("X/Ô", cm), "half")
 		# không nửa nào đi làm → theo category nửa sáng
 		self.assertEqual(day_state("Ô/P", cm), "sick")
-		self.assertEqual(day_state("P/Ô", cm), "leave")
+		# sáng phép → lấy màu phép (tím), nhất quán với mã P cả ngày
+		self.assertEqual(day_state("P/Ô", cm), "half")
 
 	def test_style_map_covers_every_state(self):
 		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
@@ -425,45 +427,62 @@ class TestAttendanceColorState(PerTestRollback, FrappeTestCase):
 		self.assertEqual(attendance_state_styles(), STATE_STYLE)
 
 
+class TestWeekdayHeaders(PerTestRollback, FrappeTestCase):
+	"""Nhãn cột ngày mang cả thứ trong tuần — nhìn bảng là biết ngày nào cuối tuần."""
+
+	def labels(self, month, year):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
+
+		columns, _data, _msg = execute({"month": month, "year": year})
+		return {c["fieldname"]: c["label"] for c in columns}
+
+	def test_day_labels_carry_the_weekday(self):
+		# 2026-08-01 là thứ Bảy → 1 T7, 2 CN, 3 T2
+		labels = self.labels(8, 2026)
+		self.assertEqual(labels["day_1"], "1 T7")
+		self.assertEqual(labels["day_2"], "2 CN")
+		self.assertEqual(labels["day_3"], "3 T2")
+
+	def test_weekday_follows_the_month_being_shown(self):
+		"""Thứ phải suy từ đúng tháng đang xem, không phải hằng số chép cứng."""
+		self.assertEqual(self.labels(9, 2026)["day_1"], "1 T3")  # 2026-09-01 là thứ Ba
+
+	def test_every_day_of_the_month_is_labelled(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import WEEKDAY_LABELS
+
+		labels = self.labels(2, 2024)  # tháng nhuận: 29 ngày
+		self.assertIn("day_29", labels)
+		self.assertNotIn("day_30", labels)
+		for day in range(1, 30):
+			label = labels[f"day_{day}"]
+			self.assertTrue(label.startswith(f"{day} "), f"nhãn ngày {day} phải mở đầu bằng số ngày")
+			self.assertIn(label.split(" ")[1], WEEKDAY_LABELS)
+
+
 class TestLegend(PerTestRollback, FrappeTestCase):
 	"""Chú thích ký hiệu: MỘT DÒNG, dùng chung, nằm trên bảng — không làm báo cáo dài ra."""
 
-	def test_the_grid_carries_exactly_one_legend_row_at_the_end(self):
-		"""Một dòng thôi, và ở cuối — nhiều hơn là báo cáo dài ra, không có thì file Excel mất nó."""
-		from hrms.hr.attendance_legend import is_legend_row
+	def test_the_grid_carries_employee_rows_only(self):
+		"""Bỏ 2026-08-03: dòng chú thích văn bản dài ở cuối bảng chỉ làm bẩn lưới.
+
+		Chú thích trên màn hình đi đường `message` (khối chip màu), còn file Excel dựng khối lưới
+		riêng — không nơi nào cần dòng đó nữa."""
 		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
 
 		_columns, data, message = execute({"month": 6, "year": 2099})
 		self.assertTrue(message, "vẫn phải có khối chú thích màu trên bảng")
-		self.assertEqual(sum(1 for r in data if is_legend_row(r)), 1)
-		self.assertTrue(is_legend_row(data[-1]), "dòng chú thích phải ở cuối")
-		self.assertTrue(
-			all(r.get("employee") for r in data[:-1]),
-			"các dòng còn lại phải đều là nhân viên",
+		self.assertTrue(all(r.get("employee") for r in data), "mọi dòng phải là dòng nhân viên")
+		self.assertFalse(
+			[r for r in data if any("=" in str(v) for v in r.values() if isinstance(v, str))],
+			"không còn ô nào dồn cả danh sách mã kiểu 'X=Đi làm đủ công; ...'",
 		)
 
-	def test_the_legend_row_survives_the_excel_export_path(self):
-		"""Đường xuất file lọc dòng theo `visible_idx`, nên phải kiểm bằng chính hàm dựng file."""
-		from frappe.desk.query_report import build_xlsx_data, format_fields, run
-
-		filters = {"month": 7, "year": 2026, "company": frappe.db.get_value("Company", {}, "name")}
-		data = frappe._dict(run("Monthly Attendance Report", filters, ignore_prepared_report=True))
-		data.filters = filters
-		format_fields(data)
-		xlsx_data, _widths = build_xlsx_data(data, list(range(len(data.result))), include_indentation=0)
-
-		self.assertTrue(
-			any("Chú thích" in str(cell) for row in xlsx_data for cell in row),
-			"file Excel xuất ra phải có dòng chú thích ký hiệu",
-		)
-
-	def test_every_attendance_code_is_explained_in_one_line(self):
-		from hrms.hr.attendance_legend import legend_pairs, legend_text
+	def test_every_attendance_code_is_explained(self):
+		from hrms.hr.attendance_legend import legend_pairs
 
 		codes = set(frappe.get_all("Attendance Code", pluck="name"))
 		explained = {c for c, _n in legend_pairs()}
 		self.assertTrue(codes <= explained, f"mã chưa có chú thích: {codes - explained}")
-		self.assertNotIn("\n", legend_text(), "chú thích phải gọn trong một dòng")
 
 	def test_calendar_markers_are_explained_too(self):
 		from hrms.hr.attendance_legend import legend_pairs
@@ -561,3 +580,74 @@ class TestOnlyEmployedPeopleAreOnTheSheet(PerTestRollback, FrappeTestCase):
 		"""Đây là chỗ dễ sai nhất: loại thẳng mọi người không Active là quỵt công đã làm."""
 		emp = self.mk_employee("left_midmonth_emp", "Left", relieving="2098-05-15")
 		self.assertIn(emp, self.roster(), "nghỉ việc giữa tháng vẫn phải có mặt trong bảng tháng đó")
+
+
+class TestAvgOfficeHours(PerTestRollback, FrappeTestCase):
+	"""TB giờ/ngày = tổng giờ có mặt / số ngày làm việc TẠI VĂN PHÒNG.
+
+	Mẫu số là chỗ dễ sai: nghỉ phép, công tác, làm tại nhà, nghỉ lễ đều KHÔNG phải ngày ở văn
+	phòng, tính vào là kéo trung bình xuống thành con số vô nghĩa."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.emp = test_employee()
+		cls.year, cls.month = 2099, 5
+
+	def mk(self, day, code="X", in_time=None, out_time=None):
+		date = f"{self.year}-{self.month:02d}-{day:02d}"
+		doc = {
+			"doctype": "Attendance",
+			"employee": self.emp,
+			"attendance_date": getdate(date),
+			"custom_attendance_code": code,
+		}
+		if in_time:
+			doc["in_time"], doc["out_time"] = f"{date} {in_time}", f"{date} {out_time}"
+		att = frappe.get_doc(doc)
+		att.insert()
+		att.submit()
+		return att
+
+	def avg(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
+
+		rows = get_sheet_rows({"month": self.month, "year": self.year})
+		return next(r for r in rows if r["employee"] == self.emp)["avg_office_hours"]
+
+	def test_average_is_total_presence_over_office_days(self):
+		# nghỉ trưa mặc định 12:00-13:30 bị trừ: 9.5h-1.5 = 8, 10.5h-1.5 = 9 -> TB 8.5
+		self.mk(4, in_time="08:00:00", out_time="17:30:00")
+		self.mk(5, in_time="08:00:00", out_time="18:30:00")
+		self.assertEqual(self.avg(), 8.5)
+
+	def test_leave_days_do_not_dilute_the_average(self):
+		self.mk(4, in_time="08:00:00", out_time="17:30:00")
+		self.mk(6, code="P")  # nghỉ phép cả ngày
+		self.assertEqual(self.avg(), 8.0, "ngày nghỉ phép không được vào mẫu số")
+
+	def test_business_trip_and_wfh_are_not_office_days(self):
+		"""CT và W đều mang status `Work From Home` — có punch cũng không phải ngày ở văn phòng."""
+		self.mk(4, in_time="08:00:00", out_time="17:30:00")
+		self.mk(7, code="CT", in_time="07:00:00", out_time="20:00:00")
+		self.assertEqual(self.avg(), 8.0, "ngày công tác không được vào TB")
+
+	def test_a_day_without_punches_is_not_an_office_day(self):
+		self.mk(4, in_time="08:00:00", out_time="17:30:00")
+		self.mk(8)  # chấm tay, không có giờ vào/ra
+		self.assertEqual(self.avg(), 8.0, "ngày không có giờ vào/ra không xác định được thời gian")
+
+	def test_no_office_day_at_all_gives_zero(self):
+		self.mk(6, code="P")
+		self.assertEqual(self.avg(), 0.0, "không có ngày nào ở văn phòng thì TB là 0, không phải lỗi")
+
+	def test_the_column_reaches_the_report_grid(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
+
+		self.mk(4, in_time="08:00:00", out_time="17:30:00")
+		columns, data, _msg = execute({"month": self.month, "year": self.year})
+
+		labels = {c["fieldname"]: c["label"] for c in columns}
+		self.assertEqual(labels["avg_office_hours"], "TB giờ/ngày")
+		row = next(r for r in data if r["employee"] == self.emp)
+		self.assertEqual(row["avg_office_hours"], 8.0)

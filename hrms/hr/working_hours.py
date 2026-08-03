@@ -1,15 +1,24 @@
 # Copyright (c) 2026, Miyano Việt Nam.
 from calendar import monthrange
+from datetime import datetime
 
 import frappe
 from frappe import _
 from frappe.query_builder.functions import Extract
-from frappe.utils import cint, flt, getdate, time_diff_in_hours
+from frappe.utils import cint, flt, get_datetime, getdate, time_diff_in_hours
 from frappe.utils.nestedset import get_descendants_of
 
 LUNCH_BREAK_HOURS = 1.5
 STANDARD_HOURS_PER_DAY = 8.0
 FULL_DAY_STATUSES = ("Present", "Work From Home")
+
+# Ngày đã chấm là nghỉ thì dù có punch lẻ cũng không tính là ngày làm việc ở văn phòng.
+NON_PRESENCE_STATUSES = ("Absent", "On Leave")
+
+# Ngày làm việc bình thường TẠI VĂN PHÒNG. `Work From Home` bị loại có chủ đích: cả mã `W` (làm tại
+# nhà) lẫn `CT` (đi công tác) đều map sang status đó, mà cả hai đều không phải ngày ở văn phòng.
+# Nghỉ lễ / nghỉ tuần không có bản ghi Attendance nào nên tự rơi ra ngoài.
+OFFICE_STATUSES = ("Present", "Half Day")
 
 
 def compute_net_hours(status, in_time, out_time, working_hours, is_split=False):
@@ -30,6 +39,88 @@ def compute_net_hours(status, in_time, out_time, working_hours, is_split=False):
 	if status == "Half Day":
 		return round(gross, 2)
 	return 0.0
+
+
+def get_lunch_window_map():
+	"""{ca: khung nghỉ trưa} — cùng luật với bộ chấm mã công (`resolve_lunch_window`).
+
+	Đọc phòng thủ: hai field này là custom field (fixtures), site chưa migrate thì chưa có.
+	"""
+	from hrms.hr.doctype.attendance.vn_day_classifier import resolve_lunch_window
+
+	meta = frappe.get_meta("Shift Type")
+	if not (meta.has_field("custom_lunch_start") and meta.has_field("custom_lunch_end")):
+		return {}
+
+	return {
+		shift.name: resolve_lunch_window(shift.custom_lunch_start, shift.custom_lunch_end)
+		for shift in frappe.get_all("Shift Type", fields=["name", "custom_lunch_start", "custom_lunch_end"])
+	}
+
+
+def presence_hours(in_time, out_time, attendance_date, lunch_start=None, lunch_end=None):
+	"""Giờ thực sự có mặt: (giờ ra - giờ vào) trừ phần giao với khung nghỉ trưa.
+
+	KHÔNG cắt theo khung ca — ở lại sau giờ tan ca vẫn được tính. Thiếu giờ vào hoặc giờ ra thì
+	không xác định được thời gian có mặt → 0.
+	"""
+	from hrms.hr.doctype.attendance.vn_day_classifier import overlap_hours, resolve_lunch_window
+
+	if not (in_time and out_time):
+		return 0.0
+
+	in_time, out_time = get_datetime(in_time), get_datetime(out_time)
+	if out_time <= in_time:
+		return 0.0
+
+	day = datetime.combine(getdate(attendance_date), datetime.min.time())
+	lunch_start, lunch_end = resolve_lunch_window(lunch_start, lunch_end)
+	lunch = overlap_hours(in_time, out_time, day + lunch_start, day + lunch_end)
+	present = (out_time - in_time).total_seconds() / 3600.0
+	return round(max(present - lunch, 0.0), 2)
+
+
+def office_hours_map(employees, start, end) -> dict:
+	"""{employee: {"hours": tổng giờ có mặt, "days": số ngày}} cho các ngày làm việc TẠI VĂN PHÒNG.
+
+	Mẫu số của "TB giờ/ngày": chỉ ngày `Present`/`Half Day` mà thực sự có giờ vào lẫn giờ ra. Ngày
+	nghỉ phép, công tác, làm tại nhà, nghỉ lễ, nghỉ tuần đều không vào — nghỉ lễ/nghỉ tuần vì không
+	có Attendance, công tác/WFH vì mang status `Work From Home`, nghỉ phép vì `On Leave`.
+
+	Một truy vấn gộp cho cả bảng, cùng lối với `lunch_days_map`."""
+	employees = list(employees or [])
+	if not employees:
+		return {}
+
+	lunch_windows = get_lunch_window_map()
+	rows = frappe.get_all(
+		"Attendance",
+		filters={
+			"employee": ["in", employees],
+			"attendance_date": ["between", [start, end]],
+			"docstatus": 1,
+			"status": ["in", OFFICE_STATUSES],
+		},
+		fields=["employee", "attendance_date", "shift", "in_time", "out_time"],
+	)
+
+	totals = {}
+	for r in rows:
+		lunch_start, lunch_end = lunch_windows.get(r.shift or "", (None, None))
+		hours = presence_hours(r.in_time, r.out_time, r.attendance_date, lunch_start, lunch_end)
+		if hours <= 0:  # không có giờ vào/ra → không phải ngày ở văn phòng, không kéo TB xuống
+			continue
+		total = totals.setdefault(r.employee, {"hours": 0.0, "days": 0})
+		total["hours"] += hours
+		total["days"] += 1
+	return totals
+
+
+def avg_office_hours(totals: dict | None) -> float:
+	"""Giờ làm trung bình một ngày = tổng giờ / số ngày; 0 khi chưa có ngày nào ở văn phòng."""
+	if not totals or not totals.get("days"):
+		return 0.0
+	return round(totals["hours"] / totals["days"], 2)
 
 
 def get_week_buckets(year, month):

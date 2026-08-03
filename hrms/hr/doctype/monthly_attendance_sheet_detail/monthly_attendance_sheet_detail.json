@@ -38,7 +38,7 @@
   "d29",
   "d30",
   "d31",
-  "work_days",
+  "total_paid_days",
   "annual_leave",
   "personal_leave",
   "sick_leave",
@@ -52,21 +52,21 @@
  ],
  "fields": [
   {
+   "columns": 2,
    "fieldname": "employee",
    "fieldtype": "Link",
-   "options": "Employee",
-   "label": "Nhân viên",
    "in_list_view": 1,
-   "reqd": 1,
-   "columns": 2
+   "label": "Nhân viên",
+   "options": "Employee",
+   "reqd": 1
   },
   {
+   "columns": 2,
    "fieldname": "employee_name",
    "fieldtype": "Data",
-   "label": "Họ tên",
-   "read_only": 1,
    "in_list_view": 1,
-   "columns": 3
+   "label": "Họ tên",
+   "read_only": 1
   },
   {
    "fieldname": "d01",
@@ -255,92 +255,105 @@
    "read_only": 1
   },
   {
-   "fieldname": "work_days",
+   "columns": 1,
+   "description": "SỐ NGÀY CÔNG TY TRẢ LƯƠNG (giống cột Tổng công của báo cáo chấm công tháng) = công đi làm + nghỉ CÓ LƯƠNG do công ty trả (phép năm, việc riêng có lương, nghỉ bù, tai nạn lao động). KHÔNG gồm ốm / chăm con ốm / thai sản (BHXH chi trả), nghỉ không lương, vắng và nghỉ lễ.",
+   "fieldname": "total_paid_days",
    "fieldtype": "Float",
-   "label": "Công",
-   "read_only": 1,
-   "precision": "2",
    "in_list_view": 1,
-   "columns": 1
+   "label": "Tổng công",
+   "precision": "2",
+   "read_only": 1
   },
   {
+   "columns": 1,
+   "description": "Nghỉ phép năm — công ty trả lương, đã nằm trong Tổng công.",
    "fieldname": "annual_leave",
    "fieldtype": "Float",
-   "label": "Phép",
-   "read_only": 1,
-   "precision": "2",
    "in_list_view": 1,
-   "columns": 1
+   "label": "Phép",
+   "precision": "2",
+   "read_only": 1
   },
   {
+   "description": "Nghỉ việc riêng có lương (kết hôn, con kết hôn, tang) — đã nằm trong Tổng công.",
    "fieldname": "personal_leave",
    "fieldtype": "Float",
    "label": "Việc riêng",
-   "read_only": 1,
-   "precision": "2"
+   "precision": "2",
+   "read_only": 1
   },
   {
+   "columns": 1,
+   "description": "Nghỉ ốm / chăm con ốm — BHXH chi trả, KHÔNG tính vào Tổng công.",
    "fieldname": "sick_leave",
    "fieldtype": "Float",
+   "in_list_view": 1,
    "label": "Ốm",
-   "read_only": 1,
-   "precision": "2"
+   "precision": "2",
+   "read_only": 1
   },
   {
+   "description": "Nghỉ thai sản — BHXH chi trả, KHÔNG tính vào Tổng công.",
    "fieldname": "maternity_leave",
    "fieldtype": "Float",
    "label": "Thai sản",
-   "read_only": 1,
-   "precision": "2"
+   "precision": "2",
+   "read_only": 1
   },
   {
+   "description": "Nghỉ do tai nạn lao động — Đ.38.3 ATVSLĐ: công ty trả đủ lương, đã nằm trong Tổng công.",
    "fieldname": "work_accident_leave",
    "fieldtype": "Float",
    "label": "Tai nạn LĐ",
-   "read_only": 1,
-   "precision": "2"
+   "precision": "2",
+   "read_only": 1
   },
   {
+   "description": "Nghỉ bù cho ngày đã làm — công ty trả, đã nằm trong Tổng công.",
    "fieldname": "comp_off",
    "fieldtype": "Float",
    "label": "Nghỉ bù",
-   "read_only": 1,
-   "precision": "2"
+   "precision": "2",
+   "read_only": 1
   },
   {
+   "columns": 1,
+   "description": "Nghỉ không lương — không ai trả, KHÔNG tính vào Tổng công.",
    "fieldname": "unpaid_leave",
    "fieldtype": "Float",
-   "label": "Không lương",
-   "read_only": 1,
-   "precision": "2",
    "in_list_view": 1,
-   "columns": 1
+   "label": "Không lương",
+   "precision": "2",
+   "read_only": 1
   },
   {
+   "columns": 1,
+   "description": "Vắng không lý do — không tính vào Tổng công.",
    "fieldname": "absent",
    "fieldtype": "Float",
-   "label": "Vắng",
-   "read_only": 1,
-   "precision": "2",
    "in_list_view": 1,
-   "columns": 1
+   "label": "Vắng",
+   "precision": "2",
+   "read_only": 1
   },
   {
+   "columns": 1,
+   "description": "Ngày nghỉ lễ hưởng lương — đếm riêng, KHÔNG cộng vào Tổng công.",
    "fieldname": "public_holiday",
    "fieldtype": "Float",
-   "label": "Nghỉ lễ",
-   "read_only": 1,
-   "precision": "2",
    "in_list_view": 1,
-   "columns": 1
+   "label": "Nghỉ lễ",
+   "precision": "2",
+   "read_only": 1
   },
   {
+   "columns": 1,
+   "description": "Số buổi ăn trưa trong kỳ (dùng cho phụ cấp ăn trưa).",
    "fieldname": "lunch_days",
    "fieldtype": "Int",
-   "label": "Ăn trưa",
-   "read_only": 1,
    "in_list_view": 1,
-   "columns": 1
+   "label": "Ăn trưa",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,

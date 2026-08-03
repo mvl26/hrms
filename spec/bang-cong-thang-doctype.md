@@ -64,6 +64,33 @@ printed form.
 - The 8 category columns are **fixed** (mirror the shipped Attendance-Code categories). Adding a new
   category later needs a schema field + a mapping entry — documented, not dynamic.
 
+#### Cột "Tổng công" (`total_paid_days`) — thêm 2026-08-03
+
+Bảng chỉ có cột công ĐI LÀM (`work_days`) nên nghỉ phép có lương không nằm trong bất kỳ cột công
+nào — người ký bảng nhìn vào tưởng công ty không trả ngày đó.
+
+Thay bằng `total_paid_days`, nhãn **"Tổng công"**, lấy đúng `totals["Tổng công"]` của
+`get_sheet_rows` — cùng con số mà báo cáo chấm công tháng hiển thị và cổng `sheet_gate` đối soát với
+`payment_days`:
+
+```text
+Tổng công = ngày đi làm + Phép + Việc riêng + Nghỉ bù + Tai nạn LĐ
+```
+
+Ốm / chăm con ốm / thai sản (**BHXH** chi trả), nghỉ không lương và vắng đứng ngoài, mỗi nhóm giữ
+cột riêng; nghỉ lễ đếm riêng. Bất biến được test khoá: `Tổng công + Ốm + Thai sản + Không lương +
+Vắng = số ngày có bản ghi chấm công`. Mọi cột tổng đều có `description` nói rõ **ai trả**.
+
+**`work_days` đã bỏ khỏi DocType** (quyết định 2026-08-03): bảng chỉ mang MỘT con số công, hai cột
+công cạnh nhau chỉ tạo chỗ để đọc nhầm. Cần tách phần đi làm thực tế thì xem mã công từng ngày,
+hoặc cột `Công` của báo cáo. Cột DB cũ **không bị drop** — dữ liệu còn nguyên, thêm lại field là
+thấy lại, nên bước này `git revert` được trọn vẹn.
+
+Bảng lập trước khi có cột này được điền bằng patch `v15_0.backfill_sheet_total_paid_days` (kể cả
+bảng ĐÃ CHỐT — kỳ đã khoá thì `populate_from_attendance` từ chối chạy, mà để trống thì bảng đã ký
+lại thiếu đúng con số quan trọng nhất). Thuần hiển thị: `sheet_gate` vốn tính lại số công trực tiếp
+từ `get_sheet_rows` chứ không đọc field này.
+
 ## Populate logic (the one moving part)
 
 `Bang Cong Thang.populate_from_attendance()` (`@frappe.whitelist`, **draft-only**):

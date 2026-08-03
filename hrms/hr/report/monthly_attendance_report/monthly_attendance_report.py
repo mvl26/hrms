@@ -13,6 +13,7 @@ Read-only: never writes, so it is safe against payroll and existing data.
 """
 
 from calendar import monthrange
+from datetime import date
 
 import frappe
 from frappe import _
@@ -21,7 +22,8 @@ from frappe.utils.nestedset import get_descendants_of
 
 from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
 
-from hrms.hr.attendance_legend import legend_html, legend_row
+from hrms.hr.attendance_legend import legend_html
+from hrms.hr.working_hours import avg_office_hours, office_hours_map
 
 Filters = frappe._dict
 
@@ -33,6 +35,9 @@ MARKER_HOLIDAY = "NL"  # ngày nghỉ lễ có lương — kept distinct so paid
 
 # Loại nhận phần không đi làm của một mã thuộc loại "Công" (mã V cũng thuộc loại này)
 CATEGORY_UNEXCUSED = "Vắng"
+
+# Thứ trong tuần theo lối viết của bảng chấm công VN. `date.weekday()`: 0 = thứ Hai … 6 = Chủ nhật.
+WEEKDAY_LABELS = ("T2", "T3", "T4", "T5", "T6", "T7", "CN")
 
 # Nghỉ lễ hưởng lương — suy từ Holiday List (không phải Attendance Code), đếm riêng một cột
 CATEGORY_HOLIDAY = "Nghỉ lễ"
@@ -62,8 +67,11 @@ REPORT_CATEGORIES = [
 # xử lý riêng thành "half" TRƯỚC khi tra bảng này, nên ở đây chỉ cần map theo category.
 CATEGORY_STATE = {
 	"Công": "work",
-	"Phép": "leave",
-	"Việc riêng": "leave",  # nghỉ hiếu hỉ có lương — mặc định gộp cùng phép (vàng)
+	# Phép năm dùng chung state (và màu tím) với 1/2P: nghỉ phép là nghỉ phép, cả ngày hay nửa ngày
+	# thì nhìn phải giống nhau. `1/2P` vốn đã rơi vào "half" qua nhánh work_fraction ở `day_state`,
+	# nên map này chỉ đổi màu của đúng mã `P` — không mã nào khác mang category "Phép".
+	"Phép": "half",
+	"Việc riêng": "leave",  # nghỉ hiếu hỉ có lương — giữ vàng riêng, KHÔNG theo màu phép năm
 	"Ốm": "sick",
 	"Thai sản": "sick",
 	"Tai nạn LĐ": "sick",
@@ -85,7 +93,7 @@ STATE_STYLE = {
 	},
 	# nhãn hằng số ở module level: bọc _() sẽ đóng băng bản dịch lúc import; dịch tại nơi render
 	"half": {  # nosemgrep
-		"label": "Làm nửa ngày",
+		"label": "Nghỉ phép / Làm nửa ngày",
 		"bg": "#e8dcf7",
 		"fg": "#6b3fb0",
 		"bg_dark": "#312145",
@@ -93,7 +101,7 @@ STATE_STYLE = {
 	},
 	# nhãn hằng số ở module level: bọc _() sẽ đóng băng bản dịch lúc import; dịch tại nơi render
 	"leave": {  # nosemgrep
-		"label": "Nghỉ phép / việc riêng",
+		"label": "Việc riêng",
 		"bg": "#fbedc4",
 		"fg": "#8a6410",
 		"bg_dark": "#3d3416",
@@ -219,12 +227,10 @@ def execute(filters: Filters | None = None) -> tuple:
 	code_map = get_code_map()
 	rows = get_sheet_rows(filters)
 
-	columns = get_columns(days)
+	columns = get_columns(days, year, month)
 	data = _rows_to_report_data(rows, days, code_map)
-	# Chú thích ký hiệu ra hai đường: khối chip màu ở `message` (đẹp, chỉ có trên màn hình) và ĐÚNG
-	# MỘT dòng cuối bảng (thuần văn bản) để nó theo được vào file Excel — `message` không vào file,
-	# mà dòng chỉ thêm lúc xuất thì bị `visible_idx` lọc mất.
-	data.append(legend_row())
+	# Chú thích chỉ đi đường `message`: khối chip màu nằm TRÊN bảng. Bản Excel dựng khối chú thích
+	# lưới riêng (`hrms/hr/attendance_xlsx.py`), nên không cần nhét thêm dòng văn bản vào cuối bảng.
 	return columns, data, legend_html()
 
 
@@ -356,7 +362,12 @@ def get_holidays(employees: list, start, end) -> dict:
 	return result
 
 
-def get_columns(days: int) -> list:
+def weekday_label(year: int, month: int, day: int) -> str:
+	"""Thứ của một ngày trong tháng — `T2`…`T7`, `CN`. Suy từ lịch, không đọc dữ liệu nào."""
+	return WEEKDAY_LABELS[date(cint(year), cint(month), cint(day)).weekday()]
+
+
+def get_columns(days: int, year: int, month: int) -> list:
 	columns = [
 		{
 			"fieldname": "employee",
@@ -368,7 +379,19 @@ def get_columns(days: int) -> list:
 		{"fieldname": "employee_name", "label": _("Nhân viên"), "fieldtype": "Data", "width": 180},
 	]
 	for day in range(1, days + 1):
-		columns.append({"fieldname": f"day_{day}", "label": str(day), "fieldtype": "Data", "width": 45})
+		# Nhãn gộp ngày + thứ trên MỘT dòng: datatable đặt `white-space: nowrap` + `overflow: hidden`
+		# cho ô tiêu đề nên xuống dòng bằng <br> sẽ bị cắt mất nửa dưới. Bản Excel tách được nên xếp
+		# thành hai dòng tiêu đề riêng (xem `attendance_xlsx.write_header`).
+		# 66px chứ không phải 45px như hồi chỉ có số ngày: ô tiêu đề của datatable ăn mất 24px đệm,
+		# hẹp hơn thì nhãn dài nhất ("30 T5") bị cắt thành "30 T…".
+		columns.append(
+			{
+				"fieldname": f"day_{day}",
+				"label": f"{day} {weekday_label(year, month, day)}",
+				"fieldtype": "Data",
+				"width": 66,
+			}
+		)
 	# Cột chủ đạo: Tổng công = số ngày được trả lương (in đậm ở formatter JS + bản in)
 	columns.append(
 		{"fieldname": "tong_cong", "label": _(TOTAL_PAID), "fieldtype": "Float", "width": 90, "precision": 2}
@@ -379,6 +402,16 @@ def get_columns(days: int) -> list:
 		)
 	columns.append(
 		{"fieldname": "lunch_days", "label": _("Số buổi ăn trưa"), "fieldtype": "Int", "width": 90}
+	)
+	# Giờ CÓ MẶT trung bình, không phải giờ quy công — xem `office_hours_map`
+	columns.append(
+		{
+			"fieldname": "avg_office_hours",
+			"label": _("TB giờ/ngày"),
+			"fieldtype": "Float",
+			"width": 90,
+			"precision": 2,
+		}
 	)
 	return columns
 
@@ -429,7 +462,10 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 
 	from hrms.vn_payroll.lunch import lunch_days_map  # nguồn duy nhất; 1 truy vấn gộp cho cả bảng
 
-	lunch_by_emp = lunch_days_map([e.name for e in employees], start, end)
+	employee_names = [e.name for e in employees]
+	lunch_by_emp = lunch_days_map(employee_names, start, end)
+	# Giờ CÓ MẶT tại văn phòng — nguồn duy nhất dùng chung với báo cáo Giờ làm việc nhân viên
+	office_by_emp = office_hours_map(employee_names, start, end)
 
 	rows = []
 	for e in employees:
@@ -488,6 +524,7 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 				"days": day_syms,
 				"totals": totals,
 				"lunch_days": lunch_by_emp.get(e.name, 0),  # số buổi ăn trưa (nguồn duy nhất)
+				"avg_office_hours": avg_office_hours(office_by_emp.get(e.name)),
 			}
 		)
 	return rows
@@ -505,6 +542,7 @@ def _rows_to_report_data(rows: list[dict], days: int, code_map: dict) -> list:
 			"employee": r["employee"],
 			"employee_name": r["employee_name"],
 			"lunch_days": cint(r.get("lunch_days")),
+			"avg_office_hours": flt(r.get("avg_office_hours")),
 			"tong_cong": flt(totals.get(TOTAL_PAID)),
 			**{f"cat_{i}": flt(totals.get(cat)) for i, (cat, _label) in enumerate(REPORT_CATEGORIES)},
 		}

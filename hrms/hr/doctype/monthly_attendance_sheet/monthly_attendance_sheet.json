@@ -23,33 +23,33 @@
  ],
  "fields": [
   {
+   "default": "BCT-.YYYY.-.#####",
    "fieldname": "naming_series",
    "fieldtype": "Select",
    "label": "Series",
    "options": "BCT-.YYYY.-.#####",
-   "default": "BCT-.YYYY.-.#####",
    "reqd": 1
   },
   {
    "fieldname": "company",
    "fieldtype": "Link",
-   "options": "Company",
+   "in_list_view": 1,
    "label": "Công ty",
-   "reqd": 1,
-   "in_list_view": 1
+   "options": "Company",
+   "reqd": 1
   },
   {
    "fieldname": "department",
    "fieldtype": "Link",
-   "options": "Department",
+   "in_list_view": 1,
    "label": "Phòng ban / Đơn vị",
-   "in_list_view": 1
+   "options": "Department"
   },
   {
+   "default": "1",
    "fieldname": "include_company_descendants",
    "fieldtype": "Check",
-   "label": "Gồm công ty con",
-   "default": "1"
+   "label": "Gồm công ty con"
   },
   {
    "fieldname": "col_break_period",
@@ -58,17 +58,17 @@
   {
    "fieldname": "month",
    "fieldtype": "Select",
+   "in_list_view": 1,
    "label": "Tháng",
    "options": "\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12",
-   "reqd": 1,
-   "in_list_view": 1
+   "reqd": 1
   },
   {
    "fieldname": "year",
    "fieldtype": "Int",
+   "in_list_view": 1,
    "label": "Năm",
-   "reqd": 1,
-   "in_list_view": 1
+   "reqd": 1
   },
   {
    "fieldname": "from_date",
@@ -83,11 +83,11 @@
    "read_only": 1
   },
   {
+   "default": "__user",
    "fieldname": "prepared_by",
    "fieldtype": "Link",
-   "options": "User",
    "label": "Người chấm công",
-   "default": "__user"
+   "options": "User"
   },
   {
    "fieldname": "section_break_emp",
@@ -95,10 +95,11 @@
    "label": "Chi tiết chấm công"
   },
   {
+   "description": "<b>Tổng công</b> = số ngày công ty trả lương = Công đi làm + Phép + Việc riêng + Nghỉ bù + Tai nạn LĐ. Ốm / chăm con ốm / thai sản do <b>BHXH</b> chi trả, nghỉ không lương và vắng không được trả — cả ba nhóm này đứng ngoài Tổng công và có cột riêng. Nghỉ lễ đếm riêng.",
    "fieldname": "employees",
    "fieldtype": "Table",
-   "options": "Monthly Attendance Sheet Detail",
-   "label": "Nhân viên"
+   "label": "Nhân viên",
+   "options": "Monthly Attendance Sheet Detail"
   },
   {
    "fieldname": "section_break_more",
@@ -112,11 +113,11 @@
   {
    "fieldname": "amended_from",
    "fieldtype": "Link",
-   "options": "Monthly Attendance Sheet",
    "label": "Amended From",
-   "read_only": 1,
    "no_copy": 1,
-   "print_hide": 1
+   "options": "Monthly Attendance Sheet",
+   "print_hide": 1,
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
@@ -130,51 +131,51 @@
  "owner": "Administrator",
  "permissions": [
   {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
    "role": "System Manager",
-   "create": 1,
-   "read": 1,
-   "write": 1,
+   "share": 1,
    "submit": 1,
-   "cancel": 1,
-   "amend": 1,
-   "delete": 1,
-   "print": 1,
-   "report": 1,
-   "email": 1,
-   "share": 1
+   "write": 1
   },
   {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
    "role": "HR Manager",
-   "create": 1,
-   "read": 1,
-   "write": 1,
+   "share": 1,
    "submit": 1,
-   "cancel": 1,
-   "amend": 1,
-   "delete": 1,
-   "print": 1,
-   "report": 1,
-   "email": 1,
-   "share": 1
+   "write": 1
   },
   {
-   "role": "HR User",
-   "create": 1,
-   "read": 1,
-   "write": 1,
-   "submit": 1,
-   "cancel": 1,
    "amend": 1,
+   "cancel": 1,
+   "create": 1,
    "delete": 1,
-   "print": 1,
-   "report": 1,
    "email": 1,
-   "share": 1
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "HR User",
+   "share": 1,
+   "submit": 1,
+   "write": 1
   }
  ],
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
- "track_changes": 1,
- "title_field": "department"
+ "title_field": "department",
+ "track_changes": 1
 }

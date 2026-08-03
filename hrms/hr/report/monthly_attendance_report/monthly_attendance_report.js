@@ -163,6 +163,11 @@ frappe.query_reports["Monthly Attendance Report"] = {
 			});
 		});
 
+		// Export mặc định của Frappe dựng file qua `make_xlsx()` — đường đó không có chỗ móc để tô
+		// màu nên file ra trắng trơn, mất sạch 10 màu trạng thái của bảng. Ghi đè ở mức INSTANCE
+		// (không vá prototype) để chỉ báo cáo này đổi đường xuất, mọi report khác giữ nguyên.
+		report.export_report = () => vn_export_dialog(report);
+
 		// bảng màu do server định nghĩa (một nguồn duy nhất) — formatter chỉ tra, không tự phân loại
 		frappe.call({
 			method: "hrms.hr.report.monthly_attendance_report.monthly_attendance_report.get_color_map",
@@ -206,6 +211,55 @@ frappe.query_reports["Monthly Attendance Report"] = {
 		return `<div style="background:${bg};color:${fg};font-weight:600;margin:-5px -8px;padding:5px 8px;text-align:center;">${text}</div>`;
 	},
 };
+
+// Hộp thoại xuất báo cáo. Excel đi đường riêng của Miyano (có màu + khối chú thích dạng lưới);
+// CSV giữ nguyên đường `export_query` của Frappe để không mất năng lực nào.
+function vn_export_dialog(report) {
+	const d = new frappe.ui.Dialog({
+		title: __("Xuất báo cáo"),
+		fields: [
+			{
+				fieldname: "file_format",
+				label: __("Định dạng"),
+				fieldtype: "Select",
+				options: [
+					{ value: "Excel", label: __("Excel — có màu, kèm chú thích") },
+					{ value: "CSV", label: __("CSV — dữ liệu thô") },
+				],
+				default: "Excel",
+				reqd: 1,
+			},
+		],
+		primary_action_label: __("Tải về"),
+		primary_action: ({ file_format }) => {
+			d.hide();
+			report.make_access_log("Export", file_format);
+
+			const filters = report.get_filter_values(true);
+			const visible_idx = report.datatable?.bodyRenderer.visibleRowIndices || [];
+			// dòng chú thích cuối bảng nằm ngoài vùng datatable đếm — bù lại như Frappe vẫn làm
+			if (visible_idx.length + 1 === report.data?.length)
+				visible_idx.push(visible_idx.length);
+
+			if (file_format === "Excel") {
+				open_url_post(frappe.request.url, {
+					cmd: "hrms.hr.attendance_xlsx.download",
+					filters,
+					visible_idx,
+				});
+			} else {
+				open_url_post(frappe.request.url, {
+					cmd: "frappe.desk.query_report.export_query",
+					report_name: report.report_name,
+					file_format_type: "CSV",
+					filters,
+					visible_idx,
+				});
+			}
+		},
+	});
+	d.show();
+}
 
 function is_dark_theme() {
 	const t = document.documentElement.getAttribute("data-theme");
