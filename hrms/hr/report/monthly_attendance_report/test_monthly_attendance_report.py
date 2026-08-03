@@ -425,45 +425,62 @@ class TestAttendanceColorState(PerTestRollback, FrappeTestCase):
 		self.assertEqual(attendance_state_styles(), STATE_STYLE)
 
 
+class TestWeekdayHeaders(PerTestRollback, FrappeTestCase):
+	"""Nhãn cột ngày mang cả thứ trong tuần — nhìn bảng là biết ngày nào cuối tuần."""
+
+	def labels(self, month, year):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
+
+		columns, _data, _msg = execute({"month": month, "year": year})
+		return {c["fieldname"]: c["label"] for c in columns}
+
+	def test_day_labels_carry_the_weekday(self):
+		# 2026-08-01 là thứ Bảy → 1 T7, 2 CN, 3 T2
+		labels = self.labels(8, 2026)
+		self.assertEqual(labels["day_1"], "1 T7")
+		self.assertEqual(labels["day_2"], "2 CN")
+		self.assertEqual(labels["day_3"], "3 T2")
+
+	def test_weekday_follows_the_month_being_shown(self):
+		"""Thứ phải suy từ đúng tháng đang xem, không phải hằng số chép cứng."""
+		self.assertEqual(self.labels(9, 2026)["day_1"], "1 T3")  # 2026-09-01 là thứ Ba
+
+	def test_every_day_of_the_month_is_labelled(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import WEEKDAY_LABELS
+
+		labels = self.labels(2, 2024)  # tháng nhuận: 29 ngày
+		self.assertIn("day_29", labels)
+		self.assertNotIn("day_30", labels)
+		for day in range(1, 30):
+			label = labels[f"day_{day}"]
+			self.assertTrue(label.startswith(f"{day} "), f"nhãn ngày {day} phải mở đầu bằng số ngày")
+			self.assertIn(label.split(" ")[1], WEEKDAY_LABELS)
+
+
 class TestLegend(PerTestRollback, FrappeTestCase):
 	"""Chú thích ký hiệu: MỘT DÒNG, dùng chung, nằm trên bảng — không làm báo cáo dài ra."""
 
-	def test_the_grid_carries_exactly_one_legend_row_at_the_end(self):
-		"""Một dòng thôi, và ở cuối — nhiều hơn là báo cáo dài ra, không có thì file Excel mất nó."""
-		from hrms.hr.attendance_legend import is_legend_row
+	def test_the_grid_carries_employee_rows_only(self):
+		"""Bỏ 2026-08-03: dòng chú thích văn bản dài ở cuối bảng chỉ làm bẩn lưới.
+
+		Chú thích trên màn hình đi đường `message` (khối chip màu), còn file Excel dựng khối lưới
+		riêng — không nơi nào cần dòng đó nữa."""
 		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
 
 		_columns, data, message = execute({"month": 6, "year": 2099})
 		self.assertTrue(message, "vẫn phải có khối chú thích màu trên bảng")
-		self.assertEqual(sum(1 for r in data if is_legend_row(r)), 1)
-		self.assertTrue(is_legend_row(data[-1]), "dòng chú thích phải ở cuối")
-		self.assertTrue(
-			all(r.get("employee") for r in data[:-1]),
-			"các dòng còn lại phải đều là nhân viên",
+		self.assertTrue(all(r.get("employee") for r in data), "mọi dòng phải là dòng nhân viên")
+		self.assertFalse(
+			[r for r in data if any("=" in str(v) for v in r.values() if isinstance(v, str))],
+			"không còn ô nào dồn cả danh sách mã kiểu 'X=Đi làm đủ công; ...'",
 		)
 
-	def test_the_legend_row_survives_the_excel_export_path(self):
-		"""Đường xuất file lọc dòng theo `visible_idx`, nên phải kiểm bằng chính hàm dựng file."""
-		from frappe.desk.query_report import build_xlsx_data, format_fields, run
-
-		filters = {"month": 7, "year": 2026, "company": frappe.db.get_value("Company", {}, "name")}
-		data = frappe._dict(run("Monthly Attendance Report", filters, ignore_prepared_report=True))
-		data.filters = filters
-		format_fields(data)
-		xlsx_data, _widths = build_xlsx_data(data, list(range(len(data.result))), include_indentation=0)
-
-		self.assertTrue(
-			any("Chú thích" in str(cell) for row in xlsx_data for cell in row),
-			"file Excel xuất ra phải có dòng chú thích ký hiệu",
-		)
-
-	def test_every_attendance_code_is_explained_in_one_line(self):
-		from hrms.hr.attendance_legend import legend_pairs, legend_text
+	def test_every_attendance_code_is_explained(self):
+		from hrms.hr.attendance_legend import legend_pairs
 
 		codes = set(frappe.get_all("Attendance Code", pluck="name"))
 		explained = {c for c, _n in legend_pairs()}
 		self.assertTrue(codes <= explained, f"mã chưa có chú thích: {codes - explained}")
-		self.assertNotIn("\n", legend_text(), "chú thích phải gọn trong một dòng")
 
 	def test_calendar_markers_are_explained_too(self):
 		from hrms.hr.attendance_legend import legend_pairs

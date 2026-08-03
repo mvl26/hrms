@@ -1,5 +1,5 @@
 # Copyright (c) 2026, Miyano Việt Nam.
-"""Chú thích ký hiệu mã công — MỘT DÒNG, dùng chung cho mọi báo cáo chấm công.
+"""Chú thích ký hiệu mã công — nguồn dùng chung cho mọi báo cáo chấm công.
 
 Bản in Bảng Công Tháng vẫn luôn có chú thích ở cuối tờ. Đây là bản dùng chung cho báo cáo trên
 màn hình, để không phải chép lại danh sách mã ở từng nơi — thêm/bớt mã trong `Attendance Code`
@@ -9,14 +9,13 @@ Mỗi ký hiệu hiện dưới dạng chip **tô đúng màu mà ô đó mang t
 formatter của report và bản in), nên nhìn chú thích là tra được màu luôn — không phải đoán ô vàng
 nghĩa là gì.
 
-Hai đường ra, cho hai nơi khác nhau:
-
+- `legend_pairs()` → [(ký hiệu, nghĩa)] theo thứ tự hiển thị; file Excel dựng khối lưới từ đây.
 - `legend_html()` → `message` của query report: khối chip màu nằm TRÊN bảng, chỉ có trên màn hình.
-- `legend_row()` → ĐÚNG MỘT dòng cuối bảng, thuần văn bản, để chú thích có mặt trong file Excel.
 
-Phải có dòng đó vì `message` không đi vào file: `_export_query` dựng file từ `columns` + `result`.
-Và dòng đó phải nằm sẵn trong bảng chứ không thể chỉ thêm lúc xuất — `build_xlsx_data` lọc dòng
-theo `visible_idx` client gửi lên, dòng nào màn hình không có sẽ bị loại khỏi file.
+Từng có thêm `legend_row()`: ĐÚNG MỘT dòng cuối bảng, dồn cả danh sách mã vào một ô văn bản, chỉ
+để chú thích theo được vào file Excel (`message` không đi vào file). Bỏ 2026-08-03 — đường xuất
+Excel của Miyano (`hrms/hr/attendance_xlsx.py`) đã tự dựng khối chú thích dạng lưới có màu, nên
+dòng văn bản dài đó chỉ còn làm bẩn cuối bảng.
 """
 
 import frappe
@@ -50,11 +49,6 @@ def legend_pairs() -> list[tuple[str, str]]:
 		return (rank, is_half, c.name != "X", c.name)  # X là ký hiệu gốc của bảng công → đứng đầu
 
 	return [(c.name, c.code_name or c.name) for c in sorted(codes, key=key)] + CALENDAR_MARKERS
-
-
-def legend_text() -> str:
-	"""Một dòng thuần văn bản: `X=Đi làm đủ công; CT=Đi công tác; ...` (cho nơi không nhận HTML)."""
-	return "; ".join(f"{code}={name}" for code, name in legend_pairs())
 
 
 def legend_styles() -> str:
@@ -121,23 +115,4 @@ def legend_html() -> str:
 		f'<span class="vn-legend-title">{escape_html(_("Chú thích"))}</span>'
 		f"{''.join(items)}"
 		f"</div>"
-	)
-
-
-# Cột đặt dòng chú thích trong bảng: rộng nhất trong các cột văn bản, và là cột người đọc quét mắt
-# xuống đầu tiên. Không đặt vào cột `employee` (Link) để nó không bị render thành liên kết gãy.
-LEGEND_ROW_FIELD = "employee_name"
-
-
-def legend_row() -> dict:
-	"""ĐÚNG MỘT dòng chú thích, gắn cuối bảng để đi được vào file Excel xuất ra."""
-	return {LEGEND_ROW_FIELD: f"{_('Chú thích')}: {legend_text()}"}
-
-
-def is_legend_row(row: dict) -> bool:
-	"""Dòng chú thích, không phải dòng nhân viên — dùng để bỏ qua khi thống kê."""
-	return (
-		bool(row)
-		and not row.get("employee")
-		and str(row.get(LEGEND_ROW_FIELD, "")).startswith(f"{_('Chú thích')}:")
 	)

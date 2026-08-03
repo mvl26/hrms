@@ -13,6 +13,7 @@ Read-only: never writes, so it is safe against payroll and existing data.
 """
 
 from calendar import monthrange
+from datetime import date
 
 import frappe
 from frappe import _
@@ -21,7 +22,7 @@ from frappe.utils.nestedset import get_descendants_of
 
 from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
 
-from hrms.hr.attendance_legend import legend_html, legend_row
+from hrms.hr.attendance_legend import legend_html
 
 Filters = frappe._dict
 
@@ -33,6 +34,9 @@ MARKER_HOLIDAY = "NL"  # ngày nghỉ lễ có lương — kept distinct so paid
 
 # Loại nhận phần không đi làm của một mã thuộc loại "Công" (mã V cũng thuộc loại này)
 CATEGORY_UNEXCUSED = "Vắng"
+
+# Thứ trong tuần theo lối viết của bảng chấm công VN. `date.weekday()`: 0 = thứ Hai … 6 = Chủ nhật.
+WEEKDAY_LABELS = ("T2", "T3", "T4", "T5", "T6", "T7", "CN")
 
 # Nghỉ lễ hưởng lương — suy từ Holiday List (không phải Attendance Code), đếm riêng một cột
 CATEGORY_HOLIDAY = "Nghỉ lễ"
@@ -219,12 +223,10 @@ def execute(filters: Filters | None = None) -> tuple:
 	code_map = get_code_map()
 	rows = get_sheet_rows(filters)
 
-	columns = get_columns(days)
+	columns = get_columns(days, year, month)
 	data = _rows_to_report_data(rows, days, code_map)
-	# Chú thích ký hiệu ra hai đường: khối chip màu ở `message` (đẹp, chỉ có trên màn hình) và ĐÚNG
-	# MỘT dòng cuối bảng (thuần văn bản) để nó theo được vào file Excel — `message` không vào file,
-	# mà dòng chỉ thêm lúc xuất thì bị `visible_idx` lọc mất.
-	data.append(legend_row())
+	# Chú thích chỉ đi đường `message`: khối chip màu nằm TRÊN bảng. Bản Excel dựng khối chú thích
+	# lưới riêng (`hrms/hr/attendance_xlsx.py`), nên không cần nhét thêm dòng văn bản vào cuối bảng.
 	return columns, data, legend_html()
 
 
@@ -356,7 +358,12 @@ def get_holidays(employees: list, start, end) -> dict:
 	return result
 
 
-def get_columns(days: int) -> list:
+def weekday_label(year: int, month: int, day: int) -> str:
+	"""Thứ của một ngày trong tháng — `T2`…`T7`, `CN`. Suy từ lịch, không đọc dữ liệu nào."""
+	return WEEKDAY_LABELS[date(cint(year), cint(month), cint(day)).weekday()]
+
+
+def get_columns(days: int, year: int, month: int) -> list:
 	columns = [
 		{
 			"fieldname": "employee",
@@ -368,7 +375,19 @@ def get_columns(days: int) -> list:
 		{"fieldname": "employee_name", "label": _("Nhân viên"), "fieldtype": "Data", "width": 180},
 	]
 	for day in range(1, days + 1):
-		columns.append({"fieldname": f"day_{day}", "label": str(day), "fieldtype": "Data", "width": 45})
+		# Nhãn gộp ngày + thứ trên MỘT dòng: datatable đặt `white-space: nowrap` + `overflow: hidden`
+		# cho ô tiêu đề nên xuống dòng bằng <br> sẽ bị cắt mất nửa dưới. Bản Excel tách được nên xếp
+		# thành hai dòng tiêu đề riêng (xem `attendance_xlsx.write_header`).
+		# 66px chứ không phải 45px như hồi chỉ có số ngày: ô tiêu đề của datatable ăn mất 24px đệm,
+		# hẹp hơn thì nhãn dài nhất ("30 T5") bị cắt thành "30 T…".
+		columns.append(
+			{
+				"fieldname": f"day_{day}",
+				"label": f"{day} {weekday_label(year, month, day)}",
+				"fieldtype": "Data",
+				"width": 66,
+			}
+		)
 	# Cột chủ đạo: Tổng công = số ngày được trả lương (in đậm ở formatter JS + bản in)
 	columns.append(
 		{"fieldname": "tong_cong", "label": _(TOTAL_PAID), "fieldtype": "Float", "width": 90, "precision": 2}

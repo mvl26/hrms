@@ -29,12 +29,13 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
-from hrms.hr.attendance_legend import is_legend_row, legend_pairs
+from hrms.hr.attendance_legend import legend_pairs
 from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
 	STATE_STYLE,
 	day_state,
 	execute,
 	get_code_map,
+	weekday_label,
 )
 
 # Chú thích tối đa 10 dòng; quá thì tràn sang cụm cột kế bên, không kéo dài xuống dưới.
@@ -67,6 +68,9 @@ HEADER_HEIGHT = 34  # đủ hai dòng chữ ở cỡ mặc định
 
 # Bề rộng tối thiểu của cột không phải cột ngày, để nhãn xuống dòng chứ không bị cắt cụt.
 MIN_TEXT_WIDTH = 11.0
+
+# Bề rộng cột ngày: vừa đủ mã dài nhất (`1/2P`), giữ cả tháng lọt một trang ngang khi in.
+DAY_WIDTH = 5.0
 
 
 def legend_layout(count: int, max_rows: int = MAX_LEGEND_ROWS) -> tuple[int, int]:
@@ -104,7 +108,7 @@ def report_title(filters: dict) -> str:
 def build_workbook(columns: list[dict], data: list[dict], filters: dict | None = None) -> Workbook:
 	"""Dựng workbook đã tô màu từ đúng `columns`/`data` mà `execute()` của report trả về."""
 	filters = frappe._dict(filters or {})
-	rows = [r for r in data if r and not is_legend_row(r)]  # khối lưới thay dòng văn bản dài
+	rows = [r for r in data if r and r.get("employee")]
 
 	wb = Workbook()
 	ws = wb.active
@@ -113,15 +117,15 @@ def build_workbook(columns: list[dict], data: list[dict], filters: dict | None =
 	last_col = len(columns)
 	write_titles(ws, filters, last_col)
 	header_row = 3
-	write_header(ws, columns, header_row)
-	end_row = write_rows(ws, columns, rows, header_row + 1)
+	first_data_row = write_header(ws, columns, header_row, filters)
+	end_row = write_rows(ws, columns, rows, first_data_row)
 	set_widths(ws, columns)
 
-	# đóng băng ở C4: cuộn ngang vẫn thấy mã NV + tên, cuộn dọc vẫn thấy dòng tiêu đề
-	ws.freeze_panes = f"{get_column_letter(FIRST_DAY_COLUMN)}{header_row + 1}"
+	# đóng băng dưới tiêu đề, bên phải cột tên: cuộn kiểu gì cũng còn biết đang xem ai, ngày nào
+	ws.freeze_panes = f"{get_column_letter(FIRST_DAY_COLUMN)}{first_data_row}"
 
 	write_legend(ws, columns, end_row + 2)
-	setup_print(ws, header_row, last_col)
+	setup_print(ws, header_row, first_data_row - 1, last_col)
 	return wb
 
 
@@ -138,13 +142,38 @@ def write_titles(ws, filters: dict, last_col: int) -> None:
 		ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=last_col)
 
 
-def write_header(ws, columns: list[dict], row: int) -> None:
+def write_header(ws, columns: list[dict], row: int, filters: dict) -> int:
+	"""Tiêu đề HAI dòng: dòng trên là ngày (cột ngày) hoặc nhãn cột, dòng dưới là thứ trong tuần.
+
+	Trên màn hình datatable chỉ có một dòng tiêu đề nên ngày và thứ phải dồn chung một nhãn
+	("1 T2"). Excel thì tách được, và tách ra mới đúng lối bảng chấm công VN: hàng số ngày, ngay
+	dưới là hàng thứ. Cột không phải cột ngày gộp dọc qua cả hai dòng.
+
+	Trả về dòng dữ liệu đầu tiên."""
 	fill = PatternFill("solid", start_color="FF" + HEADER_BG)
 	font = Font(bold=True, color="FF" + HEADER_FG)
+	weekday_row = row + 1
+	year, month = cint(filters.get("year")), cint(filters.get("month"))
+
 	for i, col in enumerate(columns, start=1):
-		cell = ws.cell(row, i, col.get("label") or col.get("fieldname"))
-		cell.fill, cell.font, cell.alignment, cell.border = fill, font, HEADER_ALIGN, BORDER
+		fieldname = col.get("fieldname") or ""
+		day = day_number(fieldname)
+		top = ws.cell(row, i, day if day else (col.get("label") or fieldname))
+		bottom = ws.cell(weekday_row, i, weekday_label(year, month, day) if day else None)
+
+		for cell in (top, bottom):
+			cell.fill, cell.font, cell.alignment, cell.border = fill, font, HEADER_ALIGN, BORDER
+		if not day:  # nhãn cột thường: gộp dọc để chữ nằm giữa hai dòng tiêu đề
+			ws.merge_cells(start_row=row, start_column=i, end_row=weekday_row, end_column=i)
+
 	ws.row_dimensions[row].height = HEADER_HEIGHT
+	ws.row_dimensions[weekday_row].height = 18
+	return weekday_row + 1
+
+
+def day_number(fieldname: str) -> int | None:
+	"""Số ngày trong tháng của một cột `day_<N>`; None nếu không phải cột ngày."""
+	return cint(fieldname[4:]) if fieldname.startswith("day_") else None
 
 
 def write_rows(ws, columns: list[dict], rows: list[dict], start_row: int) -> int:
@@ -185,11 +214,15 @@ def cell_value(row: dict, col: dict):
 
 
 def set_widths(ws, columns: list[dict]) -> None:
-	"""Cột ngày giữ nguyên bề rộng hẹp của lưới; cột còn lại có sàn để nhãn xuống dòng được."""
+	"""Cột ngày hẹp cố định; cột còn lại theo lưới, có sàn để nhãn xuống dòng được.
+
+	Không suy bề rộng cột ngày từ `width` của report: trên màn hình cột đó phải nới ra cho vừa
+	nhãn gộp "1 T2", còn ở đây thứ đã nằm ở dòng tiêu đề riêng nên ô chỉ cần chứa mã công."""
 	for i, col in enumerate(columns, start=1):
-		width = excel_width(col.get("width"))
-		if not col.get("fieldname", "").startswith("day_"):
-			width = max(width, MIN_TEXT_WIDTH)
+		if day_number(col.get("fieldname") or ""):
+			width = DAY_WIDTH
+		else:
+			width = max(excel_width(col.get("width")), MIN_TEXT_WIDTH)
 		ws.column_dimensions[get_column_letter(i)].width = width
 
 
@@ -233,13 +266,13 @@ def write_legend(ws, columns: list[dict], top: int) -> None:
 		ws.merge_cells(start_row=row, start_column=col + 1, end_row=row, end_column=col + span)
 
 
-def setup_print(ws, header_row: int, last_col: int) -> None:
-	"""In ngang, co vừa một trang ngang, lặp dòng tiêu đề ở mọi trang."""
+def setup_print(ws, header_row: int, weekday_row: int, last_col: int) -> None:
+	"""In ngang, co vừa một trang ngang, lặp cả hai dòng tiêu đề ở mọi trang."""
 	ws.page_setup.orientation = "landscape"
 	ws.page_setup.fitToWidth = 1
 	ws.page_setup.fitToHeight = 0
 	ws.sheet_properties.pageSetUpPr.fitToPage = True
-	ws.print_title_rows = f"{header_row}:{header_row}"
+	ws.print_title_rows = f"{header_row}:{weekday_row}"
 	ws.print_area = f"A1:{get_column_letter(last_col)}{ws.max_row}"
 
 

@@ -44,11 +44,14 @@ Bố cục sheet:
 ```
 dòng 1   BẢNG CHẤM CÔNG THÁNG 8/2026          (gộp ô, đậm 14, giữa)
 dòng 2   <Công ty>                             (gộp ô, giữa; bỏ nếu không lọc công ty)
-dòng 3   Mã NV | Nhân viên | 1 | 2 | … | Tổng công | Phép | … | Số buổi ăn trưa
-dòng 4+  dữ liệu — ô ngày tô nền theo state, chữ đậm, căn giữa; Tổng công in đậm
+dòng 3   Mã NV | Nhân viên | 1  | 2  | … | Tổng công | Phép | … | Số buổi ăn trưa
+dòng 4          (gộp dọc)  | T4 | T5 | … |  (gộp dọc)
+dòng 5+  dữ liệu — ô ngày tô nền theo state, chữ đậm, căn giữa; Tổng công in đậm
 ```
 
-- `freeze_panes = "C4"` → cuộn ngang vẫn thấy mã NV + tên; cuộn dọc vẫn thấy tiêu đề.
+- Tiêu đề **hai dòng**: hàng số ngày, ngay dưới là hàng thứ (`T2`…`T7`, `CN`) — đúng lối bảng chấm
+  công VN. Cột không phải cột ngày gộp dọc qua cả hai dòng. Cả hai dòng lặp lại ở mọi trang in.
+- `freeze_panes = "C5"` → cuộn ngang vẫn thấy mã NV + tên; cuộn dọc vẫn thấy tiêu đề.
 - Độ rộng cột lấy từ `width` của `columns` quy đổi (px → ký tự); cột ngày giữ hẹp cho vừa `1/2P`,
   cột còn lại có sàn 11 ký tự.
 - Nhãn cột tổng hợp dài hơn ô ("Tai nạn lao động", "Số buổi ăn trưa") thì **xuống dòng trong ô**
@@ -86,9 +89,28 @@ n_rows   = ceil(len(pairs) / n_groups)    # → 8 dòng
   (cột ngày chỉ ~4 ký tự; gộp là cách duy nhất để vẫn là "một ô" mà đọc được).
 - Bề rộng cụm tự co theo số cột còn lại của bảng, tối thiểu 4 cột — tháng 28 ngày vẫn không tràn.
 
-Dòng chú thích văn bản cũ (`legend_row()`) bị **lọc khỏi dữ liệu** bằng `is_legend_row()` trước khi
-ghi, nếu không sẽ có hai khối chú thích chồng nhau. `legend_row()` vẫn giữ nguyên vì đường xuất
-CSV và export mặc định của Frappe vẫn dùng nó.
+### 2b. Bỏ hẳn dòng chú thích văn bản dài (2026-08-03)
+
+`legend_row()` từng gắn ĐÚNG MỘT dòng cuối bảng, dồn cả 19 ký hiệu vào một ô
+(`Chú thích: X=Đi làm đủ công; CT=…`), chỉ để chú thích theo được vào file Excel — `message` không
+đi vào file. Khối lưới ở trên đã thay vai trò đó, nên dòng văn bản dài chỉ còn làm bẩn cuối lưới.
+
+Gỡ `legend_row()`, `is_legend_row()`, `legend_text()`, `LEGEND_ROW_FIELD` khỏi
+`hrms/hr/attendance_legend.py` và bỏ `data.append(legend_row())` trong `execute()`. Hệ quả đã
+lường: đường CSV và export mặc định của Frappe **không còn chú thích** — đúng ý, ai cần chú thích
+thì xuất Excel.
+
+### 2c. Thứ trong tuần
+
+`weekday_label(year, month, day)` trong `monthly_attendance_report.py` (suy từ `date.weekday()`,
+không đọc dữ liệu nào) là nguồn duy nhất cho cả hai nơi:
+
+- **Trên màn hình** — nhãn cột gộp một dòng: `1 T4`, `2 T5`, … Không xuống dòng bằng `<br>` được:
+  datatable đặt `white-space: nowrap` + `overflow: hidden` + chiều cao cố định cho ô tiêu đề nên
+  nửa dưới bị cắt. Cột ngày nới 45px → **66px** (ô tiêu đề ăn 24px đệm; hẹp hơn thì `30 T5` bị
+  cắt thành `30 T…`).
+- **Trong Excel** — tách thành hai dòng tiêu đề như mô tả ở §1; bề rộng cột ngày là hằng số riêng
+  (`DAY_WIDTH = 5.0`), không suy từ `width` của report, vì ở đây ô chỉ cần chứa mã công.
 
 ### 3. Nối vào nút Export — `monthly_attendance_report.js`
 
@@ -128,4 +150,8 @@ nhớ rồi soi ô:
 4. Khối chú thích: `Chú thích` đúng một ô; **số dòng ≤ 10**; mỗi ký hiệu một ô, nghĩa ngang hàng
    bên phải; đủ toàn bộ `legend_pairs()`; ô ký hiệu tô đúng màu state của nó.
 5. Chú thích chia đúng số cụm khi số mã > 10 (giả lập danh sách dài).
-6. `freeze_panes` = `C4`, có dòng tiêu đề tháng.
+6. `freeze_panes` = `C5`, có dòng tiêu đề tháng.
+7. Thứ trong tuần: nhãn cột trên màn hình là `1 T7` / `2 CN` cho tháng 8/2026, và đổi theo tháng
+   đang xem (9/2026 → `1 T3`); trong Excel hàng thứ nằm ngay dưới hàng số ngày, cột thường gộp dọc
+   qua cả hai dòng.
+8. Không ô nào trong file còn chuỗi dạng `X=…` (dòng chú thích văn bản dài đã bỏ hẳn).

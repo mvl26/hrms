@@ -66,6 +66,10 @@ class TestAttendanceXlsx(PerTestRollback, FrappeTestCase):
 					return cell.column
 		raise AssertionError(f"không thấy cột {header}")
 
+	def day_col(self, ws, day):
+		"""Cột của ngày `day` — dòng tiêu đề trên mang SỐ ngày, dòng dưới mang thứ."""
+		return self.col_of(ws, 1) - 1 + day
+
 	# ── màu ô mã công ───────────────────────────────────────────────────────────────────────
 
 	def test_day_cells_carry_state_colours(self):
@@ -75,19 +79,17 @@ class TestAttendanceXlsx(PerTestRollback, FrappeTestCase):
 
 		ws = self.sheet()
 		r = self.find_row(ws, self.emp)
-		day_col = self.col_of(ws, "1") - 1  # cột ngày N = day_col + N
 
-		self.assertEqual(rgb(ws.cell(r, day_col + 5)), STATE_STYLE["work"]["bg"].lstrip("#"))
-		self.assertEqual(rgb(ws.cell(r, day_col + 6)), STATE_STYLE["leave"]["bg"].lstrip("#"))
-		self.assertEqual(rgb(ws.cell(r, day_col + 7)), STATE_STYLE["absent"]["bg"].lstrip("#"))
-		self.assertEqual(ws.cell(r, day_col + 5).value, "X")
+		self.assertEqual(rgb(ws.cell(r, self.day_col(ws, 5))), STATE_STYLE["work"]["bg"].lstrip("#"))
+		self.assertEqual(rgb(ws.cell(r, self.day_col(ws, 6))), STATE_STYLE["leave"]["bg"].lstrip("#"))
+		self.assertEqual(rgb(ws.cell(r, self.day_col(ws, 7))), STATE_STYLE["absent"]["bg"].lstrip("#"))
+		self.assertEqual(ws.cell(r, self.day_col(ws, 5)).value, "X")
 
 	def test_half_day_cell_uses_half_colour(self):
 		self.mk(11, custom_morning_code="X", custom_afternoon_code="P")
 
 		ws = self.sheet()
-		r = self.find_row(ws, self.emp)
-		cell = ws.cell(r, self.col_of(ws, "1") - 1 + 11)
+		cell = ws.cell(self.find_row(ws, self.emp), self.day_col(ws, 11))
 		self.assertEqual(cell.value, "X/P")
 		self.assertEqual(rgb(cell), STATE_STYLE["half"]["bg"].lstrip("#"))
 
@@ -105,13 +107,37 @@ class TestAttendanceXlsx(PerTestRollback, FrappeTestCase):
 
 	def test_header_is_frozen_and_titled(self):
 		ws = self.sheet()
-		self.assertEqual(ws.freeze_panes, "C4")
+		self.assertEqual(ws.freeze_panes, "C5")  # dưới HAI dòng tiêu đề (ngày + thứ)
 		self.assertIn(f"{self.month}/{self.year}", str(ws.cell(1, 1).value))
+
+	# ── thứ trong tuần ──────────────────────────────────────────────────────────────────────
+
+	def test_weekday_row_sits_under_the_day_numbers(self):
+		"""Excel tách được nên xếp đúng lối bảng chấm công VN: hàng số ngày, ngay dưới là hàng thứ."""
+		filters = {"month": 3, "year": 2026}  # 2026-03-01 là Chủ nhật
+		columns, data, _msg = execute(filters)
+		ws = build_workbook(columns, data, filters).active
+
+		first_day = self.col_of(ws, 1)
+		day_row = 3  # dòng tiêu đề trên; hàng thứ nằm ngay dưới
+		self.assertEqual(ws.cell(day_row, first_day).value, 1)
+		self.assertEqual(ws.cell(day_row + 1, first_day).value, "CN")
+		self.assertEqual(ws.cell(day_row + 1, first_day + 1).value, "T2")
+		self.assertEqual(ws.cell(day_row + 1, first_day + 6).value, "T7")  # ngày 7
+		self.assertEqual(ws.cell(day_row + 1, first_day + 7).value, "CN")  # ngày 8, tròn một tuần
+
+	def test_plain_columns_span_both_header_rows(self):
+		"""Cột không phải cột ngày gộp dọc, không để nhãn lửng lơ trên hàng thứ."""
+		ws = self.sheet()
+		merged = {str(rng) for rng in ws.merged_cells.ranges}
+		self.assertIn("A3:A4", merged, "cột Mã NV phải gộp qua cả hai dòng tiêu đề")
+		self.assertIn("B3:B4", merged, "cột Nhân viên phải gộp qua cả hai dòng tiêu đề")
+		self.assertIsNone(ws.cell(4, self.col_of(ws, "Tổng công")).value)
 
 	# ── khối chú thích ──────────────────────────────────────────────────────────────────────
 
-	def test_long_text_legend_row_is_dropped(self):
-		"""Dòng chú thích văn bản dài của báo cáo không được lọt vào file — đã có khối lưới."""
+	def test_no_long_text_legend_anywhere(self):
+		"""Không ô nào được dồn cả danh sách mã kiểu `X=Đi làm đủ công; ...` — đã có khối lưới."""
 		ws = self.sheet()
 		for row in ws.iter_rows():
 			for cell in row:
