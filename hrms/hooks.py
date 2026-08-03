@@ -141,6 +141,15 @@ doc_events = {
 			"hrms.vn_payroll.salary_slip_hook.apply_mvl",
 		]
 	},
+	# Miyano: gắn mã công cho Loại nghỉ ngay tại form Loại nghỉ. Nguồn sự thật vẫn là
+	# Attendance Code.leave_type (một loại nghỉ ứng nhiều mã: P và 1/2P) — ô trên Leave Type chỉ là
+	# mặt bàn để nhập, lưu thì ghi ngược. Chỉ chạm master data, không đụng ngày công đã ghi.
+	"Leave Type": {
+		"on_update": [
+			"hrms.hr.leave_type_code.sync_code_to_leave_type",
+			"hrms.hr.leave_type_code.warn_if_unmapped",
+		],
+	},
 	# Miyano: gộp một quỹ phép năm — validate mã lý do; sau duyệt ghi mã lên Attendance (thuần hiển thị).
 	"Leave Application": {
 		"validate": "hrms.hr.doctype.leave_application.leave_single_pool.validate_pool_code",
@@ -307,6 +316,7 @@ fixtures = [
 					"Attendance-custom_afternoon_code",
 					"Attendance-custom_work_credit",
 					"Attendance-custom_lunch",
+					"Leave Type-custom_attendance_code",
 					"Leave Application-custom_attendance_code",
 					"Leave Application-custom_leave_reason",
 					"Leave Application-custom_half_day_period",
