@@ -64,6 +64,31 @@ printed form.
 - The 8 category columns are **fixed** (mirror the shipped Attendance-Code categories). Adding a new
   category later needs a schema field + a mapping entry — documented, not dynamic.
 
+#### Cột "Tổng công" (`total_paid_days`) — thêm 2026-08-03
+
+Bảng chỉ có cột công ĐI LÀM (`work_days`, nay đổi nhãn thành **"Công đi làm"**) nên nghỉ phép có
+lương không nằm trong bất kỳ cột công nào — người ký bảng nhìn vào tưởng công ty không trả ngày đó.
+
+Thêm `total_paid_days`, nhãn **"Tổng công"**, lấy đúng `totals["Tổng công"]` của `get_sheet_rows`
+— cùng con số mà báo cáo chấm công tháng hiển thị và cổng `sheet_gate` đối soát với `payment_days`:
+
+```
+Tổng công = Công đi làm + Phép + Việc riêng + Nghỉ bù + Tai nạn LĐ
+```
+
+Ốm / chăm con ốm / thai sản (**BHXH** chi trả), nghỉ không lương và vắng đứng ngoài, mỗi nhóm giữ
+cột riêng; nghỉ lễ đếm riêng. Cộng được từ các cột bên cạnh nên người ký tự kiểm được (test khoá bất
+biến này). Mọi cột tổng đều có `description` nói rõ **ai trả**.
+
+Lưới con giới hạn bề ngang nên hiện: Tổng công, Công đi làm, Phép, Ốm, Không lương, Vắng, Ăn trưa
+(Nghỉ lễ nhường chỗ — vẫn xem được khi mở dòng, và vẫn có trong bản in + báo cáo). Bản in có đủ 12
+cột tổng, Tổng công in đậm.
+
+Bảng lập trước khi có cột này được điền bằng patch `v15_0.backfill_sheet_total_paid_days` (kể cả
+bảng ĐÃ CHỐT — kỳ đã khoá thì `populate_from_attendance` từ chối chạy, mà để trống thì bảng đã ký
+lại thiếu đúng con số quan trọng nhất). Thuần hiển thị: `sheet_gate` vốn tính lại số công trực tiếp
+từ `get_sheet_rows` chứ không đọc field này.
+
 ## Populate logic (the one moving part)
 
 `Bang Cong Thang.populate_from_attendance()` (`@frappe.whitelist`, **draft-only**):

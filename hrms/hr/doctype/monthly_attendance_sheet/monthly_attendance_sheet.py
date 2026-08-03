@@ -149,8 +149,14 @@ class MonthlyAttendanceSheet(Document):
 		if self.department:
 			filters.department = self.department
 
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import TOTAL_PAID
+
+		# "Công đi làm" và "Tổng công" là HAI con số khác nhau và bảng phải hiện cả hai: cột đi làm
+		# không cộng ngày nghỉ có lương nên đứng một mình nó làm người đọc tưởng công ty không trả
+		# ngày phép. Tổng công lấy đúng cột của báo cáo → một kỳ chỉ có một con số công.
 		category_field = {
 			"Công": "work_days",
+			TOTAL_PAID: "total_paid_days",
 			"Phép": "annual_leave",
 			"Việc riêng": "personal_leave",
 			"Ốm": "sick_leave",

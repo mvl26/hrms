@@ -76,6 +76,89 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		self.assertEqual(row.work_days, 1.5)
 		self.assertEqual(row.annual_leave, 1.5)
 
+	def test_total_paid_days_counts_paid_leave_like_the_report(self):
+		"""Cột "Tổng công" của bảng = SỐ NGÀY CÔNG TY TRẢ LƯƠNG, y hệt báo cáo chấm công tháng.
+
+		Cột "Công đi làm" chỉ đếm phần ĐI LÀM nên nghỉ phép có lương không nằm trong đó — nhìn một
+		mình nó thì tưởng công ty không trả ngày phép. Hai cột phải tách bạch và Tổng công = công đi
+		làm + mọi nghỉ CÓ LƯƠNG do công ty trả."""
+		emp = frappe.db.get_value("Employee", {"company": self.company, "status": "Active"}, "name")
+		if not emp:
+			self.skipTest("no employee in company")
+		Y, M = 2096, 11
+		for day, code in ((2, "X"), (3, "P"), (4, "KH"), (5, "NB"), (6, "T")):
+			self._seed_attendance(emp, Y, M, day, custom_attendance_code=code)
+		for day, code in ((9, "Ô"), (10, "TS"), (11, "K"), (12, "V")):  # BHXH trả / không ai trả
+			self._seed_attendance(emp, Y, M, day, custom_attendance_code=code)
+
+		sheet = self._sheet(month=str(M), year=Y)
+		sheet.insert()
+		sheet.populate_from_attendance()
+
+		row = next((r for r in sheet.employees if r.employee == emp), None)
+		self.assertIsNotNone(row, "seeded employee missing from the sheet")
+		self.assertEqual(row.work_days, 1.0, "công đi làm: chỉ mỗi ngày X")
+		self.assertEqual(row.total_paid_days, 5.0, "X + P + KH + NB + T đều do công ty trả")
+		# nhóm không tính vào Tổng công vẫn phải hiện rõ ở cột riêng của nó
+		self.assertEqual(row.sick_leave, 1.0)
+		self.assertEqual(row.maternity_leave, 1.0)
+		self.assertEqual(row.unpaid_leave, 1.0)
+		self.assertEqual(row.absent, 1.0)
+
+	def test_total_paid_days_matches_the_report_column(self):
+		"""Cùng một kỳ, Tổng công của bảng phải bằng đúng cột Tổng công của báo cáo — không được
+		có hai con số công khác nhau cho cùng một nhân viên."""
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute as bcct
+
+		emp = frappe.db.get_value("Employee", {"company": self.company, "status": "Active"}, "name")
+		if not emp:
+			self.skipTest("no employee in company")
+		Y, M = 2096, 12
+		for day, code in ((2, "X"), (3, "1/2P"), (4, "P"), (5, "Ô")):
+			self._seed_attendance(emp, Y, M, day, custom_attendance_code=code)
+
+		sheet = self._sheet(month=str(M), year=Y)
+		sheet.insert()
+		sheet.populate_from_attendance()
+		row = next(r for r in sheet.employees if r.employee == emp)
+
+		_cols, data, *_ = bcct(
+			frappe._dict(month=str(M), year=Y, company=self.company, include_company_descendants=1)
+		)
+		report_row = next(r for r in data if r.get("employee") == emp)
+		self.assertEqual(row.total_paid_days, report_row["tong_cong"])
+
+	def test_total_paid_days_is_exactly_worked_plus_company_paid_leave(self):
+		"""Tổng công phải CỘNG ĐƯỢC từ các cột bên cạnh, không phải một con số rơi từ trên trời:
+
+		    Tổng công = Công đi làm + Phép + Việc riêng + Nghỉ bù + Tai nạn LĐ
+
+		Ốm / thai sản (BHXH trả), không lương và vắng đứng ngoài. Người ký bảng phải tự kiểm được."""
+		emp = frappe.db.get_value("Employee", {"company": self.company, "status": "Active"}, "name")
+		if not emp:
+			self.skipTest("no employee in company")
+		Y, M = 2095, 3
+		for day, code in (
+			(1, "X"),
+			(2, "P"),
+			(3, "KH"),
+			(4, "NB"),
+			(5, "T"),
+			(6, "Ô"),
+			(7, "K"),
+			(8, "1/2X"),
+		):
+			self._seed_attendance(emp, Y, M, day, custom_attendance_code=code)
+
+		sheet = self._sheet(month=str(M), year=Y)
+		sheet.insert()
+		sheet.populate_from_attendance()
+		row = next(r for r in sheet.employees if r.employee == emp)
+
+		company_paid = ("work_days", "annual_leave", "personal_leave", "comp_off", "work_accident_leave")
+		self.assertEqual(row.total_paid_days, sum((row.get(f) or 0) for f in company_paid))
+		self.assertEqual(row.total_paid_days, 5.5)  # X 1 + P 1 + KH 1 + NB 1 + T 1 + nửa buổi 1/2X
+
 	def test_populate_personal_leave_total(self):
 		# code N (nghỉ việc riêng có lương) must land in the personal_leave totals column
 		emp = frappe.db.get_value("Employee", {"company": self.company, "status": "Active"}, "name")
@@ -230,6 +313,8 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		self.assertIn("NGƯỜI CHẤM CÔNG", html)  # sign box 1
 		self.assertIn("PHÒNG NHÂN SỰ", html)  # sign box 2
 		self.assertIn("Chú thích", html)  # symbol legend
+		self.assertIn("Tổng<br>công", html)  # cột chủ đạo: số ngày công ty trả lương
+		self.assertIn("Công<br>đi làm", html)  # tách bạch với phần đi làm thực tế
 
 
 class TestSubmitWarnsAboutUnreviewedDays(PerTestRollback, FrappeTestCase):
