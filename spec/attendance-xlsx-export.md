@@ -49,7 +49,11 @@ dòng 4+  dữ liệu — ô ngày tô nền theo state, chữ đậm, căn gi�
 ```
 
 - `freeze_panes = "C4"` → cuộn ngang vẫn thấy mã NV + tên; cuộn dọc vẫn thấy tiêu đề.
-- Độ rộng cột lấy từ `width` của `columns` quy đổi (px → ký tự), ngày ~4.2 cho vừa `1/2P`.
+- Độ rộng cột lấy từ `width` của `columns` quy đổi (px → ký tự); cột ngày giữ hẹp cho vừa `1/2P`,
+  cột còn lại có sàn 11 ký tự.
+- Nhãn cột tổng hợp dài hơn ô ("Tai nạn lao động", "Số buổi ăn trưa") thì **xuống dòng trong ô**
+  (`wrap_text`, dòng tiêu đề cao 34), không nới cột — nới ra là cả bảng bị co nhỏ khi in vừa một
+  trang ngang.
 - Viền mảnh toàn bảng; in ngang, co vừa một trang ngang (`fitToWidth`).
 - Số: để `General` — 21.5 hiện là `21.5`, 22 hiện là `22`, không thành `22.00`.
 
