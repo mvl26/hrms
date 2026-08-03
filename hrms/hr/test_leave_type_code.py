@@ -78,8 +78,12 @@ class TestLeaveTypeCode(PerTestRollback, FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			sync_code_to_leave_type(frappe._dict(name=lt.name, custom_attendance_code="X"))
 
-	def test_clearing_the_field_releases_the_code(self):
-		"""Xoá trống ô → gỡ liên kết, không để mã mồ côi trỏ vào loại nghỉ."""
+	def test_empty_field_never_releases_the_code(self):
+		"""Ô trống = "không nhập gì", KHÔNG phải "gỡ mã" — liên kết phải còn nguyên.
+
+		Ô này chỉ là mặt bàn để nhập nên nó rỗng ở mọi lần lưu không đi qua form (script,
+		`bench execute`, hoặc bấm Save trước khi kịp chọn mã). Coi rỗng là "gỡ" thì mã nghỉ mất
+		đường tra ngược và bảng chấm công hiện sai. Gỡ thật thì sửa ở Attendance Code."""
 		lt = self._leave_type("Nghỉ thử xoá trống")
 		frappe.get_doc(
 			{
@@ -93,7 +97,19 @@ class TestLeaveTypeCode(PerTestRollback, FrappeTestCase):
 		sync_code_to_leave_type(frappe._dict(name=lt.name, custom_attendance_code="ZZ"))
 
 		sync_code_to_leave_type(frappe._dict(name=lt.name, custom_attendance_code=None))
-		self.assertIsNone(self._code_link("ZZ"))
+		self.assertEqual(self._code_link("ZZ"), lt.name)
+
+	def test_real_leave_type_save_with_empty_field_keeps_the_map(self):
+		"""SỰ CỐ THẬT 2026-08-03: lưu lại loạt Loại nghỉ đã gỡ liên kết của T/KH/R1/R2.
+
+		Khác `test_real_leave_type_save_is_safe_before_migrate` (custom field CHƯA có): ở đây field
+		đã migrate nhưng người/script lưu mà không đụng tới ô đó."""
+		before = self._code_link("KH")
+		self.assertEqual(before, "Nghỉ kết hôn", "tiền đề: KH đang trỏ Nghỉ kết hôn")
+
+		sync_code_to_leave_type(frappe._dict(name="Nghỉ kết hôn", custom_attendance_code=None))
+
+		self.assertEqual(self._code_link("KH"), "Nghỉ kết hôn")
 
 	def test_half_day_code_is_accepted(self):
 		"""1/2P là mã nghỉ hợp lệ (maps_to_status = Half Day)."""

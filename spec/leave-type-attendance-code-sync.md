@@ -54,6 +54,7 @@ Custom field `Leave Type-custom_attendance_code` (Link → Attendance Code), nh�
 - Chỉ nhận mã có `maps_to_status` ∈ {`On Leave`, `Half Day`}; chọn mã khác thì `throw`.
 - Mã **nửa ngày** vẫn quản ở phía Attendance Code (một ô không chứa được cặp).
 - Leave Type chưa có mã cả-ngày nào trỏ tới ⇒ `msgprint` cảnh báo khi lưu, **không chặn** (HR vẫn phải tạo được loại nghỉ).
+- **Ô trống = "không nhập gì", KHÔNG phải "gỡ mã"** (sửa 2026-08-03). Vì đây chỉ là mặt bàn để nhập nên nó rỗng ở mọi lần lưu không đi qua form — sửa bằng script, `bench execute`, hay chính người dùng bấm Save trước khi kịp chọn mã. Bản đầu vẫn chạy vòng dọn trong tình huống đó và **xoá `Attendance Code.leave_type`**; sự cố thật ngày 2026-08-03: lưu lại loạt Loại nghỉ đã gỡ liên kết của `T`/`KH`/`R1`/`R2`, làm mã nghỉ mất đường tra ngược và bảng chấm công hiện sai. Muốn gỡ thật thì sửa ở **Attendance Code** — nơi giữ nguồn sự thật. (Liên kết đã phục hồi theo `hrms/fixtures/attendance_code.json`; `bench migrate` cũng tự phục hồi vì fixtures mang sẵn `leave_type`.)
 
 ### Phần 3 — Nút đồng bộ (xem trước rồi mới áp)
 

@@ -51,28 +51,34 @@ def sync_code_to_leave_type(doc, method=None):
 
 	code = doc.get(FIELD)
 
-	if code:
-		status = frappe.db.get_value("Attendance Code", code, "maps_to_status")
-		if status not in LEAVE_STATUSES:
-			frappe.throw(
-				_(
-					"Mã công {0} không phải mã nghỉ (nó ứng với trạng thái {1}). Chọn mã có trạng thái {2}."
-				).format(frappe.bold(code), frappe.bold(status or "?"), " hoặc ".join(LEAVE_STATUSES)),
-				title=_("Mã công không hợp lệ"),
-			)
+	# Ô TRỐNG = "không nhập gì", KHÔNG phải "gỡ mã". Ô này chỉ là mặt bàn để nhập nên nó rỗng ở
+	# mọi lần lưu không đi qua form: sửa Loại nghỉ bằng script, `bench execute`, hay chính người
+	# dùng bấm Save trước khi kịp chọn mã. Trước đây vòng dọn bên dưới vẫn chạy trong tình huống
+	# đó và XOÁ `Attendance Code.leave_type` — mã nghỉ mất đường tra ngược, bảng chấm công hiện
+	# sai (P thành V). Sự cố có thật: lưu lại 10 Loại nghỉ ngày 2026-08-03 đã gỡ liên kết của
+	# T/KH/R1/R2. Muốn gỡ thật thì sửa ở Attendance Code — nơi giữ nguồn sự thật.
+	if not code:
+		return
+
+	status = frappe.db.get_value("Attendance Code", code, "maps_to_status")
+	if status not in LEAVE_STATUSES:
+		frappe.throw(
+			_(
+				"Mã công {0} không phải mã nghỉ (nó ứng với trạng thái {1}). Chọn mã có trạng thái {2}."
+			).format(frappe.bold(code), frappe.bold(status or "?"), " hoặc ".join(LEAVE_STATUSES)),
+			title=_("Mã công không hợp lệ"),
+		)
 
 	# Gỡ các mã cùng maps_to_status đang trỏ tới loại nghỉ này nhưng không phải mã vừa chọn:
 	# giữ đúng một mã cả-ngày cho mỗi loại nghỉ, tránh reverse-derive phải đoán.
-	keep_status = frappe.db.get_value("Attendance Code", code, "maps_to_status") if code else "On Leave"
 	for stale in frappe.get_all(
 		"Attendance Code",
-		filters={"leave_type": leave_type, "maps_to_status": keep_status, "name": ("!=", code or "")},
+		filters={"leave_type": leave_type, "maps_to_status": status, "name": ("!=", code)},
 		pluck="name",
 	):
 		frappe.db.set_value("Attendance Code", stale, "leave_type", None)
 
-	if code:
-		frappe.db.set_value("Attendance Code", code, "leave_type", leave_type)
+	frappe.db.set_value("Attendance Code", code, "leave_type", leave_type)
 
 
 def warn_if_unmapped(doc, method=None):
