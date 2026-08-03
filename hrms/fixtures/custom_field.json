@@ -293,7 +293,7 @@
   "columns": 0,
   "default": null,
   "depends_on": null,
-  "description": null,
+  "description": "Số công DOANH NGHIỆP TRẢ cho ngày này (khớp cột Tổng công của bảng chấm công tháng): đi làm + nghỉ có lương công ty trả. Nghỉ do BHXH chi trả (ốm, chăm con ốm, thai sản) và nghỉ không lương / vắng = 0. Chỉ để hiển thị — lương đọc Trạng thái / Loại nghỉ.",
   "docstatus": 0,
   "doctype": "Custom Field",
   "dt": "Attendance",

@@ -205,7 +205,7 @@ class Attendance(Document):
 		skip logic and only sets fields native entry would set, so payroll stays invariant.
 
 		Forward (user entered code(s)): morning/afternoon (or a single day code) -> native fields
-		+ custom_work_credit (Σ work_fraction of Công-category halves).
+		+ custom_work_credit (số công DOANH NGHIỆP TRẢ cho ngày đó — xem `_apply_codes_forward`).
 		Reverse (record has a status but no code, e.g. from auto-attendance / leave): derive
 		custom_attendance_code for display only, without changing native fields.
 		"""
@@ -255,10 +255,15 @@ class Attendance(Document):
 		if not (m and a):
 			return
 
-		# công đi làm thực tế = Σ work_fraction (worked-công fraction) of each half x 0.5.
-		# work_fraction already excludes non-working codes (P/Ô/K = 0), so no category filter needed;
-		# this also lets a single half-day code (1/2X/1/2P/1/2K, work_fraction 0.5) count its worked half.
-		self.custom_work_credit = sum(flt(c.work_fraction) * 0.5 for c in (m, a))
+		# Field "Công" = số công DOANH NGHIỆP TRẢ cho ngày này — khớp đúng cột "Tổng công" của bảng
+		# công tháng (dùng chung `paid_credit`, không chép luật sang đây để hai nơi không lệch nhau).
+		#
+		# Trước đây field mang `work_fraction` — công ĐI LÀM thực tế — nên một ngày nghỉ phép năm hiện
+		# "Công = 0" dù công ty trả đủ lương ngày đó, và con số 0 ấy gộp chung ba nhóm khác hẳn nhau:
+		# nghỉ công ty trả (P/KH/R1/R2/NB/T), nghỉ BHXH chi trả (Ô/Cô/TS) và không ai trả (K/V).
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import paid_credit
+
+		self.custom_work_credit = sum(paid_credit(c) * 0.5 for c in (m, a))
 		# single display code only when the whole day is one code
 		self.custom_attendance_code = morning if morning == afternoon else None
 
@@ -294,7 +299,10 @@ class Attendance(Document):
 			return
 		self.custom_attendance_code = code
 		c = self._get_attendance_code(code)
-		self.custom_work_credit = flt(c.work_fraction) if c else 0
+		# cùng một luật "ai trả" như nhánh forward — xem `_apply_codes_forward`
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import paid_credit
+
+		self.custom_work_credit = paid_credit(c) if c else 0
 
 	def validate(self):
 		from erpnext.controllers.status_updater import validate_status

@@ -36,21 +36,23 @@ def mk_attendance(employee, date, submit=True, **codes):
 
 
 # (code, expected status, expected leave_type, expected work_credit, expected half_day_status|None)
+# credit = field "Công" = số công DOANH NGHIỆP TRẢ (không phải công đi làm): nghỉ có lương công ty
+# trả vẫn là 1.0; nghỉ do BHXH chi trả (Ô/Cô/TS) và nghỉ không lương / vắng là 0.
 ALL_CODES = [
 	("X", "Present", None, 1.0, None),
 	("CT", "Work From Home", None, 1.0, None),
-	("P", "On Leave", "Nghỉ phép năm", 0.0, None),
+	("P", "On Leave", "Nghỉ phép năm", 1.0, None),
 	("Ô", "On Leave", "Nghỉ ốm", 0.0, None),
 	("Cô", "On Leave", "Nghỉ chăm con ốm", 0.0, None),
 	("TS", "On Leave", "Nghỉ thai sản", 0.0, None),
-	("T", "On Leave", "Nghỉ tai nạn lao động", 0.0, None),
-	("NB", "On Leave", "Nghỉ bù", 0.0, None),
+	("T", "On Leave", "Nghỉ tai nạn lao động", 1.0, None),
+	("NB", "On Leave", "Nghỉ bù", 1.0, None),
 	("K", "On Leave", "Nghỉ không lương", 0.0, None),
-	("KH", "On Leave", "Nghỉ kết hôn", 0.0, None),
+	("KH", "On Leave", "Nghỉ kết hôn", 1.0, None),
 	("V", "Absent", None, 0.0, None),
 	("1/2X", "Half Day", None, 0.5, "Absent"),  # đi làm nhưng thiếu giờ → nửa công, nửa kia không lý do
-	("1/2P", "Half Day", "Nghỉ phép năm", 0.5, "Present"),  # worked half + paid-leave half
-	("1/2K", "Half Day", "Nghỉ không lương", 0.5, "Present"),  # worked half + unpaid-leave half
+	("1/2P", "Half Day", "Nghỉ phép năm", 1.0, "Present"),  # nửa làm + nửa phép có lương → trả đủ ngày
+	("1/2K", "Half Day", "Nghỉ không lương", 0.5, "Present"),  # nửa làm được trả, nửa không lương = 0
 ]
 
 

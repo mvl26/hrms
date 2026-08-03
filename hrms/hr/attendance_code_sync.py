@@ -23,6 +23,7 @@ from frappe import _
 from frappe.utils import flt, get_last_day, getdate
 
 from hrms.hr.doctype.attendance.attendance import _pick_reverse_code
+from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import paid_credit
 
 
 def expected_code(row) -> str | None:
@@ -122,7 +123,12 @@ def apply_sync(rows: str | list, reason: str | None = None) -> dict:
 			continue
 
 		before = payroll_snapshot(doc)
-		credit = flt(frappe.db.get_value("Attendance Code", want, "work_fraction"))
+		# "Công" = công doanh nghiệp trả — cùng luật với form ngày công và cột Tổng công của bảng công
+		credit = paid_credit(
+			frappe.db.get_value(
+				"Attendance Code", want, ["category", "work_fraction", "is_paid"], as_dict=True
+			)
+		)
 		# CHỈ field hiển thị — status/leave_type/half_day_status không nằm trong danh sách này.
 		frappe.db.set_value(
 			"Attendance",
