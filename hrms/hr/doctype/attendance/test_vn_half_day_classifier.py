@@ -216,3 +216,73 @@ class TestLunchWindowFallback(PerTestRollback, FrappeTestCase):
 
 		self.assertEqual(doc.working_hours, 8.0)  # 9,5h - 1,5h mặc định, KHÔNG phải 9,5h
 		self.assertEqual(doc.custom_attendance_code, "X")
+
+
+class TestHolidayFollowsTheShiftSetting(PerTestRollback, FrappeTestCase):
+	"""Cờ `Mark Auto Attendance on Holidays` của ca phải điều khiển TRỌN chuỗi.
+
+	Chốt chặn ngày nghỉ của bộ phân loại sinh ra để người đi làm ngày nghỉ không bị quy thành V.
+	Nhưng nếu công ty CHỦ ĐỘNG bật chấm công ngày nghỉ trên ca, thì ngày đó phải được chấm y như
+	ngày thường: trừ nghỉ trưa, đủ giờ mới X. Không thì bật cờ xong ngày lễ đi đường riêng —
+	`working_hours` là giờ thô chưa trừ trưa, và chấm 10 phút cũng thành X đủ công.
+	"""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		ensure_short_hours_code()
+		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		cls.holiday = frappe.db.get_value(
+			"Holiday",
+			{"parent": frappe.db.get_value("Employee", cls.emp, "holiday_list")},
+			"holiday_date",
+			order_by="holiday_date desc",
+		)
+
+	def shift(self, mark_on_holidays: int) -> str:
+		name = f"VN Holiday Rule {mark_on_holidays} (test)"
+		if not frappe.db.exists("Shift Type", name):
+			frappe.get_doc(
+				{
+					"doctype": "Shift Type",
+					"__newname": name,
+					"start_time": "08:00:00",
+					"end_time": "17:30:00",
+					"custom_split_half_day": 1,
+					"custom_lunch_start": "12:00:00",
+					"custom_lunch_end": "13:30:00",
+					"custom_flexible_shift": 1,
+					"custom_flex_band_minutes": 180,
+					"custom_min_work_hours": 8,
+					"mark_auto_attendance_on_holidays": mark_on_holidays,
+				}
+			).insert()
+		return name
+
+	def classify(self, mark_on_holidays: int, in_hm: str, out_hm: str):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": self.holiday,
+				"shift": self.shift(mark_on_holidays),
+				"in_time": f"{self.holiday} {in_hm}:00",
+				"out_time": f"{self.holiday} {out_hm}:00",
+			}
+		)
+		doc.before_validate()
+		return doc
+
+	def test_shift_that_does_not_mark_holidays_leaves_the_day_alone(self):
+		d = self.classify(0, "09:00", "12:00")
+		self.assertIsNone(d.get("custom_attendance_code"), "ngày nghỉ không tự chấm mã")
+
+	def test_shift_that_marks_holidays_applies_the_normal_hours_rule(self):
+		d = self.classify(1, "08:05", "18:40")
+		self.assertEqual(d.custom_attendance_code, "X")
+		self.assertAlmostEqual(d.working_hours, 9.08, places=2)  # 10h35 - 1h30 trưa, KHÔNG phải 10,58
+
+	def test_a_short_stint_on_a_marked_holiday_is_not_a_full_day(self):
+		"""Chấm 10 phút ngày lễ không được thành đủ công."""
+		d = self.classify(1, "09:00", "09:10")
+		self.assertEqual(d.custom_attendance_code, "1/2X")

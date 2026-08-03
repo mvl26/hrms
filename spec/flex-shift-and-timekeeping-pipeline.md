@@ -390,3 +390,32 @@ Ví dụ phân biệt rõ hai con số:
 **Tác động dữ liệu (đã chạy):** 204/212 ngày trên site ghi thiếu giờ, tổng **104,77 giờ**. Đã tính
 lại toàn bộ. **Không mã công nào đổi và không phiếu lương nào đổi** — đây thuần là sửa con số hiển
 thị cho đúng sự thật. Giờ làm trung bình nay 7,97–8,5h/ngày; ngày cao nhất 10,3h.
+
+
+## 13. Ngày nghỉ: cờ `Mark Auto Attendance on Holidays` điều khiển trọn chuỗi (2026-07-30)
+
+**Câu hỏi của user:** ngày nghỉ có "ghi đè" lượt chấm công không, và cho chọn được không.
+
+**Trả lời: có chọn được — bằng cờ `Mark Auto Attendance on Holidays` sẵn có trên Shift Type.**
+Cờ này quyết định *toàn bộ* cách hệ thống đối xử với ngày nghỉ có lượt chấm:
+
+| | TẮT (mặc định) | BẬT |
+|---|---|---|
+| Lượt chấm ngày nghỉ | vẫn lưu, **không** sinh bản ghi công | sinh bản ghi công |
+| Bảng công | hiện `-` (nghỉ tuần) hoặc `NL` (nghỉ lễ) | hiện mã công thật (`X` / `1/2X`) |
+| Màn hình soát | cờ **"Ngày nghỉ nhưng có chấm công"** để HR xử lý riêng | không cờ (ngày bình thường) |
+| Giờ ghi nhận | không có | trừ nghỉ trưa như ngày thường |
+| Công | không tính | đủ giờ tối thiểu mới `X`, thiếu → `1/2X` |
+
+**Lỗi đã sửa:** chốt chặn ngày nghỉ của bộ phân loại (§4.2) chạy **vô điều kiện**, nên bật cờ xong
+ngày lễ vẫn đi đường riêng: `working_hours` là **giờ thô chưa trừ nghỉ trưa** (đo thật: 10,6h thay
+vì 9,1h cho ca 08:05–18:40) và mã luôn là `X` do suy ngược từ status — tức **chấm 10 phút ngày lễ
+cũng thành đủ công**. Nay chốt chặn chỉ áp dụng khi cờ TẮT.
+
+Mô tả field trên giao diện cũng được viết lại bằng tiếng Việt cho rõ hai chế độ (bản gốc chỉ có một
+câu tiếng Anh *"If enabled, auto attendance will be marked on holidays if Employee Checkins exist"*,
+không nói gì về công/giờ).
+
+**Lưu ý:** cờ này là **cấu hình theo ca**, không phải theo ngày. Muốn tính công một ngày lễ cụ thể
+(ví dụ huy động đi làm bù) mà không đổi luật cả ca, dùng **Yêu cầu chấm công** cho ngày đó — nó đi
+đường riêng và §11 đã bảo đảm nó không bị auto-attendance chấm vắng đè lên.

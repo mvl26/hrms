@@ -129,6 +129,7 @@ class Attendance(Document):
 		chưa có → bỏ qua chúng và coi như tắt giờ linh hoạt, tức hành vi y hệt trước đây."""
 		meta = frappe.get_meta("Shift Type")
 		fields = ["start_time", "end_time", "custom_split_half_day", "custom_lunch_start", "custom_lunch_end"]
+		fields.append("mark_auto_attendance_on_holidays")  # quyết định ngày nghỉ có được chấm hay không
 		fields += [
 			f
 			for f in ("custom_flexible_shift", "custom_flex_band_minutes", "custom_min_work_hours")
@@ -147,8 +148,9 @@ class Attendance(Document):
 	def apply_vn_half_day_classifier(self):
 		"""Chấm mã công + giờ net từ giờ vào/ra theo luật ca trượt & đủ giờ (`vn_day_classifier`).
 
-		Chỉ chạy khi: ca có bật `custom_split_half_day`, có đủ in/out, chưa có mã nhập tay, ngày
-		không thuộc diện nghỉ phép, và **không phải ngày nghỉ**. Xem spec §4.2."""
+		Chỉ chạy khi: ca có bật `custom_split_half_day`, có đủ in/out, chưa có mã nhập tay, và ngày
+		không thuộc diện nghỉ phép. Ngày nghỉ (T7/CN/lễ) thì tuỳ cờ `mark_auto_attendance_on_holidays`
+		của ca: tắt → không chấm gì; bật → chấm y như ngày thường. Xem spec §4.2 và §13."""
 		if not self.get("shift") or not self.get("in_time") or not self.get("out_time"):
 			return
 		if (
@@ -166,10 +168,14 @@ class Attendance(Document):
 		cfg = self.get_split_shift_config()
 		if not cfg:
 			return
-		if self.falls_on_holiday():
-			# Ngày nghỉ (T7/CN/lễ): auto-attendance vốn đã bỏ qua, nhưng bản ghi vẫn có thể sinh ra
-			# từ nhập tay / Yêu cầu chấm công. Đem khung ca ngày thường ra chấm thì người đi làm ngày
-			# nghỉ bị quy thành V hoặc nửa công — đúng thứ user báo. Ngày nghỉ KHÔNG tự chấm mã.
+		if not cint(cfg.get("mark_auto_attendance_on_holidays")) and self.falls_on_holiday():
+			# Ngày nghỉ (T7/CN/lễ) mà ca KHÔNG bật chấm công ngày nghỉ: không tự chấm mã. Bản ghi vẫn
+			# có thể sinh ra từ nhập tay / Yêu cầu chấm công; đem khung ca ngày thường ra chấm thì
+			# người đi làm ngày nghỉ bị quy thành V hoặc nửa công.
+			#
+			# Ca CÓ bật cờ thì ngược lại: công ty chủ động tính công ngày nghỉ, nên ngày đó phải đi
+			# đúng luật như ngày thường (trừ nghỉ trưa, đủ giờ mới X). Bỏ qua ở đây thì `working_hours`
+			# là giờ THÔ chưa trừ trưa và chấm 10 phút cũng thành X đủ công.
 			return
 
 		band = cfg.get("custom_flex_band_minutes")
