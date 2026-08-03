@@ -75,6 +75,94 @@ frappe.query_reports["Monthly Attendance Report"] = {
 			});
 		});
 
+		// Dọn các ngày mà mã công lệch với status/leave_type (thường là V kẹt lại sau khi đơn nghỉ
+		// duyệt đè lên bản ghi Vắng). XEM TRƯỚC rồi mới áp — đây là dữ liệu lương thật.
+		report.page.add_inner_button(__("Đồng bộ mã công"), () => {
+			const f = report.get_values();
+			frappe.call({
+				method: "hrms.hr.attendance_code_sync.preview_sync",
+				args: { filters: { month: String(f.month), year: f.year, company: f.company } },
+				freeze: true,
+				freeze_message: __("Đang rà mã công..."),
+				callback: (r) => {
+					const changes = (r.message && r.message.changes) || [];
+					if (!changes.length) {
+						frappe.msgprint({
+							title: __("Không có gì để đồng bộ"),
+							message: __("Mọi ngày công trong kỳ đã khớp mã."),
+							indicator: "green",
+						});
+						return;
+					}
+					const rows = changes
+						.map(
+							(c) =>
+								`<tr><td>${frappe.utils.escape_html(
+									c.employee_name || c.employee,
+								)}</td>
+								 <td>${c.attendance_date}</td>
+								 <td>${frappe.utils.escape_html(c.leave_type || c.status || "")}</td>
+								 <td><b>${frappe.utils.escape_html(c.old_code || "—")}</b> → <b>${frappe.utils.escape_html(
+										c.new_code,
+									)}</b></td></tr>`,
+						)
+						.join("");
+					const d = new frappe.ui.Dialog({
+						title: __("Đồng bộ mã công — {0} ngày", [changes.length]),
+						size: "large",
+						fields: [
+							{
+								fieldtype: "HTML",
+								options: `<p>${__(
+									"Chỉ sửa mã công hiển thị. Trạng thái, loại nghỉ và nửa ngày giữ nguyên nên lương không đổi.",
+								)}</p>
+								<div style="max-height:50vh;overflow:auto">
+								<table class="table table-bordered"><thead><tr>
+								<th>${__("Nhân viên")}</th><th>${__("Ngày")}</th><th>${__("Loại nghỉ")}</th><th>${__(
+									"Mã công",
+								)}</th>
+								</tr></thead><tbody>${rows}</tbody></table></div>`,
+							},
+							{
+								fieldtype: "Small Text",
+								fieldname: "reason",
+								label: __("Lý do"),
+								reqd: 1,
+								default: __("Đồng bộ mã công theo loại nghỉ"),
+							},
+						],
+						primary_action_label: __("Áp dụng"),
+						primary_action: (v) => {
+							frappe.call({
+								method: "hrms.hr.attendance_code_sync.apply_sync",
+								args: { rows: changes, reason: v.reason },
+								freeze: true,
+								freeze_message: __("Đang đồng bộ..."),
+								callback: (res) => {
+									d.hide();
+									const m = res.message || {};
+									let msg = __("Đã đồng bộ {0} ngày.", [m.applied || 0]);
+									if ((m.skipped || []).length)
+										msg +=
+											"<br>" +
+											__("Bỏ qua {0} ngày (kỳ đã chốt).", [
+												m.skipped.length,
+											]);
+									frappe.msgprint({
+										title: __("Xong"),
+										message: msg,
+										indicator: "green",
+									});
+									report.refresh();
+								},
+							});
+						},
+					});
+					d.show();
+				},
+			});
+		});
+
 		// bảng màu do server định nghĩa (một nguồn duy nhất) — formatter chỉ tra, không tự phân loại
 		frappe.call({
 			method: "hrms.hr.report.monthly_attendance_report.monthly_attendance_report.get_color_map",
