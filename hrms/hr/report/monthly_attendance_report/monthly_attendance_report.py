@@ -23,6 +23,7 @@ from frappe.utils.nestedset import get_descendants_of
 from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
 
 from hrms.hr.attendance_legend import legend_html
+from hrms.hr.working_hours import avg_office_hours, office_hours_map
 
 Filters = frappe._dict
 
@@ -89,7 +90,7 @@ STATE_STYLE = {
 	},
 	# nhãn hằng số ở module level: bọc _() sẽ đóng băng bản dịch lúc import; dịch tại nơi render
 	"half": {  # nosemgrep
-		"label": "Làm nửa ngày",
+		"label": "Nghỉ phép / Làm nửa ngày",
 		"bg": "#e8dcf7",
 		"fg": "#6b3fb0",
 		"bg_dark": "#312145",
@@ -97,7 +98,7 @@ STATE_STYLE = {
 	},
 	# nhãn hằng số ở module level: bọc _() sẽ đóng băng bản dịch lúc import; dịch tại nơi render
 	"leave": {  # nosemgrep
-		"label": "Nghỉ phép / việc riêng",
+		"label": "Việc riêng",
 		"bg": "#fbedc4",
 		"fg": "#8a6410",
 		"bg_dark": "#3d3416",
@@ -399,6 +400,16 @@ def get_columns(days: int, year: int, month: int) -> list:
 	columns.append(
 		{"fieldname": "lunch_days", "label": _("Số buổi ăn trưa"), "fieldtype": "Int", "width": 90}
 	)
+	# Giờ CÓ MẶT trung bình, không phải giờ quy công — xem `office_hours_map`
+	columns.append(
+		{
+			"fieldname": "avg_office_hours",
+			"label": _("TB giờ/ngày"),
+			"fieldtype": "Float",
+			"width": 90,
+			"precision": 2,
+		}
+	)
 	return columns
 
 
@@ -448,7 +459,10 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 
 	from hrms.vn_payroll.lunch import lunch_days_map  # nguồn duy nhất; 1 truy vấn gộp cho cả bảng
 
-	lunch_by_emp = lunch_days_map([e.name for e in employees], start, end)
+	employee_names = [e.name for e in employees]
+	lunch_by_emp = lunch_days_map(employee_names, start, end)
+	# Giờ CÓ MẶT tại văn phòng — nguồn duy nhất dùng chung với báo cáo Giờ làm việc nhân viên
+	office_by_emp = office_hours_map(employee_names, start, end)
 
 	rows = []
 	for e in employees:
@@ -507,6 +521,7 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 				"days": day_syms,
 				"totals": totals,
 				"lunch_days": lunch_by_emp.get(e.name, 0),  # số buổi ăn trưa (nguồn duy nhất)
+				"avg_office_hours": avg_office_hours(office_by_emp.get(e.name)),
 			}
 		)
 	return rows
@@ -524,6 +539,7 @@ def _rows_to_report_data(rows: list[dict], days: int, code_map: dict) -> list:
 			"employee": r["employee"],
 			"employee_name": r["employee_name"],
 			"lunch_days": cint(r.get("lunch_days")),
+			"avg_office_hours": flt(r.get("avg_office_hours")),
 			"tong_cong": flt(totals.get(TOTAL_PAID)),
 			**{f"cat_{i}": flt(totals.get(cat)) for i, (cat, _label) in enumerate(REPORT_CATEGORIES)},
 		}

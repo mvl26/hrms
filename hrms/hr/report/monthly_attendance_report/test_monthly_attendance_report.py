@@ -578,3 +578,74 @@ class TestOnlyEmployedPeopleAreOnTheSheet(PerTestRollback, FrappeTestCase):
 		"""Đây là chỗ dễ sai nhất: loại thẳng mọi người không Active là quỵt công đã làm."""
 		emp = self.mk_employee("left_midmonth_emp", "Left", relieving="2098-05-15")
 		self.assertIn(emp, self.roster(), "nghỉ việc giữa tháng vẫn phải có mặt trong bảng tháng đó")
+
+
+class TestAvgOfficeHours(PerTestRollback, FrappeTestCase):
+	"""TB giờ/ngày = tổng giờ có mặt / số ngày làm việc TẠI VĂN PHÒNG.
+
+	Mẫu số là chỗ dễ sai: nghỉ phép, công tác, làm tại nhà, nghỉ lễ đều KHÔNG phải ngày ở văn
+	phòng, tính vào là kéo trung bình xuống thành con số vô nghĩa."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.emp = test_employee()
+		cls.year, cls.month = 2099, 5
+
+	def mk(self, day, code="X", in_time=None, out_time=None):
+		date = f"{self.year}-{self.month:02d}-{day:02d}"
+		doc = {
+			"doctype": "Attendance",
+			"employee": self.emp,
+			"attendance_date": getdate(date),
+			"custom_attendance_code": code,
+		}
+		if in_time:
+			doc["in_time"], doc["out_time"] = f"{date} {in_time}", f"{date} {out_time}"
+		att = frappe.get_doc(doc)
+		att.insert()
+		att.submit()
+		return att
+
+	def avg(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
+
+		rows = get_sheet_rows({"month": self.month, "year": self.year})
+		return next(r for r in rows if r["employee"] == self.emp)["avg_office_hours"]
+
+	def test_average_is_total_presence_over_office_days(self):
+		# nghỉ trưa mặc định 12:00-13:30 bị trừ: 9.5h-1.5 = 8, 10.5h-1.5 = 9 -> TB 8.5
+		self.mk(4, in_time="08:00:00", out_time="17:30:00")
+		self.mk(5, in_time="08:00:00", out_time="18:30:00")
+		self.assertEqual(self.avg(), 8.5)
+
+	def test_leave_days_do_not_dilute_the_average(self):
+		self.mk(4, in_time="08:00:00", out_time="17:30:00")
+		self.mk(6, code="P")  # nghỉ phép cả ngày
+		self.assertEqual(self.avg(), 8.0, "ngày nghỉ phép không được vào mẫu số")
+
+	def test_business_trip_and_wfh_are_not_office_days(self):
+		"""CT và W đều mang status `Work From Home` — có punch cũng không phải ngày ở văn phòng."""
+		self.mk(4, in_time="08:00:00", out_time="17:30:00")
+		self.mk(7, code="CT", in_time="07:00:00", out_time="20:00:00")
+		self.assertEqual(self.avg(), 8.0, "ngày công tác không được vào TB")
+
+	def test_a_day_without_punches_is_not_an_office_day(self):
+		self.mk(4, in_time="08:00:00", out_time="17:30:00")
+		self.mk(8)  # chấm tay, không có giờ vào/ra
+		self.assertEqual(self.avg(), 8.0, "ngày không có giờ vào/ra không xác định được thời gian")
+
+	def test_no_office_day_at_all_gives_zero(self):
+		self.mk(6, code="P")
+		self.assertEqual(self.avg(), 0.0, "không có ngày nào ở văn phòng thì TB là 0, không phải lỗi")
+
+	def test_the_column_reaches_the_report_grid(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
+
+		self.mk(4, in_time="08:00:00", out_time="17:30:00")
+		columns, data, _msg = execute({"month": self.month, "year": self.year})
+
+		labels = {c["fieldname"]: c["label"] for c in columns}
+		self.assertEqual(labels["avg_office_hours"], "TB giờ/ngày")
+		row = next(r for r in data if r["employee"] == self.emp)
+		self.assertEqual(row["avg_office_hours"], 8.0)

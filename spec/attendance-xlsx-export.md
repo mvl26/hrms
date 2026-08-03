@@ -125,6 +125,28 @@ Không sửa `Company.company_name` thành tên đầy đủ: đó là tên côn
 (hoá đơn, phiếu lương…), không riêng bảng chấm công — đổi là đổi hết. Điền `tax_id` / tạo Address
 cho Company thì dữ liệu thắng ngay, không phải sửa code.
 
+### 2e. TB giờ/ngày (2026-08-03)
+
+Cột cuối bảng: **tổng giờ có mặt / số ngày làm việc tại văn phòng**.
+
+Mẫu số là chỗ dễ sai. "Ngày làm việc tại văn phòng" = Attendance đã duyệt có status
+`Present`/`Half Day` **và** có cả giờ vào lẫn giờ ra. Bốn nhóm rơi ra ngoài, đúng ý HR:
+
+| Loại ngày | Vì sao không vào mẫu số |
+|---|---|
+| Nghỉ lễ, nghỉ tuần | không có bản ghi Attendance nào |
+| Nghỉ phép, vắng | status `On Leave` / `Absent` |
+| **Công tác (CT), làm tại nhà (W)** | cả hai mã đều map sang status `Work From Home` |
+| Chấm tay, yêu cầu chấm công | không có giờ vào/ra ⇒ không xác định được thời gian có mặt |
+
+Giờ mỗi ngày là **giờ CÓ MẶT**, không phải giờ quy công: `(ra - vào)` trừ phần giao với khung nghỉ
+trưa của ca (mặc định 12:00–13:30). Không cắt theo khung ca — ở lại sau giờ tan ca vẫn được tính.
+
+**Một nguồn duy nhất:** `presence_hours()` / `get_lunch_window_map()` / `NON_PRESENCE_STATUSES` dời
+từ `hr/report/employee_working_hours/` về `hrms/hr/working_hours.py` (module dùng chung), thêm
+`office_hours_map()` + `avg_office_hours()`. Báo cáo Giờ làm việc nhân viên import lại từ đó, nên
+hai báo cáo không thể lệch nhau — đã đối chiếu trên dữ liệu thật tháng 7/2026: khớp cả 6 nhân viên.
+
 ### 2c. Thứ trong tuần
 
 `weekday_label(year, month, day)` trong `monthly_attendance_report.py` (suy từ `date.weekday()`,

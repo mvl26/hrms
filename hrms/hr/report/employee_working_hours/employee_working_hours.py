@@ -13,20 +13,21 @@ Ngày không có giờ vào/ra (WFH, yêu cầu chấm công, nhập tay) không
 và không vào mẫu số TB. Xem `spec/employee-working-hours-report.md`.
 """
 
-from datetime import datetime
-
 import frappe
 from frappe import _
 from frappe.utils import cint, get_datetime, get_first_day, get_last_day, getdate
 
-from hrms.hr.doctype.attendance.vn_day_classifier import overlap_hours, resolve_lunch_window
-from hrms.hr.working_hours import compute_net_hours
+from hrms.hr.working_hours import (
+	NON_PRESENCE_STATUSES,
+	compute_net_hours,
+	get_lunch_window_map,
+	presence_hours,
+)
 
 # nhãn thứ trong tuần theo chỉ số `date.weekday()` (0 = Thứ Hai)
 WEEKDAY_LABELS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
-# ngày đã chấm là nghỉ thì dù có punch lẻ cũng không tính là ngày làm việc ở văn phòng
-NON_PRESENCE_STATUSES = ("Absent", "On Leave")
+__all__ = ["NON_PRESENCE_STATUSES", "get_lunch_window_map", "presence_hours"]  # nơi cũ của ba tên này
 
 
 def execute(filters=None):
@@ -86,41 +87,6 @@ def get_split_shift_names():
 	if not frappe.get_meta("Shift Type").has_field("custom_split_half_day"):
 		return set()
 	return set(frappe.get_all("Shift Type", filters={"custom_split_half_day": 1}, pluck="name"))
-
-
-def get_lunch_window_map():
-	"""{ca: khung nghỉ trưa} — cùng luật với bộ chấm mã công (`resolve_lunch_window`).
-
-	Đọc phòng thủ: hai field này là custom field (fixtures), site chưa migrate thì chưa có.
-	"""
-	meta = frappe.get_meta("Shift Type")
-	if not (meta.has_field("custom_lunch_start") and meta.has_field("custom_lunch_end")):
-		return {}
-
-	return {
-		shift.name: resolve_lunch_window(shift.custom_lunch_start, shift.custom_lunch_end)
-		for shift in frappe.get_all("Shift Type", fields=["name", "custom_lunch_start", "custom_lunch_end"])
-	}
-
-
-def presence_hours(in_time, out_time, attendance_date, lunch_start=None, lunch_end=None):
-	"""Giờ thực sự có mặt: (giờ ra - giờ vào) trừ phần giao với khung nghỉ trưa.
-
-	KHÔNG cắt theo khung ca — ở lại sau giờ tan ca vẫn được tính. Thiếu giờ vào hoặc giờ ra thì
-	không xác định được thời gian có mặt → 0.
-	"""
-	if not (in_time and out_time):
-		return 0.0
-
-	in_time, out_time = get_datetime(in_time), get_datetime(out_time)
-	if out_time <= in_time:
-		return 0.0
-
-	day = datetime.combine(getdate(attendance_date), datetime.min.time())
-	lunch_start, lunch_end = resolve_lunch_window(lunch_start, lunch_end)
-	lunch = overlap_hours(in_time, out_time, day + lunch_start, day + lunch_end)
-	present = (out_time - in_time).total_seconds() / 3600.0
-	return round(max(present - lunch, 0.0), 2)
 
 
 def get_daily_rows(filters, employees=None):

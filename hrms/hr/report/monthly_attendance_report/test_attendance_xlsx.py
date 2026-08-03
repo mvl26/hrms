@@ -167,6 +167,26 @@ class TestAttendanceXlsx(PerTestRollback, FrappeTestCase):
 			"mã nhân viên không được còn trong file",
 		)
 
+	def test_avg_office_hours_reaches_the_file(self):
+		"""TB giờ/ngày phải theo được vào file, không chỉ có trên màn hình."""
+		date = f"{self.year}-{self.month:02d}-04"
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": getdate(date),
+				"custom_attendance_code": "X",
+				"in_time": f"{date} 08:00:00",
+				"out_time": f"{date} 17:30:00",
+			}
+		)
+		att.insert()
+		att.submit()
+
+		ws = self.sheet()
+		cell = ws.cell(self.find_row(ws, self.emp), self.col_of(ws, "TB giờ/ngày"))
+		self.assertEqual(cell.value, 8.0)  # 9.5h trừ 1.5h nghỉ trưa
+
 	# ── thứ trong tuần ──────────────────────────────────────────────────────────────────────
 
 	def test_weekday_row_sits_under_the_day_numbers(self):
