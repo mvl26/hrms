@@ -39,7 +39,6 @@
   "d30",
   "d31",
   "total_paid_days",
-  "work_days",
   "annual_leave",
   "personal_leave",
   "sick_leave",
@@ -267,16 +266,6 @@
   },
   {
    "columns": 1,
-   "description": "Chỉ phần ĐI LÀM thực tế (X, CT, W, nửa buổi làm của 1/2X…). Không gồm ngày nghỉ nào.",
-   "fieldname": "work_days",
-   "fieldtype": "Float",
-   "in_list_view": 1,
-   "label": "Công đi làm",
-   "precision": "2",
-   "read_only": 1
-  },
-  {
-   "columns": 1,
    "description": "Nghỉ phép năm — công ty trả lương, đã nằm trong Tổng công.",
    "fieldname": "annual_leave",
    "fieldtype": "Float",
@@ -348,9 +337,11 @@
    "read_only": 1
   },
   {
+   "columns": 1,
    "description": "Ngày nghỉ lễ hưởng lương — đếm riêng, KHÔNG cộng vào Tổng công.",
    "fieldname": "public_holiday",
    "fieldtype": "Float",
+   "in_list_view": 1,
    "label": "Nghỉ lễ",
    "precision": "2",
    "read_only": 1

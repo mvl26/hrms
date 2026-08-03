@@ -72,8 +72,9 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		self.assertEqual(row.d04, "X")
 		self.assertEqual(row.d05, "P")
 		self.assertEqual(row.d06, "1/2P")
-		# Công = X 1.0 + 1/2P 0.5 = 1.5 ; Phép = P 1.0 + 1/2P 0.5 = 1.5
-		self.assertEqual(row.work_days, 1.5)
+		# Tổng công = X 1.0 + P 1.0 + 1/2P 1.0 (nửa làm + nửa phép đều được trả) = 3.0
+		# Phép = P 1.0 + 1/2P 0.5 = 1.5
+		self.assertEqual(row.total_paid_days, 3.0)
 		self.assertEqual(row.annual_leave, 1.5)
 
 	def test_total_paid_days_counts_paid_leave_like_the_report(self):
@@ -97,7 +98,6 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 
 		row = next((r for r in sheet.employees if r.employee == emp), None)
 		self.assertIsNotNone(row, "seeded employee missing from the sheet")
-		self.assertEqual(row.work_days, 1.0, "công đi làm: chỉ mỗi ngày X")
 		self.assertEqual(row.total_paid_days, 5.0, "X + P + KH + NB + T đều do công ty trả")
 		# nhóm không tính vào Tổng công vẫn phải hiện rõ ở cột riêng của nó
 		self.assertEqual(row.sick_leave, 1.0)
@@ -128,12 +128,11 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		report_row = next(r for r in data if r.get("employee") == emp)
 		self.assertEqual(row.total_paid_days, report_row["tong_cong"])
 
-	def test_total_paid_days_is_exactly_worked_plus_company_paid_leave(self):
-		"""Tổng công phải CỘNG ĐƯỢC từ các cột bên cạnh, không phải một con số rơi từ trên trời:
+	def test_total_paid_days_excludes_every_day_the_company_does_not_pay(self):
+		"""Tổng công chỉ gồm ngày CÔNG TY TRẢ: đi làm + phép + việc riêng + nghỉ bù + tai nạn LĐ.
 
-		    Tổng công = Công đi làm + Phép + Việc riêng + Nghỉ bù + Tai nạn LĐ
-
-		Ốm / thai sản (BHXH trả), không lương và vắng đứng ngoài. Người ký bảng phải tự kiểm được."""
+		Ốm / thai sản (BHXH trả), không lương và vắng phải nằm NGOÀI, mỗi nhóm ở cột riêng của nó —
+		không được lẫn vào Tổng công mà cũng không được biến mất khỏi bảng."""
 		emp = frappe.db.get_value("Employee", {"company": self.company, "status": "Active"}, "name")
 		if not emp:
 			self.skipTest("no employee in company")
@@ -155,9 +154,11 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		sheet.populate_from_attendance()
 		row = next(r for r in sheet.employees if r.employee == emp)
 
-		company_paid = ("work_days", "annual_leave", "personal_leave", "comp_off", "work_accident_leave")
-		self.assertEqual(row.total_paid_days, sum((row.get(f) or 0) for f in company_paid))
 		self.assertEqual(row.total_paid_days, 5.5)  # X 1 + P 1 + KH 1 + NB 1 + T 1 + nửa buổi 1/2X
+		# ba nhóm KHÔNG được trả vẫn phải hiện đủ ở cột riêng, không lẫn vào Tổng công
+		self.assertEqual(row.sick_leave, 1.0)
+		self.assertEqual(row.unpaid_leave, 1.0)
+		self.assertEqual(row.absent, 0.5)  # nửa còn lại của 1/2X
 
 	def test_populate_personal_leave_total(self):
 		# code N (nghỉ việc riêng có lương) must land in the personal_leave totals column
@@ -200,8 +201,8 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		self.assertEqual(row.absent, 1.0)  # V
 
 	def test_row_totals_foot_to_attended_days(self):
-		# a fully-resolved attended day contributes exactly 1.0 across the 9 buckets, so the row
-		# sums to the number of attended days — nothing evaporates or is double counted.
+		# Tổng công + ba nhóm không được công ty trả = số ngày có bản ghi chấm công. Mỗi ngày đóng góp
+		# đúng 1.0, không ngày nào bốc hơi hay bị đếm hai lần.
 		emp = frappe.db.get_value("Employee", {"company": self.company, "status": "Active"}, "name")
 		if not emp:
 			self.skipTest("no active employee in company")
@@ -215,17 +216,7 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 
 		row = next((r for r in sheet.employees if r.employee == emp), None)
 		self.assertIsNotNone(row, "seeded employee missing from the sheet")
-		fields = (
-			"work_days",
-			"annual_leave",
-			"personal_leave",
-			"sick_leave",
-			"maternity_leave",
-			"work_accident_leave",
-			"comp_off",
-			"unpaid_leave",
-			"absent",
-		)
+		fields = ("total_paid_days", "sick_leave", "maternity_leave", "unpaid_leave", "absent")
 		self.assertEqual(sum((row.get(f) or 0) for f in fields), 4.0)  # 4 attended days
 
 	def test_public_holiday_populates_nghi_le_column(self):
@@ -313,8 +304,8 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		self.assertIn("NGƯỜI CHẤM CÔNG", html)  # sign box 1
 		self.assertIn("PHÒNG NHÂN SỰ", html)  # sign box 2
 		self.assertIn("Chú thích", html)  # symbol legend
-		self.assertIn("Tổng<br>công", html)  # cột chủ đạo: số ngày công ty trả lương
-		self.assertIn("Công<br>đi làm", html)  # tách bạch với phần đi làm thực tế
+		self.assertIn("Tổng<br>công", html)  # cột công duy nhất: số ngày công ty trả lương
+		self.assertNotIn("Công<br>đi làm", html)  # bảng chỉ mang MỘT con số công
 
 
 class TestSubmitWarnsAboutUnreviewedDays(PerTestRollback, FrappeTestCase):

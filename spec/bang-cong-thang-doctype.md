@@ -66,23 +66,25 @@ printed form.
 
 #### Cột "Tổng công" (`total_paid_days`) — thêm 2026-08-03
 
-Bảng chỉ có cột công ĐI LÀM (`work_days`, nay đổi nhãn thành **"Công đi làm"**) nên nghỉ phép có
-lương không nằm trong bất kỳ cột công nào — người ký bảng nhìn vào tưởng công ty không trả ngày đó.
+Bảng chỉ có cột công ĐI LÀM (`work_days`) nên nghỉ phép có lương không nằm trong bất kỳ cột công
+nào — người ký bảng nhìn vào tưởng công ty không trả ngày đó.
 
-Thêm `total_paid_days`, nhãn **"Tổng công"**, lấy đúng `totals["Tổng công"]` của `get_sheet_rows`
-— cùng con số mà báo cáo chấm công tháng hiển thị và cổng `sheet_gate` đối soát với `payment_days`:
+Thay bằng `total_paid_days`, nhãn **"Tổng công"**, lấy đúng `totals["Tổng công"]` của
+`get_sheet_rows` — cùng con số mà báo cáo chấm công tháng hiển thị và cổng `sheet_gate` đối soát với
+`payment_days`:
 
-```
-Tổng công = Công đi làm + Phép + Việc riêng + Nghỉ bù + Tai nạn LĐ
+```text
+Tổng công = ngày đi làm + Phép + Việc riêng + Nghỉ bù + Tai nạn LĐ
 ```
 
 Ốm / chăm con ốm / thai sản (**BHXH** chi trả), nghỉ không lương và vắng đứng ngoài, mỗi nhóm giữ
-cột riêng; nghỉ lễ đếm riêng. Cộng được từ các cột bên cạnh nên người ký tự kiểm được (test khoá bất
-biến này). Mọi cột tổng đều có `description` nói rõ **ai trả**.
+cột riêng; nghỉ lễ đếm riêng. Bất biến được test khoá: `Tổng công + Ốm + Thai sản + Không lương +
+Vắng = số ngày có bản ghi chấm công`. Mọi cột tổng đều có `description` nói rõ **ai trả**.
 
-Lưới con giới hạn bề ngang nên hiện: Tổng công, Công đi làm, Phép, Ốm, Không lương, Vắng, Ăn trưa
-(Nghỉ lễ nhường chỗ — vẫn xem được khi mở dòng, và vẫn có trong bản in + báo cáo). Bản in có đủ 12
-cột tổng, Tổng công in đậm.
+**`work_days` đã bỏ khỏi DocType** (quyết định 2026-08-03): bảng chỉ mang MỘT con số công, hai cột
+công cạnh nhau chỉ tạo chỗ để đọc nhầm. Cần tách phần đi làm thực tế thì xem mã công từng ngày,
+hoặc cột `Công` của báo cáo. Cột DB cũ **không bị drop** — dữ liệu còn nguyên, thêm lại field là
+thấy lại, nên bước này `git revert` được trọn vẹn.
 
 Bảng lập trước khi có cột này được điền bằng patch `v15_0.backfill_sheet_total_paid_days` (kể cả
 bảng ĐÃ CHỐT — kỳ đã khoá thì `populate_from_attendance` từ chối chạy, mà để trống thì bảng đã ký
