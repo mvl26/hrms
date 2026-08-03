@@ -254,6 +254,17 @@ def is_paid_leave(code) -> bool:
 	return bool(code and cint(code.is_paid) and code.category not in NON_PAID_LEAVE_CATEGORIES)
 
 
+def paid_credit(code) -> float:
+	"""Số công DOANH NGHIỆP TRẢ cho một buổi mang mã này (0 → 1; nhân 0.5 khi cộng từng nửa).
+
+	Phần đi làm luôn được trả (`work_fraction`); phần không đi làm chỉ được trả nếu là nghỉ CÓ
+	LƯƠNG của công ty. Đây chính là luật cột "Tổng công" của bảng công, tách ra thành hàm để form
+	ngày công và báo cáo không thể lệch nhau."""
+	worked = flt(code.work_fraction)
+	rest = 1.0 - worked
+	return worked + (rest if (rest and is_paid_leave(code)) else 0.0)
+
+
 def _company_filter(filters: Filters) -> list | None:
 	if not filters.get("company"):
 		return None

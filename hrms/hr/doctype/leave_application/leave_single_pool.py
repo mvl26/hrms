@@ -21,7 +21,7 @@ lương bất biến.
 """
 
 import frappe
-from frappe.utils import cint, getdate
+from frappe.utils import cint, flt, getdate
 
 POOL_LEAVE_TYPE = "Nghỉ phép năm"
 # Loại nghỉ (nhãn tiếng Việt hiện trên đơn) → mã công. Khớp code_name trong
@@ -42,6 +42,27 @@ def resolve_reason_code(doc):
 	return POOL_REASONS.get(doc.get("custom_leave_reason"))
 
 
+def code_for_leave_type(leave_type, status="On Leave"):
+	"""Mã công của một Loại nghỉ, tra từ bảng `Attendance Code` (nguồn sự thật duy nhất).
+
+	Dùng cho mọi loại nghỉ NGOÀI quỹ phép năm. Cần thiết vì upstream
+	``create_or_update_attendance`` đi nhánh ``db_set`` khi ngày đó ĐÃ có bản ghi (thường là Vắng do
+	auto-attendance): ``db_set`` ghi thẳng DB nên ``before_validate`` — và cầu nối mã công — không
+	chạy, mã cũ (``V``) nằm nguyên. Ở nhánh tạo mới thì ``insert()`` chạy cầu nối nên vẫn đúng.
+
+	Trả None khi không loại nghỉ nào map tới — người gọi phải GIỮ NGUYÊN mã cũ, không được bịa."""
+	if not leave_type:
+		return None
+	from hrms.hr.doctype.attendance.attendance import _pick_reverse_code
+
+	matches = frappe.get_all(
+		"Attendance Code",
+		filters={"maps_to_status": status, "leave_type": leave_type},
+		pluck="name",
+	)
+	return _pick_reverse_code(status, matches)
+
+
 def validate_pool_code(doc, method=None):
 	"""Đơn rút quỹ phép năm: **bắt buộc** chọn Loại nghỉ hợp lệ; nghỉ nửa ngày bắt buộc chọn buổi
 	(Sáng/Chiều). Bỏ qua loại nghỉ khác (miễn trừ/không lương)."""
@@ -55,16 +76,21 @@ def validate_pool_code(doc, method=None):
 
 def set_leave_attendance_code(doc, method=None):
 	"""Sau khi Đơn xin nghỉ duyệt sinh Attendance (upstream ``update_attendance``), ghi mã suy từ Loại
-	nghỉ lên Attendance để bảng công hiện đúng. Chỉ áp cho đơn rút quỹ phép năm; loại miễn trừ/khác để
-	bridge reverse-derive tự đặt mã (TS/N/T…).
+	nghỉ lên Attendance để bảng công hiện đúng — cho MỌI loại nghỉ.
+
+	Đơn rút quỹ phép năm lấy mã từ "Loại nghỉ" người dùng chọn; loại nghỉ khác tra bảng
+	``Attendance Code``. Không thể phó mặc cho bridge reverse-derive: khi ngày đó ĐÃ có bản ghi (Vắng
+	do auto-attendance), upstream đi nhánh ``db_set`` nên ``before_validate`` không chạy và mã ``V``
+	kẹt lại dù status đã là On Leave.
 
 	THUẦN HIỂN THỊ: chỉ đặt mã qua ``db_set`` — không đụng status/leave_type/half_day_status nên lương
-	không đổi. Ngày nghỉ nửa ngày: tách mã theo buổi (custom_morning_code / custom_afternoon_code)."""
-	if doc.get("leave_type") != POOL_LEAVE_TYPE:
-		return
-	code = resolve_reason_code(doc)
+	không đổi. Ngày nghỉ nửa ngày: dùng token đơn (1/2P)."""
+	if doc.get("leave_type") == POOL_LEAVE_TYPE:
+		code = resolve_reason_code(doc)
+	else:
+		code = code_for_leave_type(doc.get("leave_type"))
 	if not code:
-		return
+		return  # không map được thì GIỮ NGUYÊN mã cũ, không bịa
 	period = doc.get("custom_half_day_period")
 	half_day_date = doc.get("half_day_date")
 	is_half = cint(doc.get("half_day")) and half_day_date and period
@@ -76,17 +102,16 @@ def set_leave_attendance_code(doc, method=None):
 	):
 		if is_half and getdate(att.attendance_date) == getdate(half_day_date):
 			# nghỉ nửa ngày (làm nửa còn lại) → MỘT token đơn 1/2P, không tách P/X (theo quy ước mã).
-			# db_set thuần hiển thị nên không đụng status/leave_type/half_day_status → lương bất biến.
-			vals = {
-				"custom_attendance_code": HALF_DAY_CODE.get(code, code),
-				"custom_morning_code": None,
-				"custom_afternoon_code": None,
-			}
+			day_code = HALF_DAY_CODE.get(code, code)
 		else:
-			vals = {
-				"custom_attendance_code": code,
-				"custom_morning_code": None,
-				"custom_afternoon_code": None,
-			}
+			day_code = code
+
+		# db_set thuần hiển thị nên không đụng status/leave_type/half_day_status → lương bất biến.
+		vals = {
+			"custom_attendance_code": day_code,
+			"custom_morning_code": None,
+			"custom_afternoon_code": None,
+			"custom_work_credit": flt(frappe.db.get_value("Attendance Code", day_code, "work_fraction")),
+		}
 		for field, value in vals.items():
 			frappe.db.set_value("Attendance", att.name, field, value, update_modified=False)

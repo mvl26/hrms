@@ -129,6 +129,7 @@ class Attendance(Document):
 		chưa có → bỏ qua chúng và coi như tắt giờ linh hoạt, tức hành vi y hệt trước đây."""
 		meta = frappe.get_meta("Shift Type")
 		fields = ["start_time", "end_time", "custom_split_half_day", "custom_lunch_start", "custom_lunch_end"]
+		fields.append("mark_auto_attendance_on_holidays")  # quyết định ngày nghỉ có được chấm hay không
 		fields += [
 			f
 			for f in ("custom_flexible_shift", "custom_flex_band_minutes", "custom_min_work_hours")
@@ -147,8 +148,9 @@ class Attendance(Document):
 	def apply_vn_half_day_classifier(self):
 		"""Chấm mã công + giờ net từ giờ vào/ra theo luật ca trượt & đủ giờ (`vn_day_classifier`).
 
-		Chỉ chạy khi: ca có bật `custom_split_half_day`, có đủ in/out, chưa có mã nhập tay, ngày
-		không thuộc diện nghỉ phép, và **không phải ngày nghỉ**. Xem spec §4.2."""
+		Chỉ chạy khi: ca có bật `custom_split_half_day`, có đủ in/out, chưa có mã nhập tay, và ngày
+		không thuộc diện nghỉ phép. Ngày nghỉ (T7/CN/lễ) thì tuỳ cờ `mark_auto_attendance_on_holidays`
+		của ca: tắt → không chấm gì; bật → chấm y như ngày thường. Xem spec §4.2 và §13."""
 		if not self.get("shift") or not self.get("in_time") or not self.get("out_time"):
 			return
 		if (
@@ -166,15 +168,22 @@ class Attendance(Document):
 		cfg = self.get_split_shift_config()
 		if not cfg:
 			return
-		if self.falls_on_holiday():
-			# Ngày nghỉ (T7/CN/lễ): auto-attendance vốn đã bỏ qua, nhưng bản ghi vẫn có thể sinh ra
-			# từ nhập tay / Yêu cầu chấm công. Đem khung ca ngày thường ra chấm thì người đi làm ngày
-			# nghỉ bị quy thành V hoặc nửa công — đúng thứ user báo. Ngày nghỉ KHÔNG tự chấm mã.
+		if not cint(cfg.get("mark_auto_attendance_on_holidays")) and self.falls_on_holiday():
+			# Ngày nghỉ (T7/CN/lễ) mà ca KHÔNG bật chấm công ngày nghỉ: không tự chấm mã. Bản ghi vẫn
+			# có thể sinh ra từ nhập tay / Yêu cầu chấm công; đem khung ca ngày thường ra chấm thì
+			# người đi làm ngày nghỉ bị quy thành V hoặc nửa công.
+			#
+			# Ca CÓ bật cờ thì ngược lại: công ty chủ động tính công ngày nghỉ, nên ngày đó phải đi
+			# đúng luật như ngày thường (trừ nghỉ trưa, đủ giờ mới X). Bỏ qua ở đây thì `working_hours`
+			# là giờ THÔ chưa trừ trưa và chấm 10 phút cũng thành X đủ công.
 			return
 
 		band = cfg.get("custom_flex_band_minutes")
 		lunch_start, lunch_end = resolve_lunch_window(cfg.custom_lunch_start, cfg.custom_lunch_end)
-		self.working_hours, self.custom_attendance_code = classify_day(
+		# `working_hours` nhận GIỜ LÀM THỰC TẾ (không bị khung ca cắt) — làm 08:23-18:55 phải ghi
+		# 9h02 chứ không phải 8h. Mã công thì quyết định theo `counted` (phần trong khung ca), nên
+		# ở lại muộn vẫn không tự thành công thêm. Xem `DayResult`.
+		ket_qua = classify_day(
 			get_datetime(self.in_time),
 			get_datetime(self.out_time),
 			day=datetime.combine(getdate(self.attendance_date), datetime.min.time()),
@@ -187,6 +196,8 @@ class Attendance(Document):
 			band_minutes=self.VN_DEFAULT_FLEX_BAND_MINUTES if band is None else cint(band),
 			min_work_hours=flt(cfg.get("custom_min_work_hours")) or self.VN_DEFAULT_MIN_WORK_HOURS,
 		)
+		self.working_hours = ket_qua.hours
+		self.custom_attendance_code = ket_qua.code
 
 	def apply_attendance_code_bridge(self):
 		"""Two-way bridge between VN attendance codes (mã công) and the native status fields
@@ -194,7 +205,7 @@ class Attendance(Document):
 		skip logic and only sets fields native entry would set, so payroll stays invariant.
 
 		Forward (user entered code(s)): morning/afternoon (or a single day code) -> native fields
-		+ custom_work_credit (Σ work_fraction of Công-category halves).
+		+ custom_work_credit (số công DOANH NGHIỆP TRẢ cho ngày đó — xem `_apply_codes_forward`).
 		Reverse (record has a status but no code, e.g. from auto-attendance / leave): derive
 		custom_attendance_code for display only, without changing native fields.
 		"""
@@ -244,10 +255,15 @@ class Attendance(Document):
 		if not (m and a):
 			return
 
-		# công đi làm thực tế = Σ work_fraction (worked-công fraction) of each half x 0.5.
-		# work_fraction already excludes non-working codes (P/Ô/K = 0), so no category filter needed;
-		# this also lets a single half-day code (1/2X/1/2P/1/2K, work_fraction 0.5) count its worked half.
-		self.custom_work_credit = sum(flt(c.work_fraction) * 0.5 for c in (m, a))
+		# Field "Công" = số công DOANH NGHIỆP TRẢ cho ngày này — khớp đúng cột "Tổng công" của bảng
+		# công tháng (dùng chung `paid_credit`, không chép luật sang đây để hai nơi không lệch nhau).
+		#
+		# Trước đây field mang `work_fraction` — công ĐI LÀM thực tế — nên một ngày nghỉ phép năm hiện
+		# "Công = 0" dù công ty trả đủ lương ngày đó, và con số 0 ấy gộp chung ba nhóm khác hẳn nhau:
+		# nghỉ công ty trả (P/KH/R1/R2/NB/T), nghỉ BHXH chi trả (Ô/Cô/TS) và không ai trả (K/V).
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import paid_credit
+
+		self.custom_work_credit = sum(paid_credit(c) * 0.5 for c in (m, a))
 		# single display code only when the whole day is one code
 		self.custom_attendance_code = morning if morning == afternoon else None
 
@@ -283,7 +299,10 @@ class Attendance(Document):
 			return
 		self.custom_attendance_code = code
 		c = self._get_attendance_code(code)
-		self.custom_work_credit = flt(c.work_fraction) if c else 0
+		# cùng một luật "ai trả" như nhánh forward — xem `_apply_codes_forward`
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import paid_credit
+
+		self.custom_work_credit = paid_credit(c) if c else 0
 
 	def validate(self):
 		from erpnext.controllers.status_updater import validate_status

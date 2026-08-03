@@ -94,6 +94,13 @@ class AttendanceRequest(Document):
 			# update existing attendance, change the status
 			old_status = doc.status
 
+			# Luôn gắn ngày công về đơn, kể cả khi status không đổi. Đơn on-duty / quên chấm công
+			# đều quy ra `Present`; ngày công dựng lại từ lượt chấm cũng ra `Present`. Chỉ ghi khi
+			# status khác nhau thì những ngày đó mất sạch dấu vết đơn đã duyệt — không biết ngày ấy
+			# có đơn hay không, và mã hiển thị (CT) không bao giờ được ghi.
+			if doc.attendance_request != self.name:
+				doc.db_set("attendance_request", self.name)
+
 			if old_status != status:
 				doc.db_set({"status": status, "attendance_request": self.name})
 				if status == "Half Day":

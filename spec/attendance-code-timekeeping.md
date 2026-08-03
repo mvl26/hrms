@@ -107,6 +107,28 @@ Priority khi tô ô: `N` (đã nghỉ việc) > bản ghi Attendance > `NL` > `C
 - Ví dụ 1/2P: worked 0.5 → Công +0.5; leave 0.5, category Phép → Phép +0.5. NN: Công +0.5,
   nửa còn lại là vắng không lương (không cộng vào cột nghỉ nào).
 
+### Field "Công" (`custom_work_credit`) trên form Ngày công — sửa 2026-08-03
+
+Field này **không** mang `work_fraction` nữa. Nó là **số công DOANH NGHIỆP TRẢ** cho ngày đó, đúng
+bằng cột **Tổng công** của bảng chấm công tháng:
+
+```
+công = work_fraction + (phần không đi làm nếu đó là nghỉ CÓ LƯƠNG công ty trả)
+```
+
+Luật nằm ở một chỗ duy nhất — `monthly_attendance_report.paid_credit()` — cả hai chiều của cầu nối
+mã công (`_apply_codes_forward`, `_derive_attendance_code_reverse`), nút Đồng bộ mã công và báo cáo
+đều gọi nó, nên form và bảng công không thể lệch nhau.
+
+**Vì sao đổi:** mang `work_fraction` thì một ngày **nghỉ phép năm hiện Công = 0** dù công ty trả đủ
+lương, và cùng số 0 ấy gộp ba nhóm khác hẳn nhau: nghỉ công ty trả (P/KH/R1/R2/NB/T), nghỉ **BHXH**
+chi trả (Ô/Cô/TS) và không ai trả (K/V). Nay: nhóm 1 = 1,0; nhóm 2 và 3 = 0; `1/2P` = 1,0 (nửa làm
++ nửa phép đều được trả) còn `1/2K`/`1/2X` = 0,5.
+
+Vẫn **thuần hiển thị** — payroll chỉ đọc `status`/`leave_type`/`half_day_status`. Dữ liệu cũ tính
+lại bằng patch `v15_0.recompute_work_credit_as_paid_cong` (idempotent). Sau khi tính lại,
+`Σ Công của tháng == payment_days` của phiếu lương, nên field này thành một phép đối soát nhanh.
+
 ## Phase 0 — Leave Type anchors (VN law)
 
 Standardize/ensure these Leave Types exist with correct flags so codes can point at them

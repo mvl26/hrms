@@ -146,7 +146,11 @@ khung ca trượt ra khỏi giờ trưa — không phụ thuộc giả định n
 Với biên ±3h và trưa 12:00–13:30: khung ca luôn bắt đầu ≤ 11:00 và kết thúc ≥ 14:30 ⇒ giờ trưa luôn
 nằm trọn trong khung ⇒ luôn trừ đủ 1,5h.
 
-Giờ làm **ngoài khung ca trượt không được cộng** — đó là chủ ý: làm thêm không tự biến thành công.
+Giờ làm **ngoài khung ca trượt không được cộng vào phần TÍNH CÔNG** — đó là chủ ý: làm thêm không
+tự biến thành công.
+
+> ⚠️ **§12 sửa lại phần này**: công thức trên chỉ còn dùng cho `counted` (giờ tính công). Số ghi vào
+> `working_hours` nay là **giờ làm thực tế**, không bị khung ca cắt.
 
 ### 4.3 Mã công
 
@@ -358,3 +362,60 @@ ngày BHXH là có lương trong khi controller đã trừ — lệch mà không
 
 **Tác động trên dữ liệu thật (T6/2026):** Nguyễn Văn An 20,5 → 18,5 công (1 Ô + 1 Cô);
 Trần Thị Bình 22,0 → 19,0 (3 TS). Bảng chốt và 6 phiếu lương T6 đã được tính lại theo luật mới.
+
+
+## 12. Giờ ghi nhận phải là giờ ĐÃ LÀM, không phải phần lọt vào khung ca (2026-07-30)
+
+**Vấn đề:** làm 08:23 → 18:55 (10h32, trừ nghỉ trưa còn **9h02**) bị ghi thành **8h**, vì khung ca
+trượt kết thúc lúc 17:53 và mọi giờ sau đó bị cắt.
+
+**Nguyên nhân:** §4.2 gộp hai con số vốn khác nhau vào cùng một chỗ. Khung ca có việc của nó — chặn
+việc ở lại muộn tự biến thành công — nhưng nó **không được phép bóp méo số giờ đã làm**.
+
+`classify_day` nay trả `DayResult(hours, counted, code)`:
+
+| | Ý nghĩa | Dùng ở đâu |
+|---|---|---|
+| `hours` | **giờ làm thực tế**: ra − vào, trừ phần trùng nghỉ trưa. Không bị khung ca cắt | ghi vào `working_hours`; bảng công, báo cáo giờ làm việc |
+| `counted` | **giờ tính công**: phần nằm trong khung ca | quyết định `X` / `1/2X` / `V` |
+
+Ví dụ phân biệt rõ hai con số:
+
+```
+08:23-18:55  →  hours 9.03  counted 8.00  →  X      (làm thêm không thành công thêm)
+14:00-22:00  →  hours 8.00  counted 6.50  →  1/2X   (đủ 8h nhưng ngoài biên ca trượt)
+11:00-19:30  →  hours 7.00  counted 7.00  →  1/2X   (thiếu giờ thật)
+```
+
+**Tác động dữ liệu (đã chạy):** 204/212 ngày trên site ghi thiếu giờ, tổng **104,77 giờ**. Đã tính
+lại toàn bộ. **Không mã công nào đổi và không phiếu lương nào đổi** — đây thuần là sửa con số hiển
+thị cho đúng sự thật. Giờ làm trung bình nay 7,97–8,5h/ngày; ngày cao nhất 10,3h.
+
+
+## 13. Ngày nghỉ: cờ `Mark Auto Attendance on Holidays` điều khiển trọn chuỗi (2026-07-30)
+
+**Câu hỏi của user:** ngày nghỉ có "ghi đè" lượt chấm công không, và cho chọn được không.
+
+**Trả lời: có chọn được — bằng cờ `Mark Auto Attendance on Holidays` sẵn có trên Shift Type.**
+Cờ này quyết định *toàn bộ* cách hệ thống đối xử với ngày nghỉ có lượt chấm:
+
+| | TẮT (mặc định) | BẬT |
+|---|---|---|
+| Lượt chấm ngày nghỉ | vẫn lưu, **không** sinh bản ghi công | sinh bản ghi công |
+| Bảng công | hiện `-` (nghỉ tuần) hoặc `NL` (nghỉ lễ) | hiện mã công thật (`X` / `1/2X`) |
+| Màn hình soát | cờ **"Ngày nghỉ nhưng có chấm công"** để HR xử lý riêng | không cờ (ngày bình thường) |
+| Giờ ghi nhận | không có | trừ nghỉ trưa như ngày thường |
+| Công | không tính | đủ giờ tối thiểu mới `X`, thiếu → `1/2X` |
+
+**Lỗi đã sửa:** chốt chặn ngày nghỉ của bộ phân loại (§4.2) chạy **vô điều kiện**, nên bật cờ xong
+ngày lễ vẫn đi đường riêng: `working_hours` là **giờ thô chưa trừ nghỉ trưa** (đo thật: 10,6h thay
+vì 9,1h cho ca 08:05–18:40) và mã luôn là `X` do suy ngược từ status — tức **chấm 10 phút ngày lễ
+cũng thành đủ công**. Nay chốt chặn chỉ áp dụng khi cờ TẮT.
+
+Mô tả field trên giao diện cũng được viết lại bằng tiếng Việt cho rõ hai chế độ (bản gốc chỉ có một
+câu tiếng Anh *"If enabled, auto attendance will be marked on holidays if Employee Checkins exist"*,
+không nói gì về công/giờ).
+
+**Lưu ý:** cờ này là **cấu hình theo ca**, không phải theo ngày. Muốn tính công một ngày lễ cụ thể
+(ví dụ huy động đi làm bù) mà không đổi luật cả ca, dùng **Yêu cầu chấm công** cho ngày đó — nó đi
+đường riêng và §11 đã bảo đảm nó không bị auto-attendance chấm vắng đè lên.
