@@ -358,3 +358,31 @@ ngày BHXH là có lương trong khi controller đã trừ — lệch mà không
 
 **Tác động trên dữ liệu thật (T6/2026):** Nguyễn Văn An 20,5 → 18,5 công (1 Ô + 1 Cô);
 Trần Thị Bình 22,0 → 19,0 (3 TS). Bảng chốt và 6 phiếu lương T6 đã được tính lại theo luật mới.
+
+
+## 12. Giờ ghi nhận phải là giờ ĐÃ LÀM, không phải phần lọt vào khung ca (2026-07-30)
+
+**Vấn đề:** làm 08:23 → 18:55 (10h32, trừ nghỉ trưa còn **9h02**) bị ghi thành **8h**, vì khung ca
+trượt kết thúc lúc 17:53 và mọi giờ sau đó bị cắt.
+
+**Nguyên nhân:** §4.2 gộp hai con số vốn khác nhau vào cùng một chỗ. Khung ca có việc của nó — chặn
+việc ở lại muộn tự biến thành công — nhưng nó **không được phép bóp méo số giờ đã làm**.
+
+`classify_day` nay trả `DayResult(hours, counted, code)`:
+
+| | Ý nghĩa | Dùng ở đâu |
+|---|---|---|
+| `hours` | **giờ làm thực tế**: ra − vào, trừ phần trùng nghỉ trưa. Không bị khung ca cắt | ghi vào `working_hours`; bảng công, báo cáo giờ làm việc |
+| `counted` | **giờ tính công**: phần nằm trong khung ca | quyết định `X` / `1/2X` / `V` |
+
+Ví dụ phân biệt rõ hai con số:
+
+```
+08:23-18:55  →  hours 9.03  counted 8.00  →  X      (làm thêm không thành công thêm)
+14:00-22:00  →  hours 8.00  counted 6.50  →  1/2X   (đủ 8h nhưng ngoài biên ca trượt)
+11:00-19:30  →  hours 7.00  counted 7.00  →  1/2X   (thiếu giờ thật)
+```
+
+**Tác động dữ liệu (đã chạy):** 204/212 ngày trên site ghi thiếu giờ, tổng **104,77 giờ**. Đã tính
+lại toàn bộ. **Không mã công nào đổi và không phiếu lương nào đổi** — đây thuần là sửa con số hiển
+thị cho đúng sự thật. Giờ làm trung bình nay 7,97–8,5h/ngày; ngày cao nhất 10,3h.

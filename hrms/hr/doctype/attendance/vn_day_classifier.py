@@ -20,6 +20,7 @@ luôn nằm trọn trong khung → luôn trừ đủ 1,5h và mỗi phía của 
 """
 
 from datetime import datetime, timedelta
+from typing import NamedTuple
 
 CODE_FULL_DAY = "X"  # đủ giờ → đủ công
 CODE_SHORT_HOURS = "1/2X"  # có đi làm nhưng thiếu giờ → nửa công
@@ -69,6 +70,20 @@ def shift_window(
 	return w_start + offset, w_end + offset
 
 
+class DayResult(NamedTuple):
+	"""Kết quả chấm một ngày. HAI con số giờ, đừng lẫn:
+
+	- `hours` — **giờ làm thực tế**: ra - vào, trừ phần trùng nghỉ trưa. Đây là số giờ người ta đã
+	  thực sự làm, hiện trên bảng công và báo cáo giờ làm việc. Không bị khung ca cắt.
+	- `counted` — **giờ tính công**: phần nằm trong khung ca. Chỉ dùng để quyết định đủ công hay
+	  thiếu giờ, để việc ở lại muộn không tự biến thành công thêm.
+	"""
+
+	hours: float
+	counted: float
+	code: str
+
+
 def classify_day(
 	in_time: datetime,
 	out_time: datetime,
@@ -81,21 +96,33 @@ def classify_day(
 	flexible: bool = False,
 	band_minutes: int = 0,
 	min_work_hours: float = 8.0,
-) -> tuple[float, str]:
-	"""Trả `(giờ net làm tròn 2 chữ số, mã công)` cho một ngày có giờ vào/ra.
+) -> DayResult:
+	"""Chấm một ngày có giờ vào/ra → `DayResult(hours, counted, code)`.
 
 	`day` là nửa đêm của ngày chấm công; `start_time`/`end_time`/`lunch_*` là timedelta tính từ
-	nửa đêm (đúng kiểu Frappe trả về cho field Time)."""
+	nửa đêm (đúng kiểu Frappe trả về cho field Time).
+
+	Trước đây hàm này chỉ trả MỘT số giờ — phần lọt vào khung ca — và ghi thẳng vào `working_hours`.
+	Hệ quả: làm 08:23-18:55 (9h02 thật) bị ghi thành 8h vì khung ca trượt kết thúc 17:53. Khung ca
+	có việc của nó là chặn làm thêm biến thành công, nhưng **không được bóp méo số giờ đã làm**.
+	"""
 	w_start, w_end = shift_window(in_time, day, start_time, end_time, flexible, band_minutes)
 	l_start, l_end = day + lunch_start, day + lunch_end
 
-	worked = overlap_hours(in_time, out_time, w_start, w_end)
-	# chỉ trừ phần giờ trưa THỰC SỰ nằm trong khung ca — khung trượt xa có thể không chứa trọn giờ trưa
-	lunch = overlap_hours(in_time, out_time, max(w_start, l_start), min(w_end, l_end))
-	hours = round(max(worked - lunch, 0.0), 2)
+	# giờ làm THỰC TẾ: toàn bộ thời gian có mặt, chỉ trừ phần trùng nghỉ trưa
+	actual = overlap_hours(in_time, out_time, in_time, out_time) - overlap_hours(
+		in_time, out_time, l_start, l_end
+	)
+	hours = round(max(actual, 0.0), 2)
 
-	if hours >= min_work_hours:
-		return hours, CODE_FULL_DAY
-	if hours > 0:
-		return hours, CODE_SHORT_HOURS
-	return hours, CODE_ABSENT
+	# giờ TÍNH CÔNG: chỉ phần nằm trong khung ca, trừ phần giờ trưa thực sự nằm trong khung đó
+	# (khung trượt xa có thể không chứa trọn giờ trưa)
+	in_window = overlap_hours(in_time, out_time, w_start, w_end)
+	lunch_in_window = overlap_hours(in_time, out_time, max(w_start, l_start), min(w_end, l_end))
+	counted = round(max(in_window - lunch_in_window, 0.0), 2)
+
+	if counted >= min_work_hours:
+		return DayResult(hours, counted, CODE_FULL_DAY)
+	if counted > 0:
+		return DayResult(hours, counted, CODE_SHORT_HOURS)
+	return DayResult(hours, counted, CODE_ABSENT)

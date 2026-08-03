@@ -174,7 +174,10 @@ class Attendance(Document):
 
 		band = cfg.get("custom_flex_band_minutes")
 		lunch_start, lunch_end = resolve_lunch_window(cfg.custom_lunch_start, cfg.custom_lunch_end)
-		self.working_hours, self.custom_attendance_code = classify_day(
+		# `working_hours` nhận GIỜ LÀM THỰC TẾ (không bị khung ca cắt) — làm 08:23-18:55 phải ghi
+		# 9h02 chứ không phải 8h. Mã công thì quyết định theo `counted` (phần trong khung ca), nên
+		# ở lại muộn vẫn không tự thành công thêm. Xem `DayResult`.
+		ket_qua = classify_day(
 			get_datetime(self.in_time),
 			get_datetime(self.out_time),
 			day=datetime.combine(getdate(self.attendance_date), datetime.min.time()),
@@ -187,6 +190,8 @@ class Attendance(Document):
 			band_minutes=self.VN_DEFAULT_FLEX_BAND_MINUTES if band is None else cint(band),
 			min_work_hours=flt(cfg.get("custom_min_work_hours")) or self.VN_DEFAULT_MIN_WORK_HOURS,
 		)
+		self.working_hours = ket_qua.hours
+		self.custom_attendance_code = ket_qua.code
 
 	def apply_attendance_code_bridge(self):
 		"""Two-way bridge between VN attendance codes (mã công) and the native status fields
