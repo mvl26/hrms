@@ -143,3 +143,42 @@ def set_attendance_request_code(doc, method=None):
 			}
 		for field, value in vals.items():
 			frappe.db.set_value("Attendance", att.name, field, value, update_modified=False)
+
+
+def approved_request_for(employee: str, date) -> str | None:
+	"""Tên Yêu cầu chấm công ĐÃ DUYỆT phủ ngày này, hoặc None."""
+	return frappe.db.get_value(
+		"Attendance Request",
+		{
+			"employee": employee,
+			"docstatus": 1,
+			"from_date": ["<=", date],
+			"to_date": [">=", date],
+		},
+		"name",
+	)
+
+
+def reapply_attendance_request(employee: str, date) -> str | None:
+	"""Dựng lại ngày công từ Yêu cầu chấm công đã duyệt. Trả tên yêu cầu nếu có dựng, None nếu không.
+
+	Yêu cầu chấm công chỉ ghi ra Attendance ĐÚNG MỘT LẦN, lúc submit. Sau đó bất kỳ lần nào ngày
+	công được dựng lại — chạy công cụ rebuild, HR huỷ rồi chấm lại, bản ghi bị xoá — auto-attendance
+	thấy ngày trống là chấm **Vắng**, vì `get_dates_for_attendance` chỉ trừ ngày lễ và ngày đã có
+	bản ghi, không hề hỏi Yêu cầu chấm công. Người lao động có đơn WFH đã duyệt mà vẫn bị ghi vắng.
+
+	Hàm này để auto-attendance hỏi lại trước khi chấm vắng: có đơn đã duyệt thì dựng lại đúng ngày
+	công đó (WFH / on-duty / quên chấm) thay vì chấm vắng. Dùng chính `create_or_update_attendance`
+	của Yêu cầu chấm công nên không đẻ ra đường ghi thứ hai.
+	"""
+	name = approved_request_for(employee, date)
+	if not name:
+		return None
+
+	doc = frappe.get_doc("Attendance Request", name)
+	if not doc.should_mark_attendance(date):
+		return None  # ngày lễ / đang nghỉ phép — chính đơn cũng không chấm ngày này
+
+	doc.create_or_update_attendance(date)
+	set_attendance_request_code(doc)
+	return name

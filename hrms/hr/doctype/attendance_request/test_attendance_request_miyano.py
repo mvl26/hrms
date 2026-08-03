@@ -438,3 +438,174 @@ class TestAttendanceRequestPayrollInvariance(PerTestRollback, FrappeTestCase):
 		)
 		self.assertEqual(absent, 1)  # chỉ ngày Absent
 		self.assertEqual(lwp, 0)  # WFH/On Duty/muộn-sớm không tạo LWP
+
+
+class TestApprovedRequestSurvivesRebuild(PerTestRollback, FrappeTestCase):
+	"""Yêu cầu chấm công đã duyệt phải THẮNG auto-attendance, không chỉ lúc submit.
+
+	Yêu cầu chỉ ghi ra Attendance đúng một lần (`create_or_update_attendance` trong `on_submit`).
+	Sau đó bất kỳ lần nào ngày công được dựng lại — chạy công cụ rebuild, HR huỷ rồi chấm lại, hoặc
+	bản ghi bị xoá — auto-attendance thấy ngày trống là chấm **Vắng**, vì `get_dates_for_attendance`
+	chỉ trừ ngày lễ và ngày đã có bản ghi, không hề hỏi Yêu cầu chấm công.
+
+	Hệ quả người dùng thấy: "tôi có yêu cầu WFH đã duyệt mà ngày đó vẫn bị ghi vắng mặt".
+	"""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.shift = "VN AR Rebuild Shift (test)"
+		if not frappe.db.exists("Shift Type", cls.shift):
+			frappe.get_doc(
+				{
+					"doctype": "Shift Type",
+					"__newname": cls.shift,
+					"start_time": "08:00:00",
+					"end_time": "17:30:00",
+					"enable_auto_attendance": 1,
+				}
+			).insert()
+
+	def setUp(self):
+		from erpnext.setup.doctype.employee.test_employee import make_employee
+
+		from hrms.tests.vn_test_utils import default_company
+
+		self.company = default_company()
+		self.emp = make_employee("ar_rebuild@wfh.test", company=self.company, date_of_joining="2098-01-01")
+		frappe.db.set_value("Employee", self.emp, "default_shift", self.shift)
+		self.day = "2098-05-06"  # thứ Hai
+
+	def approve_wfh(self):
+		ar = frappe.get_doc(
+			{
+				"doctype": "Attendance Request",
+				"employee": self.emp,
+				"from_date": self.day,
+				"to_date": self.day,
+				"reason": "Work From Home",
+				"company": self.company,
+				"custom_approver": frappe.session.user,
+			}
+		)
+		ar.insert()
+		ar.submit()
+		return ar
+
+	def attendance(self):
+		return frappe.db.get_value(
+			"Attendance",
+			{"employee": self.emp, "attendance_date": self.day, "docstatus": ["<", 2]},
+			["status", "attendance_request", "custom_attendance_code"],
+			as_dict=True,
+		)
+
+	def wipe_attendance(self):
+		"""Mô phỏng ngày công bị dựng lại: xoá bản ghi rồi để auto-attendance chạy lại."""
+		att = frappe.db.get_value(
+			"Attendance", {"employee": self.emp, "attendance_date": self.day, "docstatus": ["<", 2]}
+		)
+		doc = frappe.get_doc("Attendance", att)
+		if doc.docstatus == 1:
+			doc.cancel()
+		frappe.delete_doc("Attendance", att, force=1, ignore_permissions=True)
+
+	def run_auto_attendance(self):
+		shift = frappe.get_doc("Shift Type", self.shift)
+		shift.process_attendance_after = "2098-05-01"
+		shift.last_sync_of_checkin = "2098-05-31 23:59:59"
+		shift.save()
+		shift.reload()
+		shift.process_auto_attendance()
+
+	def test_the_request_marks_the_day_on_submit(self):
+		self.approve_wfh()
+		self.assertEqual(self.attendance().status, "Work From Home")
+
+	def test_the_day_is_not_marked_absent_after_a_rebuild(self):
+		self.approve_wfh()
+		self.wipe_attendance()
+		self.run_auto_attendance()
+		self.assertNotEqual(
+			(self.attendance() or frappe._dict()).status,
+			"Absent",
+			"có yêu cầu WFH đã duyệt mà vẫn bị chấm vắng",
+		)
+
+	def test_the_day_goes_back_to_work_from_home_after_a_rebuild(self):
+		self.approve_wfh()
+		self.wipe_attendance()
+		self.run_auto_attendance()
+		att = self.attendance()
+		self.assertIsNotNone(att, "ngày có yêu cầu đã duyệt không được để trống")
+		self.assertEqual(att.status, "Work From Home")
+		self.assertTrue(att.attendance_request, "bản ghi dựng lại phải gắn về đúng yêu cầu")
+
+
+class TestRequestAlwaysLinksItsDay(PerTestRollback, FrappeTestCase):
+	"""Dựng lại ngày công phải GẮN LẠI đơn đã duyệt, kể cả khi status trùng nhau.
+
+	`create_or_update_attendance` chỉ ghi khi `old_status != status`. Đơn on-duty / quên chấm công
+	đều quy ra `Present`; ngày công dựng lại từ lượt chấm cũng ra `Present`. Status trùng nên đơn
+	KHÔNG được gắn lại: `attendance_request` để trống và mã hiển thị (CT) không bao giờ được ghi.
+	Nhìn vào ngày công không biết nó có đơn đã duyệt hay không.
+
+	(Nộp đơn mới cho ngày đã cùng status thì upstream chặn ngay từ `validate`, nên tình huống này
+	chỉ xuất hiện sau khi dữ liệu bị dựng lại — đúng ca `HR-ARQ-26-07-00004` trên site.)
+	"""
+
+	def setUp(self):
+		from erpnext.setup.doctype.employee.test_employee import make_employee
+
+		from hrms.tests.vn_test_utils import default_company
+
+		self.company = default_company()
+		self.emp = make_employee("ar_link@onduty.test", company=self.company, date_of_joining="2098-01-01")
+		self.day = "2098-05-07"
+
+	def approved_on_duty(self):
+		ar = frappe.get_doc(
+			{
+				"doctype": "Attendance Request",
+				"employee": self.emp,
+				"from_date": self.day,
+				"to_date": self.day,
+				"reason": "On Duty",
+				"company": self.company,
+				"custom_approver": frappe.session.user,
+			}
+		)
+		ar.insert()
+		ar.submit()
+		return ar
+
+	def attendance(self):
+		return frappe.db.get_value(
+			"Attendance",
+			{"employee": self.emp, "attendance_date": self.day, "docstatus": ["<", 2]},
+			["name", "status", "attendance_request", "custom_attendance_code"],
+			as_dict=True,
+		)
+
+	def test_reapplying_relinks_the_day_even_when_the_status_already_matches(self):
+		from hrms.hr.doctype.attendance_request.attendance_request_miyano import (
+			reapply_attendance_request,
+		)
+
+		ar = self.approved_on_duty()
+		att = self.attendance()
+		self.assertEqual(att.status, "Present")
+
+		# mô phỏng ngày công được dựng lại: cùng status nhưng mất liên kết và mất mã
+		frappe.db.set_value(
+			"Attendance",
+			att.name,
+			{"attendance_request": None, "custom_attendance_code": "X"},
+			update_modified=False,
+		)
+
+		reapply_attendance_request(self.emp, self.day)
+
+		lai = self.attendance()
+		self.assertEqual(lai.attendance_request, ar.name, "phải gắn lại về đơn đã duyệt")
+		self.assertEqual(lai.custom_attendance_code, "CT", "on-duty phải mang lại mã hiển thị CT")

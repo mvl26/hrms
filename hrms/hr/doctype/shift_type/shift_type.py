@@ -218,11 +218,21 @@ class ShiftType(Document):
 		start_time = get_time(self.start_time)
 		dates = self.get_dates_for_attendance(employee)
 
+		from hrms.hr.doctype.attendance_request.attendance_request_miyano import (
+			reapply_attendance_request,
+		)
+
 		for date in dates:
 			timestamp = datetime.combine(date, start_time)
 			shift_details = get_employee_shift(employee, timestamp, True)
 
 			if shift_details and shift_details.shift_type.name == self.name:
+				# Có Yêu cầu chấm công đã duyệt phủ ngày này thì dựng lại ngày công theo đơn (WFH /
+				# on-duty / quên chấm) rồi thôi — chấm vắng đè lên đơn đã duyệt là sai. Đơn chỉ ghi
+				# Attendance đúng một lần lúc submit, nên mỗi lần dựng lại dữ liệu phải hỏi lại nó.
+				if reapply_attendance_request(employee, date):
+					continue
+
 				attendance = mark_attendance(employee, date, "Absent", self.name)
 
 				if not attendance:
