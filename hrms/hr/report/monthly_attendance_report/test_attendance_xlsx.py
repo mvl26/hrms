@@ -87,14 +87,14 @@ class TestAttendanceXlsx(PerTestRollback, FrappeTestCase):
 
 	def test_day_cells_carry_state_colours(self):
 		self.mk(5, custom_attendance_code="X")  # đi làm đủ  → work
-		self.mk(6, custom_attendance_code="P")  # phép năm   → leave
+		self.mk(6, custom_attendance_code="P")  # phép năm   → half (tím)
 		self.mk(7, custom_attendance_code="V")  # vắng       → absent
 
 		ws = self.sheet()
 		r = self.find_row(ws, self.emp)
 
 		self.assertEqual(rgb(ws.cell(r, self.day_col(ws, 5))), STATE_STYLE["work"]["bg"].lstrip("#"))
-		self.assertEqual(rgb(ws.cell(r, self.day_col(ws, 6))), STATE_STYLE["leave"]["bg"].lstrip("#"))
+		self.assertEqual(rgb(ws.cell(r, self.day_col(ws, 6))), STATE_STYLE["half"]["bg"].lstrip("#"))
 		self.assertEqual(rgb(ws.cell(r, self.day_col(ws, 7))), STATE_STYLE["absent"]["bg"].lstrip("#"))
 		self.assertEqual(ws.cell(r, self.day_col(ws, 5)).value, "X")
 
@@ -253,7 +253,7 @@ class TestAttendanceXlsx(PerTestRollback, FrappeTestCase):
 					codes.setdefault(cell.value, []).append(rgb(cell))
 		# ký hiệu trong chú thích mang đúng màu state của nó (giống hệt ô trong lưới)
 		self.assertIn(STATE_STYLE["work"]["bg"].lstrip("#"), codes.get("X", []))
-		self.assertIn(STATE_STYLE["leave"]["bg"].lstrip("#"), codes.get("P", []))
+		self.assertIn(STATE_STYLE["half"]["bg"].lstrip("#"), codes.get("P", []))
 		self.assertIn(STATE_STYLE["absent"]["bg"].lstrip("#"), codes.get("V", []))
 
 	# ── endpoint của nút Export ─────────────────────────────────────────────────────────────

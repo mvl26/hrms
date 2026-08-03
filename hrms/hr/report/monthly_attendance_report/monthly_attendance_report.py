@@ -67,8 +67,11 @@ REPORT_CATEGORIES = [
 # xử lý riêng thành "half" TRƯỚC khi tra bảng này, nên ở đây chỉ cần map theo category.
 CATEGORY_STATE = {
 	"Công": "work",
-	"Phép": "leave",
-	"Việc riêng": "leave",  # nghỉ hiếu hỉ có lương — mặc định gộp cùng phép (vàng)
+	# Phép năm dùng chung state (và màu tím) với 1/2P: nghỉ phép là nghỉ phép, cả ngày hay nửa ngày
+	# thì nhìn phải giống nhau. `1/2P` vốn đã rơi vào "half" qua nhánh work_fraction ở `day_state`,
+	# nên map này chỉ đổi màu của đúng mã `P` — không mã nào khác mang category "Phép".
+	"Phép": "half",
+	"Việc riêng": "leave",  # nghỉ hiếu hỉ có lương — giữ vàng riêng, KHÔNG theo màu phép năm
 	"Ốm": "sick",
 	"Thai sản": "sick",
 	"Tai nạn LĐ": "sick",

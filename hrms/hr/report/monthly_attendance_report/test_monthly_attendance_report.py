@@ -334,8 +334,9 @@ class TestAttendanceColorState(PerTestRollback, FrappeTestCase):
 			"1/2P": "half",
 			"1/2K": "half",
 			# nghỉ cả ngày → theo category
-			"P": "leave",
-			"KH": "leave",  # việc riêng / kết hôn (mặc định gộp phép/vàng)
+			# Phép năm cùng màu tím với 1/2P: nghỉ phép là nghỉ phép, cả ngày hay nửa ngày.
+			"P": "half",
+			"KH": "leave",  # việc riêng / kết hôn — giữ vàng, KHÔNG theo phép năm
 			"Ô": "sick",
 			"Cô": "sick",
 			"TS": "sick",
@@ -364,7 +365,8 @@ class TestAttendanceColorState(PerTestRollback, FrappeTestCase):
 		self.assertEqual(day_state("X/Ô", cm), "half")
 		# không nửa nào đi làm → theo category nửa sáng
 		self.assertEqual(day_state("Ô/P", cm), "sick")
-		self.assertEqual(day_state("P/Ô", cm), "leave")
+		# sáng phép → lấy màu phép (tím), nhất quán với mã P cả ngày
+		self.assertEqual(day_state("P/Ô", cm), "half")
 
 	def test_style_map_covers_every_state(self):
 		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
