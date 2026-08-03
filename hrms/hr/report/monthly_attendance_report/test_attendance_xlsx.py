@@ -12,7 +12,18 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import getdate
 
 from hrms.hr.attendance_legend import legend_pairs
-from hrms.hr.attendance_xlsx import LEGEND_LABEL, MAX_LEGEND_ROWS, build_workbook, legend_layout
+from hrms.hr.attendance_xlsx import (
+	FIRST_DATA_ROW,
+	FIRST_DAY_COLUMN,
+	HEADER_ROW,
+	LEGEND_LABEL,
+	LEGEND_LABEL_COLUMN,
+	MAX_LEGEND_ROWS,
+	MIYANO_LETTERHEAD,
+	WEEKDAY_ROW,
+	build_workbook,
+	legend_layout,
+)
 from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import STATE_STYLE, execute
 from hrms.tests.isolation import PerTestRollback
 from hrms.tests.vn_test_utils import test_employee
@@ -53,10 +64,12 @@ class TestAttendanceXlsx(PerTestRollback, FrappeTestCase):
 		return wb.active
 
 	def find_row(self, ws, employee):
-		for row in ws.iter_rows(min_col=1, max_col=1):
-			if row[0].value == employee:
+		"""Dòng của nhân viên — dò theo cột tên, vì cột đầu giờ là STT chứ không phải mã NV."""
+		name = frappe.db.get_value("Employee", employee, "employee_name")
+		for row in ws.iter_rows(min_col=2, max_col=2, min_row=FIRST_DATA_ROW):
+			if row[0].value == name:
 				return row[0].row
-		raise AssertionError(f"không thấy dòng của {employee} trong sheet")
+		raise AssertionError(f"không thấy dòng của {employee} ({name}) trong sheet")
 
 	def col_of(self, ws, header):
 		"""Cột mang nhãn `header` trên dòng tiêu đề."""
@@ -105,10 +118,54 @@ class TestAttendanceXlsx(PerTestRollback, FrappeTestCase):
 		self.assertEqual(cell.value, expected)
 		self.assertTrue(cell.font.bold, "cột Tổng công phải in đậm như trên màn hình")
 
-	def test_header_is_frozen_and_titled(self):
+	def test_header_is_frozen(self):
 		ws = self.sheet()
-		self.assertEqual(ws.freeze_panes, "C5")  # dưới HAI dòng tiêu đề (ngày + thứ)
-		self.assertIn(f"{self.month}/{self.year}", str(ws.cell(1, 1).value))
+		self.assertEqual(ws.freeze_panes, f"C{FIRST_DATA_ROW}")  # dưới HAI dòng tiêu đề bảng
+
+	# ── tiêu đề thư ─────────────────────────────────────────────────────────────────────────
+
+	def test_letterhead_block_is_left_aligned(self):
+		ws = self.sheet(company=frappe.db.get_value("Company", {}, "name"))
+		self.assertEqual(ws.cell(1, 1).value, MIYANO_LETTERHEAD["name"])
+		self.assertTrue(ws.cell(1, 1).font.bold, "tên pháp nhân phải in đậm")
+		self.assertIn(MIYANO_LETTERHEAD["tax_id"], str(ws.cell(2, 1).value))
+		self.assertIn("Địa chỉ:", str(ws.cell(3, 1).value))
+		for row in (1, 2, 3):
+			self.assertEqual(ws.cell(row, 1).alignment.horizontal, "left")
+
+	def test_title_and_period_are_centred_above_the_grid(self):
+		ws = self.sheet()
+		title_row, period_row = HEADER_ROW - 3, HEADER_ROW - 2
+		self.assertEqual(ws.cell(title_row, 1).value, "BẢNG CHẤM CÔNG")
+		self.assertEqual(ws.cell(period_row, 1).value, f"Tháng {self.month:02d} Năm {self.year}")
+		for row in (title_row, period_row):
+			self.assertEqual(ws.cell(row, 1).alignment.horizontal, "center")
+		self.assertIsNone(ws.cell(HEADER_ROW - 1, 1).value, "phải có dòng trống trước bảng")
+
+	def test_company_master_data_wins_over_the_fallback(self):
+		"""Điền `tax_id` cho Company là số đó lên bản in ngay, không phải sửa code."""
+		company = frappe.db.get_value("Company", {}, "name")
+		frappe.db.set_value("Company", company, "tax_id", "9999999999")
+		ws = self.sheet(company=company)
+		self.assertIn("9999999999", str(ws.cell(2, 1).value))
+
+	# ── cột STT ─────────────────────────────────────────────────────────────────────────────
+
+	def test_first_column_is_a_running_number_not_the_employee_id(self):
+		ws = self.sheet()
+		self.assertEqual(ws.cell(HEADER_ROW, 1).value, "STT")
+
+		numbers, row = [], FIRST_DATA_ROW
+		while isinstance(ws.cell(row, 1).value, int):
+			numbers.append(ws.cell(row, 1).value)
+			row += 1
+		self.assertTrue(numbers, "phải có ít nhất một dòng nhân viên")
+		self.assertEqual(numbers, list(range(1, len(numbers) + 1)), "STT phải chạy 1, 2, 3…")
+
+		self.assertFalse(
+			[c for r in ws.iter_rows() for c in r if str(c.value or "").startswith("HR-EMP")],
+			"mã nhân viên không được còn trong file",
+		)
 
 	# ── thứ trong tuần ──────────────────────────────────────────────────────────────────────
 
@@ -119,20 +176,19 @@ class TestAttendanceXlsx(PerTestRollback, FrappeTestCase):
 		ws = build_workbook(columns, data, filters).active
 
 		first_day = self.col_of(ws, 1)
-		day_row = 3  # dòng tiêu đề trên; hàng thứ nằm ngay dưới
-		self.assertEqual(ws.cell(day_row, first_day).value, 1)
-		self.assertEqual(ws.cell(day_row + 1, first_day).value, "CN")
-		self.assertEqual(ws.cell(day_row + 1, first_day + 1).value, "T2")
-		self.assertEqual(ws.cell(day_row + 1, first_day + 6).value, "T7")  # ngày 7
-		self.assertEqual(ws.cell(day_row + 1, first_day + 7).value, "CN")  # ngày 8, tròn một tuần
+		self.assertEqual(ws.cell(HEADER_ROW, first_day).value, 1)
+		self.assertEqual(ws.cell(WEEKDAY_ROW, first_day).value, "CN")
+		self.assertEqual(ws.cell(WEEKDAY_ROW, first_day + 1).value, "T2")
+		self.assertEqual(ws.cell(WEEKDAY_ROW, first_day + 6).value, "T7")  # ngày 7
+		self.assertEqual(ws.cell(WEEKDAY_ROW, first_day + 7).value, "CN")  # ngày 8, tròn một tuần
 
 	def test_plain_columns_span_both_header_rows(self):
 		"""Cột không phải cột ngày gộp dọc, không để nhãn lửng lơ trên hàng thứ."""
 		ws = self.sheet()
 		merged = {str(rng) for rng in ws.merged_cells.ranges}
-		self.assertIn("A3:A4", merged, "cột Mã NV phải gộp qua cả hai dòng tiêu đề")
-		self.assertIn("B3:B4", merged, "cột Nhân viên phải gộp qua cả hai dòng tiêu đề")
-		self.assertIsNone(ws.cell(4, self.col_of(ws, "Tổng công")).value)
+		self.assertIn(f"A{HEADER_ROW}:A{WEEKDAY_ROW}", merged, "cột STT phải gộp qua hai dòng tiêu đề")
+		self.assertIn(f"B{HEADER_ROW}:B{WEEKDAY_ROW}", merged, "cột Nhân viên phải gộp qua hai dòng")
+		self.assertIsNone(ws.cell(WEEKDAY_ROW, self.col_of(ws, "Tổng công")).value)
 
 	# ── khối chú thích ──────────────────────────────────────────────────────────────────────
 
@@ -148,15 +204,16 @@ class TestAttendanceXlsx(PerTestRollback, FrappeTestCase):
 		ws = self.sheet()
 		pairs = legend_pairs()
 
-		label_cells = [c for row in ws.iter_rows() for c in row if c.value == LEGEND_LABEL and c.column == 1]
+		label_cells = [c for row in ws.iter_rows() for c in row if c.value == LEGEND_LABEL]
 		self.assertEqual(len(label_cells), 1, "chữ 'Chú thích' phải nằm đúng MỘT ô")
+		self.assertEqual(label_cells[0].column, LEGEND_LABEL_COLUMN, "phải nằm ở cột Nhân viên")
 		top = label_cells[0].row
 
 		# mỗi ký hiệu một ô, nghĩa ở ô ngang hàng ngay bên phải
 		seen = {}
 		for row in ws.iter_rows(min_row=top):
 			for cell in row:
-				if cell.value in dict(pairs) and cell.column > 1:
+				if cell.value in dict(pairs) and cell.column >= FIRST_DAY_COLUMN:
 					seen[cell.value] = (cell.row, cell.column)
 		self.assertEqual(set(seen), {code for code, _name in pairs}, "thiếu ký hiệu trong chú thích")
 
@@ -194,7 +251,8 @@ class TestAttendanceXlsx(PerTestRollback, FrappeTestCase):
 			self.assertEqual(frappe.response["type"], "binary")
 			self.assertTrue(frappe.response["filename"].endswith(".xlsx"))
 			ws = load_workbook(BytesIO(frappe.response["filecontent"])).active
-			self.assertIn(f"{self.month}/{self.year}", str(ws.cell(1, 1).value))
+			period = str(ws.cell(HEADER_ROW - 2, 1).value)
+			self.assertEqual(period, f"Tháng {self.month:02d} Năm {self.year}")
 		finally:
 			frappe.local.response = response
 

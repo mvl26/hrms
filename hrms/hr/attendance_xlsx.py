@@ -45,13 +45,27 @@ MAX_LEGEND_ROWS = 10
 # hiển thị, và bọc `_()` ở module level sẽ đóng băng bản dịch ngay lúc import.
 LEGEND_LABEL = "Chú thích"
 
+# Chữ "Chú thích" nằm ở cột Nhân viên, không phải cột STT: cột STT hẹp, chữ tràn ra ngoài trông
+# như dữ liệu lạc dòng.
+LEGEND_LABEL_COLUMN = 2
+
 # Bề rộng (tính bằng ký tự) dành cho phần nghĩa của ký hiệu — đủ cho nhãn dài nhất trong
 # `Attendance Code` ("Ngày nghỉ / ngoài thời gian làm việc").
 LEGEND_MEANING_CHARS = 34
 
-# Hai cột đầu (Mã NV, Nhân viên) rộng và mang dữ liệu văn bản; khối chú thích bắt đầu từ cột ngày
-# thứ nhất vì cột ngày hẹp, vừa đúng một ô ký hiệu.
+# Hai cột đầu (STT, Nhân viên) mang dữ liệu văn bản; khối chú thích bắt đầu từ cột ngày thứ nhất
+# vì cột ngày hẹp, vừa đúng một ô ký hiệu.
 FIRST_DAY_COLUMN = 3
+
+# Bảng bắt đầu sau khối tiêu đề thư (6 dòng chữ + 1 dòng trống). Tiêu đề bảng chiếm hai dòng
+# (số ngày, rồi thứ), nên dữ liệu bắt đầu ngay dưới.
+HEADER_ROW = 8
+WEEKDAY_ROW = HEADER_ROW + 1
+FIRST_DATA_ROW = WEEKDAY_ROW + 1
+
+# Cột STT thay cột "Mã NV" của báo cáo: bản in cần số thứ tự, mã hệ thống (HR-EMP-00001) chỉ tốn
+# chỗ. Không đổi `columns` của report vì trên màn hình cột Mã NV là liên kết bấm sang hồ sơ.
+STT_COLUMN = {"fieldname": "stt", "label": "STT", "fieldtype": "Int", "width": 44}
 
 HEADER_BG = "E9EDF2"
 HEADER_FG = "1F272E"
@@ -66,11 +80,27 @@ LEFT = Alignment(horizontal="left", vertical="center")
 HEADER_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
 HEADER_HEIGHT = 34  # đủ hai dòng chữ ở cỡ mặc định
 
+PLAIN_FONT = Font()
+# Cột số nào cần khác thường: Tổng công là cột chủ đạo nên in đậm; STT chỉ để đánh dòng nên làm mờ
+# đi, không tranh mắt với số liệu.
+NUMBER_FONTS = {"tong_cong": Font(bold=True), "stt": Font(color="FF6B7280")}
+
 # Bề rộng tối thiểu của cột không phải cột ngày, để nhãn xuống dòng chứ không bị cắt cụt.
 MIN_TEXT_WIDTH = 11.0
 
 # Bề rộng cột ngày: vừa đủ mã dài nhất (`1/2P`), giữ cả tháng lọt một trang ngang khi in.
 DAY_WIDTH = 5.0
+
+# Tiêu đề thư của Miyano. Deployment này chỉ có MỘT pháp nhân (xem CLAUDE.md), và không dòng nào
+# trong ba dòng dưới đây có sẵn trong master data: `Company.company_name` là tên gọi tắt "Miyano",
+# `tax_id` để trống, site chưa có Address nào. Để đây thay vì sửa `company_name` vì đổi tên đó là
+# đổi tên công ty trên MỌI chứng từ ERPNext, không chỉ bảng chấm công. `company_lines()` vẫn ưu
+# tiên master data khi có, nên điền `tax_id` / tạo Address là hết dùng tới mặc định này.
+MIYANO_LETTERHEAD = {
+	"name": "CÔNG TY TNHH MIYANO VIỆT NAM",
+	"tax_id": "0109529507",
+	"address": ("số 20, Khu C17, ngõ 264/63, đường Ngọc Thụy, Phường Bồ Đề, Thành phố Hà Nội, Việt Nam"),
+}
 
 
 def legend_layout(count: int, max_rows: int = MAX_LEGEND_ROWS) -> tuple[int, int]:
@@ -100,15 +130,58 @@ def fill_for(state: str) -> tuple[PatternFill, Font] | tuple[None, None]:
 	)
 
 
-def report_title(filters: dict) -> str:
-	month, year = cint(filters.get("month")), cint(filters.get("year"))
-	return _("BẢNG CHẤM CÔNG THÁNG {0}/{1}").format(month, year)
+def report_period(filters: dict) -> str:
+	"""Dòng kỳ công dưới tên bảng: `Tháng 06 Năm 2026`."""
+	return _("Tháng {0} Năm {1}").format(f"{cint(filters.get('month')):02d}", cint(filters.get("year")))
+
+
+def company_lines(company: str | None) -> list[str]:
+	"""Ba dòng tiêu đề thư: tên pháp nhân, MST, địa chỉ. Bỏ qua dòng nào không có dữ liệu.
+
+	Master data thắng ở đâu có: `Company.tax_id` cho MST, Address chính liên kết với Company cho
+	địa chỉ. Site hiện chưa có cả hai (2026-08-03: `tax_id` trống, không Address nào) và
+	`Company.company_name` là tên gọi tắt "Miyano" chứ không phải tên pháp nhân trên giấy tờ, nên
+	`MIYANO_LETTERHEAD` đứng làm mặc định — điền vào Company/Address là dữ liệu thắng ngay, không
+	phải sửa code."""
+	tax_id = frappe.db.get_value("Company", company, "tax_id") if company else None
+	lines = [MIYANO_LETTERHEAD["name"]]
+	if tax_id or MIYANO_LETTERHEAD["tax_id"]:
+		lines.append(_("MST: {0}").format(tax_id or MIYANO_LETTERHEAD["tax_id"]))
+	address = company_address(company) or MIYANO_LETTERHEAD["address"]
+	if address:
+		lines.append(_("Địa chỉ: {0}").format(address))
+	return lines
+
+
+def company_address(company: str | None) -> str | None:
+	"""Địa chỉ chính của Company gộp thành một dòng; None nếu chưa có Address nào liên kết."""
+	if not company:
+		return None
+	names = frappe.get_all(
+		"Dynamic Link",
+		filters={"link_doctype": "Company", "link_name": company, "parenttype": "Address"},
+		pluck="parent",
+	)
+	if not names:
+		return None
+	addresses = frappe.get_all(
+		"Address",
+		filters={"name": ["in", names]},
+		fields=["address_line1", "address_line2", "city", "state", "country", "is_primary_address"],
+		order_by="is_primary_address desc",
+		limit=1,
+	)
+	if not addresses:
+		return None
+	a = addresses[0]
+	return ", ".join(p for p in (a.address_line1, a.address_line2, a.city, a.state, a.country) if p)
 
 
 def build_workbook(columns: list[dict], data: list[dict], filters: dict | None = None) -> Workbook:
 	"""Dựng workbook đã tô màu từ đúng `columns`/`data` mà `execute()` của report trả về."""
 	filters = frappe._dict(filters or {})
 	rows = [r for r in data if r and r.get("employee")]
+	columns = excel_columns(columns)
 
 	wb = Workbook()
 	ws = wb.active
@@ -116,59 +189,70 @@ def build_workbook(columns: list[dict], data: list[dict], filters: dict | None =
 
 	last_col = len(columns)
 	write_titles(ws, filters, last_col)
-	header_row = 3
-	first_data_row = write_header(ws, columns, header_row, filters)
-	end_row = write_rows(ws, columns, rows, first_data_row)
+	write_header(ws, columns, filters)
+	end_row = write_rows(ws, columns, rows, FIRST_DATA_ROW)
 	set_widths(ws, columns)
 
 	# đóng băng dưới tiêu đề, bên phải cột tên: cuộn kiểu gì cũng còn biết đang xem ai, ngày nào
-	ws.freeze_panes = f"{get_column_letter(FIRST_DAY_COLUMN)}{first_data_row}"
+	ws.freeze_panes = f"{get_column_letter(FIRST_DAY_COLUMN)}{FIRST_DATA_ROW}"
 
 	write_legend(ws, columns, end_row + 2)
-	setup_print(ws, header_row, first_data_row - 1, last_col)
+	setup_print(ws, last_col)
 	return wb
 
 
+def excel_columns(columns: list[dict]) -> list[dict]:
+	"""Cột của file: thay "Mã NV" bằng STT, giữ nguyên phần còn lại của báo cáo."""
+	return [STT_COLUMN if c.get("fieldname") == "employee" else c for c in columns]
+
+
 def write_titles(ws, filters: dict, last_col: int) -> None:
-	ws.cell(1, 1, report_title(filters)).font = Font(bold=True, size=14)
-	ws.cell(1, 1).alignment = CENTER
-	ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=last_col)
-	ws.row_dimensions[1].height = 24
+	"""Tiêu đề thư: khối pháp nhân căn TRÁI, rồi tên bảng + kỳ công căn GIỮA.
 
-	# dòng 2 luôn tồn tại (giữ tiêu đề ở dòng 3 cố định), chỉ điền khi có lọc công ty
-	if filters.get("company"):
-		ws.cell(2, 1, filters.company).font = Font(bold=True, size=11, color="FF6B7280")
-		ws.cell(2, 1).alignment = CENTER
-		ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=last_col)
+	Mỗi dòng gộp hết bề ngang bảng để khi in không bị cắt ở mép cột."""
+	for row, text in enumerate(company_lines(filters.get("company")), start=1):
+		cell = ws.cell(row, 1, text)
+		cell.font = Font(bold=(row == 1), size=11)
+		cell.alignment = LEFT
+		ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
+
+	# neo theo `HEADER_ROW` chứ không theo số dòng pháp nhân vừa ghi: thiếu MST hay địa chỉ thì
+	# khối trên ngắn lại, nhưng bảng vẫn phải bắt đầu đúng chỗ mọi nơi khác trong module trông đợi.
+	title_row = HEADER_ROW - 3  # tên bảng, kỳ công, rồi một dòng trống trước tiêu đề bảng
+	for offset, (text, font) in enumerate(
+		((_("BẢNG CHẤM CÔNG"), Font(bold=True, size=16)), (report_period(filters), Font(size=12)))
+	):
+		cell = ws.cell(title_row + offset, 1, text)
+		cell.font, cell.alignment = font, CENTER
+		ws.merge_cells(
+			start_row=title_row + offset, start_column=1, end_row=title_row + offset, end_column=last_col
+		)
+	ws.row_dimensions[title_row].height = 26
 
 
-def write_header(ws, columns: list[dict], row: int, filters: dict) -> int:
+def write_header(ws, columns: list[dict], filters: dict) -> None:
 	"""Tiêu đề HAI dòng: dòng trên là ngày (cột ngày) hoặc nhãn cột, dòng dưới là thứ trong tuần.
 
 	Trên màn hình datatable chỉ có một dòng tiêu đề nên ngày và thứ phải dồn chung một nhãn
 	("1 T2"). Excel thì tách được, và tách ra mới đúng lối bảng chấm công VN: hàng số ngày, ngay
-	dưới là hàng thứ. Cột không phải cột ngày gộp dọc qua cả hai dòng.
-
-	Trả về dòng dữ liệu đầu tiên."""
+	dưới là hàng thứ. Cột không phải cột ngày gộp dọc qua cả hai dòng."""
 	fill = PatternFill("solid", start_color="FF" + HEADER_BG)
 	font = Font(bold=True, color="FF" + HEADER_FG)
-	weekday_row = row + 1
 	year, month = cint(filters.get("year")), cint(filters.get("month"))
 
 	for i, col in enumerate(columns, start=1):
 		fieldname = col.get("fieldname") or ""
 		day = day_number(fieldname)
-		top = ws.cell(row, i, day if day else (col.get("label") or fieldname))
-		bottom = ws.cell(weekday_row, i, weekday_label(year, month, day) if day else None)
+		top = ws.cell(HEADER_ROW, i, day if day else (col.get("label") or fieldname))
+		bottom = ws.cell(WEEKDAY_ROW, i, weekday_label(year, month, day) if day else None)
 
 		for cell in (top, bottom):
 			cell.fill, cell.font, cell.alignment, cell.border = fill, font, HEADER_ALIGN, BORDER
 		if not day:  # nhãn cột thường: gộp dọc để chữ nằm giữa hai dòng tiêu đề
-			ws.merge_cells(start_row=row, start_column=i, end_row=weekday_row, end_column=i)
+			ws.merge_cells(start_row=HEADER_ROW, start_column=i, end_row=WEEKDAY_ROW, end_column=i)
 
-	ws.row_dimensions[row].height = HEADER_HEIGHT
-	ws.row_dimensions[weekday_row].height = 18
-	return weekday_row + 1
+	ws.row_dimensions[HEADER_ROW].height = HEADER_HEIGHT
+	ws.row_dimensions[WEEKDAY_ROW].height = 18
 
 
 def day_number(fieldname: str) -> int | None:
@@ -179,15 +263,15 @@ def day_number(fieldname: str) -> int | None:
 def write_rows(ws, columns: list[dict], rows: list[dict], start_row: int) -> int:
 	"""Ghi dữ liệu, trả về dòng cuối đã ghi (hoặc dòng ngay trước đó nếu bảng rỗng)."""
 	for offset, data_row in enumerate(rows):
-		write_row(ws, columns, data_row, start_row + offset)
+		write_row(ws, columns, data_row, start_row + offset, stt=offset + 1)
 	return start_row + len(rows) - 1
 
 
-def write_row(ws, columns: list[dict], data_row: dict, row: int) -> None:
+def write_row(ws, columns: list[dict], data_row: dict, row: int, stt: int) -> None:
 	"""Một dòng nhân viên: ô ngày tô theo `_state_<day>`, cột Tổng công in đậm."""
 	for i, col in enumerate(columns, start=1):
 		fieldname = col.get("fieldname")
-		cell = ws.cell(row, i, cell_value(data_row, col))
+		cell = ws.cell(row, i, stt if fieldname == "stt" else cell_value(data_row, col))
 		cell.border = BORDER
 
 		if fieldname.startswith("day_"):
@@ -197,8 +281,7 @@ def write_row(ws, columns: list[dict], data_row: dict, row: int) -> None:
 				cell.fill, cell.font = fill, font
 		elif col.get("fieldtype") in ("Float", "Int"):
 			cell.alignment = CENTER
-			# cột chủ đạo — in đậm y như trên màn hình
-			cell.font = Font(bold=True) if fieldname == "tong_cong" else Font()
+			cell.font = NUMBER_FONTS.get(fieldname, PLAIN_FONT)
 		else:
 			cell.alignment = LEFT
 
@@ -222,7 +305,9 @@ def set_widths(ws, columns: list[dict]) -> None:
 		if day_number(col.get("fieldname") or ""):
 			width = DAY_WIDTH
 		else:
-			width = max(excel_width(col.get("width")), MIN_TEXT_WIDTH)
+			# sàn chỉ nới tới mức nhãn cần: "STT" không việc gì phải rộng bằng "Ốm / chăm con ốm"
+			label = str(col.get("label") or "")
+			width = max(excel_width(col.get("width")), min(len(label) + 2, MIN_TEXT_WIDTH))
 		ws.column_dimensions[get_column_letter(i)].width = width
 
 
@@ -245,7 +330,7 @@ def write_legend(ws, columns: list[dict], top: int) -> None:
 	span = legend_span(ws, len(columns), groups)
 	code_map = get_code_map()
 
-	label = ws.cell(top, 1, LEGEND_LABEL)  # đúng MỘT ô, không gộp
+	label = ws.cell(top, LEGEND_LABEL_COLUMN, LEGEND_LABEL)  # đúng MỘT ô, không gộp
 	label.font = Font(bold=True)
 	label.alignment = LEFT
 
@@ -266,13 +351,13 @@ def write_legend(ws, columns: list[dict], top: int) -> None:
 		ws.merge_cells(start_row=row, start_column=col + 1, end_row=row, end_column=col + span)
 
 
-def setup_print(ws, header_row: int, weekday_row: int, last_col: int) -> None:
-	"""In ngang, co vừa một trang ngang, lặp cả hai dòng tiêu đề ở mọi trang."""
+def setup_print(ws, last_col: int) -> None:
+	"""In ngang, co vừa một trang ngang, lặp cả hai dòng tiêu đề bảng ở mọi trang."""
 	ws.page_setup.orientation = "landscape"
 	ws.page_setup.fitToWidth = 1
 	ws.page_setup.fitToHeight = 0
 	ws.sheet_properties.pageSetUpPr.fitToPage = True
-	ws.print_title_rows = f"{header_row}:{weekday_row}"
+	ws.print_title_rows = f"{HEADER_ROW}:{WEEKDAY_ROW}"
 	ws.print_area = f"A1:{get_column_letter(last_col)}{ws.max_row}"
 
 

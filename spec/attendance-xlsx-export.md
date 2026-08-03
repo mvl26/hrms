@@ -42,12 +42,23 @@ metadata ẩn, không phải cột — bộ dựng file đọc nó y như format
 Bố cục sheet:
 
 ```
-dòng 1   BẢNG CHẤM CÔNG THÁNG 8/2026          (gộp ô, đậm 14, giữa)
-dòng 2   <Công ty>                             (gộp ô, giữa; bỏ nếu không lọc công ty)
-dòng 3   Mã NV | Nhân viên | 1  | 2  | … | Tổng công | Phép | … | Số buổi ăn trưa
-dòng 4          (gộp dọc)  | T4 | T5 | … |  (gộp dọc)
-dòng 5+  dữ liệu — ô ngày tô nền theo state, chữ đậm, căn giữa; Tổng công in đậm
+dòng 1   CÔNG TY TNHH MIYANO VIỆT NAM          (gộp ô, đậm, căn TRÁI)
+dòng 2   MST: 0109529507                       (gộp ô, trái)
+dòng 3   Địa chỉ: số 20, Khu C17, …            (gộp ô, trái)
+dòng 4   —
+dòng 5   BẢNG CHẤM CÔNG                        (gộp ô, đậm 16, căn GIỮA)
+dòng 6   Tháng 06 Năm 2026                     (gộp ô, giữa)
+dòng 7   —
+dòng 8   STT | Nhân viên | 1  | 2  | … | Tổng công | Phép | … | Số buổi ăn trưa
+dòng 9        (gộp dọc)  | T4 | T5 | … |  (gộp dọc)
+dòng 10+ dữ liệu — ô ngày tô nền theo state, chữ đậm, căn giữa; Tổng công in đậm
 ```
+
+- **Cột đầu là STT** (1, 2, 3…), không phải "Mã NV": bản in cần số thứ tự, `HR-EMP-00001` chỉ tốn
+  chỗ. Chỉ đổi ở file — trên màn hình cột Mã NV vẫn là liên kết bấm sang hồ sơ nhân viên.
+- Neo dòng bằng hằng số `HEADER_ROW` / `WEEKDAY_ROW` / `FIRST_DATA_ROW`, không đếm theo số dòng
+  tiêu đề thư thực ghi: thiếu MST hay địa chỉ thì khối trên ngắn lại, bảng vẫn phải bắt đầu đúng
+  chỗ mọi nơi khác trông đợi.
 
 - Tiêu đề **hai dòng**: hàng số ngày, ngay dưới là hàng thứ (`T2`…`T7`, `CN`) — đúng lối bảng chấm
   công VN. Cột không phải cột ngày gộp dọc qua cả hai dòng. Cả hai dòng lặp lại ở mọi trang in.
@@ -76,14 +87,15 @@ n_rows   = ceil(len(pairs) / n_groups)    # → 8 dòng
 `legend_pairs()` đã sắp (đi làm → nghỉ có lương → không lương → vắng).
 
 ```
-   A          C     D … L                 M     N … V
-1  Chú thích  [X]   Đi làm đủ công        [N]   Nghỉ việc riêng
-2             [CT]  Đi công tác           [K]   Nghỉ không lương
+   B          C     D … J                 K     L … R
+1  Chú thích  [X]   Đi làm đủ công        [NB]  Nghỉ bù
+2             [CT]  Đi công tác           [KH]  Nghỉ kết hôn
 …
-8             [NB]  Nghỉ bù               [NL]  Nghỉ lễ hưởng lương
+10            [T]   Nghỉ tai nạn lao động [NL]  Nghỉ lễ hưởng lương
 ```
 
-- `Chú thích` — **một ô** (cột A, dòng đầu khối), không gộp.
+- `Chú thích` — **một ô** (cột **Nhân viên**, dòng đầu khối), không gộp. Không đặt ở cột STT: cột
+  đó hẹp, chữ tràn ra ngoài trông như dữ liệu lạc dòng.
 - Ký hiệu — **một ô**, tô đúng nền/chữ của state ô đó trong lưới, đậm, căn giữa, có viền.
 - Nghĩa — **một ô ngang hàng ngay bên phải**, gộp qua nhiều cột ngày cho đủ rộng
   (cột ngày chỉ ~4 ký tự; gộp là cách duy nhất để vẫn là "một ô" mà đọc được).
@@ -99,6 +111,19 @@ Gỡ `legend_row()`, `is_legend_row()`, `legend_text()`, `LEGEND_ROW_FIELD` kh�
 `hrms/hr/attendance_legend.py` và bỏ `data.append(legend_row())` trong `execute()`. Hệ quả đã
 lường: đường CSV và export mặc định của Frappe **không còn chú thích** — đúng ý, ai cần chú thích
 thì xuất Excel.
+
+### 2d. Tiêu đề thư (2026-08-03)
+
+`company_lines(company)` dựng ba dòng: tên pháp nhân, `MST: …`, `Địa chỉ: …`.
+
+**Master data thắng ở đâu có** — `Company.tax_id` cho MST, Address chính liên kết với Company cho
+địa chỉ. Site hiện chưa có cả hai (`tax_id` trống, không Address nào) và `Company.company_name` là
+tên gọi tắt `Miyano` chứ không phải tên pháp nhân trên giấy tờ, nên hằng số `MIYANO_LETTERHEAD`
+đứng làm mặc định.
+
+Không sửa `Company.company_name` thành tên đầy đủ: đó là tên công ty trên **mọi** chứng từ ERPNext
+(hoá đơn, phiếu lương…), không riêng bảng chấm công — đổi là đổi hết. Điền `tax_id` / tạo Address
+cho Company thì dữ liệu thắng ngay, không phải sửa code.
 
 ### 2c. Thứ trong tuần
 
@@ -150,8 +175,11 @@ nhớ rồi soi ô:
 4. Khối chú thích: `Chú thích` đúng một ô; **số dòng ≤ 10**; mỗi ký hiệu một ô, nghĩa ngang hàng
    bên phải; đủ toàn bộ `legend_pairs()`; ô ký hiệu tô đúng màu state của nó.
 5. Chú thích chia đúng số cụm khi số mã > 10 (giả lập danh sách dài).
-6. `freeze_panes` = `C5`, có dòng tiêu đề tháng.
+6. `freeze_panes` = `C10` (ngay dưới hai dòng tiêu đề bảng).
 7. Thứ trong tuần: nhãn cột trên màn hình là `1 T7` / `2 CN` cho tháng 8/2026, và đổi theo tháng
    đang xem (9/2026 → `1 T3`); trong Excel hàng thứ nằm ngay dưới hàng số ngày, cột thường gộp dọc
    qua cả hai dòng.
 8. Không ô nào trong file còn chuỗi dạng `X=…` (dòng chú thích văn bản dài đã bỏ hẳn).
+9. Tiêu đề thư: ba dòng pháp nhân căn trái ở dòng 1–3, `BẢNG CHẤM CÔNG` + `Tháng 07 Năm 2026` căn
+   giữa, dòng ngay trên bảng để trống; điền `Company.tax_id` là số đó lên bản in ngay.
+10. Cột đầu là `STT` chạy 1, 2, 3…; không ô nào trong file còn chuỗi bắt đầu bằng `HR-EMP`.
