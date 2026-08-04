@@ -513,9 +513,13 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 				if emp_hol[day]:
 					day_syms[day] = MARKER_WEEKLY_OFF  # nghỉ hàng tuần (CN) — không tính công
 				else:
-					# nghỉ lễ hưởng lương → đếm vào cột "Nghỉ lễ" (nghỉ nhưng vẫn hưởng lương)
+					# Nghỉ lễ HƯỞNG NGUYÊN LƯƠNG (Đ.112 BLLĐ) → vừa đếm riêng, vừa vào Tổng công.
+					# Quyết định 2026-08-04 (HR chốt): ngày công chuẩn = ngày đi làm + nghỉ lễ + nghỉ
+					# có lương. Trước đó ngày lễ bị loại khỏi CẢ tử số lẫn mẫu số nên đi làm đủ vẫn đủ
+					# lương, nhưng người có ngày vắng bị chia theo mẫu số nhỏ hơn → thiệt.
 					day_syms[day] = MARKER_HOLIDAY
 					totals[CATEGORY_HOLIDAY] = totals.get(CATEGORY_HOLIDAY, 0.0) + 1.0
+					totals[TOTAL_PAID] = totals.get(TOTAL_PAID, 0.0) + 1.0
 
 		rows.append(
 			{

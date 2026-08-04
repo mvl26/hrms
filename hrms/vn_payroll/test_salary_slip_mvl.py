@@ -195,3 +195,54 @@ class TestSalarySlipMVL(PerTestRollback, FrappeTestCase):
 		self.assertEqual(ss.net_pay, base_net + 5_000_000)  # thưởng cộng vào thực lĩnh
 		self.assertEqual(comp["Tổng thu nhập"], base_net + 5_000_000)  # K gồm thưởng
 		self.assertGreater(comp["Thuế TNCN (nộp thay)"], 0)  # thưởng chịu thuế
+
+
+class TestPaidHolidays(PerTestRollback, FrappeTestCase):
+	"""Ngày nghỉ lễ vào CẢ `total_working_days` lẫn `payment_days` (HR chốt 2026-08-04).
+
+	Cờ `include_holidays_in_total_working_days` của ERPNext KHÔNG dùng được: nó đếm mọi ngày trong
+	Holiday List, mà thứ Bảy/Chủ nhật cũng nằm đó (22 → 31 ngày). Nên phải đếm riêng ngày lễ."""
+
+	def make_list(self, employee):
+		hl = frappe.get_doc(
+			{
+				"doctype": "Holiday List",
+				"holiday_list_name": "MVL Le 2099-06",
+				"from_date": "2099-06-01",
+				"to_date": "2099-06-30",
+				"holidays": [
+					{"holiday_date": "2099-06-07", "description": "CN", "weekly_off": 1},
+					{"holiday_date": "2099-06-14", "description": "CN", "weekly_off": 1},
+					{"holiday_date": "2099-06-10", "description": "Lễ", "weekly_off": 0},
+					{"holiday_date": "2099-06-25", "description": "Lễ", "weekly_off": 0},
+				],
+			}
+		).insert()
+		frappe.db.set_value("Employee", employee, "holiday_list", hl.name)
+
+	def count(self, employee, start="2099-06-01", end="2099-06-30"):
+		from hrms.vn_payroll.salary_slip_hook import paid_holidays_in_period
+
+		return paid_holidays_in_period(frappe._dict(employee=employee, start_date=start, end_date=end))
+
+	def test_counts_public_holidays_only_not_weekly_offs(self):
+		emp = make_employee("mvl_hol@codes.com", company=default_company())
+		self.make_list(emp)
+		self.assertEqual(self.count(emp), 2.0, "chỉ 2 ngày lễ; 2 ngày Chủ nhật không được tính")
+
+	def test_holiday_before_joining_is_not_theirs(self):
+		emp = make_employee("mvl_hol2@codes.com", company=default_company())
+		self.make_list(emp)
+		frappe.db.set_value("Employee", emp, "date_of_joining", "2099-06-15")
+		self.assertEqual(self.count(emp), 1.0, "vào làm 15/6 → ngày lễ 10/6 không phải công của họ")
+
+	def test_holiday_after_relieving_is_not_theirs(self):
+		emp = make_employee("mvl_hol3@codes.com", company=default_company())
+		self.make_list(emp)
+		frappe.db.set_value("Employee", emp, "relieving_date", "2099-06-20")
+		self.assertEqual(self.count(emp), 1.0, "nghỉ việc 20/6 → ngày lễ 25/6 không phải công của họ")
+
+	def test_no_holiday_list_is_zero_not_an_error(self):
+		emp = make_employee("mvl_hol4@codes.com", company=default_company())
+		frappe.db.set_value("Employee", emp, "holiday_list", None)
+		self.assertIsInstance(self.count(emp), float)
