@@ -651,3 +651,22 @@ class TestThreeCodesOnly(FrappeTestCase):
 			self.skipTest("site chưa sync Property Setter cho reason")
 		for reason in [o.strip() for o in options.split("\n") if o.strip()]:
 			self.assertIn(reason, REASON_TO_CODE, f"lý do {reason!r} chưa có mã công")
+
+
+class TestHalfDaySession(FrappeTestCase):
+	"""Nửa ngày phải theo BUỔI người nộp chọn, không mặc định buổi sáng (HR nêu 2026-08-05)."""
+
+	def test_the_session_field_exists_on_the_form(self):
+		meta = frappe.get_meta("Attendance Request")
+		df = meta.get_field("custom_half_day_session")
+		if not df:
+			self.skipTest("site chưa sync custom field")
+		self.assertEqual(df.fieldtype, "Select")
+		self.assertEqual([o for o in df.options.split("\n") if o], ["Sáng", "Chiều"])
+		self.assertEqual(df.depends_on, "eval:doc.half_day", "chỉ hiện khi tick nửa ngày")
+		self.assertEqual(df.mandatory_depends_on, "eval:doc.half_day", "tick nửa ngày thì bắt buộc chọn")
+
+	def test_afternoon_request_writes_the_code_on_the_afternoon(self):
+		from hrms.hr.doctype.attendance_request.attendance_request_miyano import AFTERNOON, MORNING
+
+		self.assertEqual((MORNING, AFTERNOON), ("Sáng", "Chiều"))

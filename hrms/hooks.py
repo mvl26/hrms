@@ -327,6 +327,7 @@ fixtures = [
 					"Leave Application-custom_leave_reason",
 					"Leave Application-custom_half_day_period",
 					"Attendance Request-custom_approver",
+					"Attendance Request-custom_half_day_session",
 					"Expense Claim-custom_business_trip",
 					"Shift Type-custom_split_half_day",
 					"Shift Type-custom_lunch_start",

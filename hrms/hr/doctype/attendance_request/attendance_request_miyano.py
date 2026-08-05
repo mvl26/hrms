@@ -111,6 +111,9 @@ def guard_submit(doc, method=None):
 # --- mã công (thuần hiển thị, payroll-neutral) --------------------------------------------------
 UNPAID_CODE = "K"  # nửa còn lại KHÔNG làm → nghỉ không lương (native half_day_status="Absent" trừ 0.5)
 
+# Giá trị của `custom_half_day_session` (custom field, fixtures). Chỉ hai buổi; mặc định "Sáng".
+MORNING, AFTERNOON = "Sáng", "Chiều"
+
 
 def set_attendance_request_code(doc, method=None):
 	"""``on_submit``: sau khi upstream ``create_attendance_records`` sinh/cập nhật Attendance, ghi mã
@@ -133,13 +136,18 @@ def set_attendance_request_code(doc, method=None):
 		fields=["name", "attendance_date", "half_day_status"],
 	):
 		if is_half and getdate(att.attendance_date) == half_date:
-			# buổi còn lại: hiện diện đủ → X (W/X đủ công); không → K không lương (W/K nửa ngày). Khớp
+			# buổi còn lại: hiện diện đủ → X (đủ công); không → K không lương (chỉ làm nửa ngày). Khớp
 			# đúng cách payroll xử lý half_day_status (chỉ Absent mới trừ 0.5) nên bảng công ↔ lương nhất quán.
 			other = WORK_CODE if att.half_day_status == "Present" else UNPAID_CODE
+			# Buổi nào được yêu cầu là do NGƯỜI NỘP chọn (`custom_half_day_session`). Trước 2026-08-05
+			# luôn gán mã vào buổi SÁNG, nên đơn xin nửa ngày chiều bị ghi ngược buổi trên bảng công.
 			vals = {
-				"custom_morning_code": code,
-				"custom_afternoon_code": other,
 				"custom_attendance_code": None,
+				**(
+					{"custom_morning_code": other, "custom_afternoon_code": code}
+					if doc.get("custom_half_day_session") == AFTERNOON
+					else {"custom_morning_code": code, "custom_afternoon_code": other}
+				),
 			}
 		else:
 			vals = {
