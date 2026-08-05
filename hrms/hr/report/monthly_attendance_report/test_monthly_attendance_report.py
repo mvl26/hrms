@@ -98,6 +98,8 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 				"Ốm / chăm con ốm",
 				"Thai sản",
 				"Tai nạn lao động",
+				# KH tách khỏi "Nghỉ riêng" 2026-08-04 (HR chốt); R1/R2 vẫn ở "Nghỉ riêng"
+				"Nghỉ kết hôn",
 				"Nghỉ riêng",
 				"Không lương",
 			],
@@ -716,3 +718,63 @@ class TestHolidayCountsAsPaid(PerTestRollback, FrappeTestCase):
 		t = self.totals(emp)
 		# ngày 5 là nghỉ tuần: không phải ngày công, không được trả → Tổng công chỉ có ngày lễ
 		self.assertEqual(t.get(TOTAL_PAID), 1.0, "nghỉ tuần KHÔNG được cộng vào Tổng công")
+
+
+class TestMarriageLeaveHasItsOwnColumn(PerTestRollback, FrappeTestCase):
+	"""Nghỉ kết hôn (KH) có cột riêng, tách khỏi "Nghỉ riêng" — HR chốt 2026-08-04.
+
+	Tách theo MÃ chứ không theo loại: KH vẫn cùng loại "Việc riêng" với R1 (con kết hôn) và R2
+	(tang), nên đổi `category` sẽ kéo theo màu ô và mọi chỗ khác đang gom theo loại."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.emp = test_employee()
+		cls.year, cls.month = 2099, 8
+
+	def mk(self, day, code):
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": getdate(f"{self.year}-{self.month:02d}-{day:02d}"),
+				"custom_attendance_code": code,
+			}
+		)
+		att.insert()
+		att.submit()
+
+	def totals(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
+
+		rows = get_sheet_rows({"month": self.month, "year": self.year})
+		return next(r for r in rows if r["employee"] == self.emp)["totals"]
+
+	def test_marriage_leave_is_split_out_from_personal_leave(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
+			BUCKET_MARRIAGE,
+			TOTAL_PAID,
+		)
+
+		self.mk(3, "KH")  # nghỉ kết hôn
+		self.mk(4, "R2")  # nghỉ tang — vẫn thuộc "Nghỉ riêng"
+		t = self.totals()
+		self.assertEqual(t.get(BUCKET_MARRIAGE), 1.0, "KH phải vào cột riêng")
+		self.assertEqual(t.get("Việc riêng"), 1.0, "chỉ còn R2 ở cột Nghỉ riêng")
+		self.assertEqual(t.get(TOTAL_PAID), 2.0, "cả hai đều công ty trả → vẫn đủ trong Tổng công")
+
+	def test_the_report_shows_both_columns(self):
+		columns, _data, _msg = execute({"month": self.month, "year": self.year})
+		labels = [c["label"] for c in columns if c["fieldname"].startswith("cat_")]
+		self.assertIn("Nghỉ kết hôn", labels)
+		self.assertIn("Nghỉ riêng", labels)
+
+	def test_sick_leave_is_not_paid_by_the_company(self):
+		"""Chốt lại 2026-08-04: ốm/chăm con ốm do BHXH trả → KHÔNG vào Tổng công."""
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import TOTAL_PAID
+
+		self.mk(5, "Ô")
+		self.mk(6, "Cô")
+		t = self.totals()
+		self.assertEqual(t.get("Ốm"), 2.0, "vẫn đếm riêng ở cột Ốm / chăm con ốm")
+		self.assertEqual(t.get(TOTAL_PAID, 0.0), 0.0, "BHXH chi trả → không phải công của doanh nghiệp")

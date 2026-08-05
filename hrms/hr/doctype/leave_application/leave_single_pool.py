@@ -6,10 +6,16 @@ CHỈ "Nghỉ phép năm" trừ vào quỹ phép năm (Frappe tự chặn khi h�
 
     Nghỉ phép năm → P
 
-**Nghỉ ốm / chăm con ốm KHÔNG trừ quỹ phép năm** (nghỉ CÓ LƯƠNG, ĐỦ CÔNG): nộp bằng loại nghỉ riêng
-(``Nghỉ ốm`` / ``Nghỉ chăm con ốm`` — BHXH trả, công ty không tính lương) hoặc ghi thẳng mã công Ô/Cô — bridge reverse-derive tự
-đặt mã, payroll trả đủ. Thai sản/việc riêng cưới-tang/TNLĐ/nghỉ bù cũng là loại riêng hưởng lương
-KHÔNG trừ quỹ; K không lương.
+**Nghỉ ốm / chăm con ốm KHÔNG trừ quỹ phép năm**: nộp bằng loại nghỉ riêng (``Nghỉ ốm`` /
+``Nghỉ chăm con ốm``) hoặc ghi thẳng mã công Ô/Cô — bridge reverse-derive tự đặt mã.
+
+Nhưng KHÔNG tính công: **quỹ BHXH chi trả** ngày ốm và chăm con ốm (Đ.25/28 Luật BHXH), không phải
+doanh nghiệp, nên Ô/Cô mang ``is_paid = 0`` và rơi khỏi "Tổng công" (quyết định 2026-07-30, HR xác
+nhận lại 2026-08-04). Chỗ này từng ghi ngược là "CÓ LƯƠNG, ĐỦ CÔNG" — sai so với dữ liệu và so với
+`is_paid_leave` của báo cáo chấm công; sửa lại 2026-08-04 để không ai đọc chú thích rồi tin nhầm.
+
+Thai sản do BHXH trả nên cũng không tính công. Ngược lại việc riêng cưới-tang / TNLĐ / nghỉ bù là
+CÔNG TY trả nên vẫn hưởng lương, đủ công, và KHÔNG trừ quỹ phép năm; K không lương.
 
 Sau khi duyệt sinh Attendance, hook ghi mã P lên Attendance để bảng công hiện đúng. Nghỉ **nửa ngày**
 phải chọn buổi (``custom_half_day_period`` = Sáng/Chiều) — buổi để đặt half_day_date của đơn — nhưng
@@ -26,8 +32,8 @@ from frappe.utils import cint, flt, getdate
 POOL_LEAVE_TYPE = "Nghỉ phép năm"
 # Loại nghỉ (nhãn tiếng Việt hiện trên đơn) → mã công. Khớp code_name trong
 # hrms/fixtures/attendance_code.json. Miyano: CHỈ "Nghỉ phép năm" trừ vào quỹ phép năm. Nghỉ ốm /
-# chăm con ốm là nghỉ CÓ LƯƠNG, ĐỦ CÔNG, KHÔNG trừ phép năm → nộp bằng loại nghỉ riêng (Nghỉ ốm /
-# Nghỉ chăm con ốm) hoặc ghi thẳng mã công Ô/Cô; bridge reverse-derive tự đặt mã, payroll trả đủ.
+# chăm con ốm KHÔNG trừ phép năm → nộp bằng loại nghỉ riêng (Nghỉ ốm / Nghỉ chăm con ốm) hoặc ghi
+# thẳng mã công Ô/Cô; bridge reverse-derive tự đặt mã. Hai loại đó do BHXH trả nên không tính công.
 POOL_REASONS = {
 	"Nghỉ phép năm": "P",
 }

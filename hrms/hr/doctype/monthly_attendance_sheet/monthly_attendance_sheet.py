@@ -149,7 +149,10 @@ class MonthlyAttendanceSheet(Document):
 		if self.department:
 			filters.department = self.department
 
-		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import TOTAL_PAID
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
+			BUCKET_MARRIAGE,
+			TOTAL_PAID,
+		)
 
 		# Bảng chỉ mang MỘT con số công: "Tổng công" = số ngày công ty trả lương, lấy đúng cột của báo
 		# cáo → một kỳ không thể có hai con số công. Phần đi làm thực tế không có cột riêng ở đây; cần
@@ -157,6 +160,9 @@ class MonthlyAttendanceSheet(Document):
 		category_field = {
 			TOTAL_PAID: "total_paid_days",
 			"Phép": "annual_leave",
+			# KH (nghỉ kết hôn) tách khỏi "Việc riêng" — HR chốt 2026-08-04. Phải có mặt ở ĐÂY nữa,
+			# không thì ngày KH rơi khỏi bảng: bảng chỉ ghi những loại có trong bảng ánh xạ này.
+			BUCKET_MARRIAGE: "marriage_leave",
 			"Việc riêng": "personal_leave",
 			"Ốm": "sick_leave",
 			"Thai sản": "maternity_leave",

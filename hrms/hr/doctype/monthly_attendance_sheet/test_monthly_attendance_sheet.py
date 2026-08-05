@@ -161,7 +161,7 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		self.assertEqual(row.absent, 0.5)  # nửa còn lại của 1/2X
 
 	def test_populate_personal_leave_total(self):
-		# code N (nghỉ việc riêng có lương) must land in the personal_leave totals column
+		# KH (nghỉ kết hôn) có cột RIÊNG từ 2026-08-04 — không còn gộp vào personal_leave
 		emp = frappe.db.get_value("Employee", {"company": self.company, "status": "Active"}, "name")
 		if not emp:
 			self.skipTest("no employee in company")
@@ -175,7 +175,8 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		row = next((r for r in sheet.employees if r.employee == emp), None)
 		self.assertIsNotNone(row, "seeded employee missing from the sheet")
 		self.assertEqual(row.d07, "KH")
-		self.assertEqual(row.personal_leave, 1.0)  # full-day personal leave = 1.0
+		self.assertEqual(row.marriage_leave, 1.0, "KH có cột riêng trên bảng, không rơi đi đâu mất")
+		self.assertFalse(row.personal_leave, "KH không còn gộp vào cột Việc riêng")
 
 	def test_populate_all_leave_category_columns(self):
 		# every leave/absence category maps to its own totals column — backfills the 5 buckets

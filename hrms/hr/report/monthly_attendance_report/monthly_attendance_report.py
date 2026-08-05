@@ -36,6 +36,12 @@ MARKER_HOLIDAY = "NL"  # ngày nghỉ lễ có lương — kept distinct so paid
 # Loại nhận phần không đi làm của một mã thuộc loại "Công" (mã V cũng thuộc loại này)
 CATEGORY_UNEXCUSED = "Vắng"
 
+# Nghỉ kết hôn có cột RIÊNG (HR chốt 2026-08-04) dù cùng loại "Việc riêng" với nghỉ con kết hôn (R1)
+# và nghỉ tang (R2). Tách theo MÃ chứ không theo loại: đổi `category` của KH sẽ kéo theo màu ô và
+# mọi nơi khác đang gom theo loại. Đây là ngoại lệ có chủ đích, khai báo một chỗ.
+BUCKET_MARRIAGE = "Nghỉ kết hôn"
+CODE_OWN_BUCKET = {"KH": BUCKET_MARRIAGE}
+
 # Thứ trong tuần theo lối viết của bảng chấm công VN. `date.weekday()`: 0 = thứ Hai … 6 = Chủ nhật.
 WEEKDAY_LABELS = ("T2", "T3", "T4", "T5", "T6", "T7", "CN")
 
@@ -54,6 +60,7 @@ REPORT_CATEGORIES = [
 	("Ốm", "Ốm / chăm con ốm"),
 	("Thai sản", "Thai sản"),
 	("Tai nạn LĐ", "Tai nạn lao động"),
+	(BUCKET_MARRIAGE, "Nghỉ kết hôn"),
 	("Việc riêng", "Nghỉ riêng"),
 	("Không lương", "Không lương"),
 ]
@@ -499,7 +506,9 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 						# không làm đủ buổi (1/2X = đi làm thiếu giờ) không nói nửa kia nghỉ vì gì, nên
 						# nửa đó là nghỉ không lý do -> Vắng. Thiếu nhánh này thì ngày 1/2X chỉ quy ra
 						# 0.5 công và dòng bảng công không cân về số ngày công của tháng.
-						bucket = c.category if c.category != "Công" else CATEGORY_UNEXCUSED
+						bucket = CODE_OWN_BUCKET.get(
+							c.name, c.category if c.category != "Công" else CATEGORY_UNEXCUSED
+						)
 						totals[bucket] = totals.get(bucket, 0.0) + rest
 						# Nghỉ CÓ LƯƠNG (P/Ô/Cô/TS/T/NB/N) tính vào Tổng công = số ngày được trả lương.
 						if is_paid_leave(c):
