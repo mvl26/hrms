@@ -246,3 +246,39 @@ class TestPaidHolidays(PerTestRollback, FrappeTestCase):
 		emp = make_employee("mvl_hol4@codes.com", company=default_company())
 		frappe.db.set_value("Employee", emp, "holiday_list", None)
 		self.assertIsInstance(self.count(emp), float)
+
+
+class TestPaidHolidaysRunBeforeTheGate(PerTestRollback, FrappeTestCase):
+	"""Cộng ngày lễ phải xảy ra TRƯỚC cổng đối soát bảng công.
+
+	Lỗi 2026-08-04: `add_paid_holidays` nằm trong `apply_mvl`, mà `hooks.py` xếp
+	`sheet_gate.gate` chạy trước `apply_mvl`. Cổng vì thế so `payment_days` CHƯA cộng lễ (21,5)
+	với "Tổng công" của bảng ĐÃ cộng lễ (22,5) → chặn toàn bộ 6 phiếu với "Lệch -1.0 ngày"."""
+
+	def validate_hooks(self):
+		from hrms import hooks
+
+		return hooks.doc_events["Salary Slip"]["validate"]
+
+	def test_holidays_are_added_before_the_reconciliation_gate(self):
+		hooks = self.validate_hooks()
+		add = "hrms.vn_payroll.salary_slip_hook.add_paid_holidays"
+		gate = "hrms.vn_payroll.sheet_gate.gate"
+		self.assertIn(add, hooks, "cộng ngày lễ phải là một hook riêng, không nấp trong apply_mvl")
+		self.assertLess(
+			hooks.index(add),
+			hooks.index(gate),
+			"cộng ngày lễ phải chạy TRƯỚC cổng đối soát, nếu không cổng so số chưa cộng với bảng đã cộng",
+		)
+
+	def test_apply_mvl_does_not_add_holidays_a_second_time(self):
+		"""Chạy hai lần trong cùng một lượt validate là cộng đôi ngày lễ."""
+		import inspect
+
+		from hrms.vn_payroll import salary_slip_hook
+
+		self.assertNotIn(
+			"add_paid_holidays(",
+			inspect.getsource(salary_slip_hook.apply_mvl),
+			"apply_mvl không được gọi lại — hook đã chạy nó trước cổng rồi",
+		)

@@ -176,8 +176,17 @@ def paid_holidays_in_period(doc) -> float:
 	)
 
 
-def add_paid_holidays(doc) -> None:
+def add_paid_holidays(doc, method=None) -> None:
 	"""Cộng ngày nghỉ lễ vào CẢ `total_working_days` lẫn `payment_days` của phiếu.
+
+	**Hook RIÊNG, xếp TRƯỚC `sheet_gate.gate` trong `hooks.py` — thứ tự là bắt buộc.** Cổng đối
+	soát so `payment_days` của phiếu với "Tổng công" của bảng đã chốt, mà bảng đã đếm ngày lễ; để
+	việc cộng này nằm trong `apply_mvl` (chạy SAU cổng) thì cổng so số chưa cộng với số đã cộng và
+	chặn sạch mọi phiếu của tháng có lễ ("Lệch -1.0 ngày" — đã dính 2026-08-04).
+
+	Gọi ĐÚNG MỘT LẦN mỗi lượt validate: controller tính lại `total_working_days`/`payment_days` từ
+	đầu ở mỗi lần lưu, nên cộng lại mỗi lượt là đúng, nhưng gọi hai lần trong CÙNG một lượt sẽ cộng
+	đôi. Vì thế `apply_mvl` không được gọi lại hàm này.
 
 	Quyết định 2026-08-04 (HR chốt): ngày công chuẩn = ngày đi làm + nghỉ lễ + nghỉ có lương.
 	ERPNext loại mọi ngày trong Holiday List khỏi `total_working_days`, mà nghỉ hàng tuần cũng nằm
@@ -190,6 +199,11 @@ def add_paid_holidays(doc) -> None:
 
 	Ghi thẳng lên `doc` để `payment_days` trên phiếu và cột "Tổng công" của bảng chấm công là CÙNG
 	một con số — cổng đối soát `sheet_gate.reconcile_with_sheet` so hai vế này với nhau."""
+	# Chỉ phiếu dùng cấu trúc MVL — giữ đúng phạm vi cũ hồi hàm này còn nằm trong `apply_mvl`.
+	# Là hook riêng thì nó chạy cho MỌI Salary Slip, kể cả phiếu đi đường Frappe gốc.
+	if not salary_type_of(doc.salary_structure):
+		return
+
 	holidays = paid_holidays_in_period(doc)
 	if not holidays:
 		return
@@ -205,8 +219,6 @@ def apply_mvl(doc, method=None):
 	ssa = get_mvl_assignment(doc)
 	if not ssa:
 		return
-
-	add_paid_holidays(doc)
 
 	standard_days = flt(doc.total_working_days)
 	if not standard_days:
