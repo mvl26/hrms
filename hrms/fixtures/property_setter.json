@@ -6,12 +6,12 @@
   "doctype_or_field": "DocField",
   "field_name": "reason",
   "is_system_generated": 0,
-  "modified": "2026-07-25 00:00:00.000000",
+  "modified": "2026-08-05 12:00:00.000000",
   "module": null,
   "name": "Attendance Request-reason-options",
   "property": "options",
   "property_type": "Text",
   "row_name": null,
-  "value": "Work From Home\nOn Duty\nQuên chấm công\nĐi muộn/về sớm"
+  "value": "Work From Home\nOn Duty\nLàm việc từ xa\nQuên chấm công\nĐi muộn/về sớm"
  }
 ]

@@ -19,7 +19,13 @@ _FIX_DIR = os.path.join(frappe.get_app_path("hrms"), "fixtures")
 _FIXTURE = os.path.join(_FIX_DIR, "attendance_code.json")
 
 # 4 tình huống yêu cầu chấm công (giá trị reason) — WFH/On Duty là option native, 2 cái sau Miyano thêm.
-EXPECTED_REASONS = {"Work From Home", "On Duty", "Quên chấm công", "Đi muộn/về sớm"}
+EXPECTED_REASONS = {
+	"Work From Home",
+	"On Duty",
+	"Làm việc từ xa",  # thêm 2026-08-05 (HR chốt) → mã X
+	"Quên chấm công",
+	"Đi muộn/về sớm",
+}
 
 
 def _codes():
@@ -609,3 +615,39 @@ class TestRequestAlwaysLinksItsDay(PerTestRollback, FrappeTestCase):
 		lai = self.attendance()
 		self.assertEqual(lai.attendance_request, ar.name, "phải gắn lại về đơn đã duyệt")
 		self.assertEqual(lai.custom_attendance_code, "CT", "on-duty phải mang lại mã hiển thị CT")
+
+
+class TestThreeCodesOnly(FrappeTestCase):
+	"""Kênh Yêu cầu chấm công chỉ sinh ĐÚNG BA mã: W, CT, X (HR chốt 2026-08-05).
+
+	Cả ba đều là ngày ĐI LÀM, đủ công — nghỉ đi đường Đơn xin nghỉ, không phải đường này."""
+
+	def test_remote_work_maps_to_the_plain_working_code(self):
+		from hrms.hr.doctype.attendance_request.attendance_request_miyano import REASON_TO_CODE
+
+		# làm việc từ xa (chiều đi gặp khách hàng) vẫn là một ngày công bình thường → X, không phải W
+		self.assertEqual(REASON_TO_CODE["Làm việc từ xa"], "X")
+		self.assertEqual(REASON_TO_CODE["Work From Home"], "W")
+		self.assertEqual(REASON_TO_CODE["On Duty"], "CT")
+
+	def test_no_reason_produces_a_code_outside_the_three(self):
+		from hrms.hr.doctype.attendance_request.attendance_request_miyano import (
+			DEFAULT_CODE,
+			REASON_TO_CODE,
+		)
+
+		self.assertEqual(set(REASON_TO_CODE.values()) | {DEFAULT_CODE}, {"W", "CT", "X"})
+
+	def test_every_reason_option_on_the_form_has_a_code(self):
+		"""Thêm lý do vào Property Setter mà quên map là ngày đó âm thầm rơi về mã mặc định."""
+		from hrms.hr.doctype.attendance_request.attendance_request_miyano import REASON_TO_CODE
+
+		options = frappe.db.get_value(
+			"Property Setter",
+			{"doc_type": "Attendance Request", "field_name": "reason", "property": "options"},
+			"value",
+		)
+		if not options:
+			self.skipTest("site chưa sync Property Setter cho reason")
+		for reason in [o.strip() for o in options.split("\n") if o.strip()]:
+			self.assertIn(reason, REASON_TO_CODE, f"lý do {reason!r} chưa có mã công")

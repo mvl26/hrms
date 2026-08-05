@@ -17,10 +17,16 @@ import frappe
 from frappe import _
 from frappe.utils import cint, getdate
 
-# reason (giá trị native + 2 giá trị Miyano thêm) → mã công hiển thị trên bảng chấm công.
+# reason (giá trị native + các giá trị Miyano thêm) → mã công hiển thị trên bảng chấm công.
+# Kênh này chỉ sinh ra ĐÚNG BA mã (HR chốt 2026-08-05): W, CT, X — đều là ngày ĐI LÀM, đủ công.
+# Nghỉ (phép/ốm/không lương) đi đường Đơn xin nghỉ, không phải đường này.
 REASON_TO_CODE = {
-	"Work From Home": "W",  # làm tại nhà (W = Work from home)
-	"On Duty": "CT",  # ra ngoài công việc = công tác → tái dùng mã CT có sẵn
+	"Work From Home": "W",  # làm tại nhà
+	"On Duty": "CT",  # đi công tác → tái dùng mã CT có sẵn
+	# Làm việc từ xa: vẫn làm đủ ngày nhưng không ngồi văn phòng cả ngày (ví dụ chiều đi gặp khách
+	# hàng). Khác "làm tại nhà" ở chỗ không cố định một nơi, nên mang mã X (đi làm đủ công) chứ
+	# không phải W — bảng chấm công đọc là một ngày công bình thường.
+	"Làm việc từ xa": "X",
 	"Quên chấm công": "X",
 	"Đi muộn/về sớm": "X",
 }
