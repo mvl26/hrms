@@ -18,17 +18,23 @@ from frappe import _
 from frappe.utils import cint, getdate
 
 # reason (giá trị native + các giá trị Miyano thêm) → mã công hiển thị trên bảng chấm công.
+#
+# QUY ƯỚC NGÔN NGỮ (chốt 2026-08-05): **giá trị LƯU và định danh trong code luôn là tiếng Anh; người
+# dùng chỉ thấy tiếng Việt**, dịch ở lớp hiển thị qua `translations/vi.csv`. Ba giá trị Miyano thêm
+# từng lưu thẳng tiếng Việt ("Làm việc từ xa"…) — đã đổi sang tiếng Anh 2026-08-05, lúc đó chưa bản
+# ghi nào dùng chúng nên không phải di trú dữ liệu. Thêm lựa chọn mới sau này phải theo quy ước này:
+# giá trị tiếng Anh ở đây + fixtures, bản dịch tiếng Việt trong vi.csv.
 # Kênh này chỉ sinh ra ĐÚNG BA mã (HR chốt 2026-08-05): W, CT, X — đều là ngày ĐI LÀM, đủ công.
 # Nghỉ (phép/ốm/không lương) đi đường Đơn xin nghỉ, không phải đường này.
 REASON_TO_CODE = {
 	"Work From Home": "W",  # làm tại nhà
 	"On Duty": "CT",  # đi công tác → tái dùng mã CT có sẵn
-	# Làm việc từ xa: vẫn làm đủ ngày nhưng không ngồi văn phòng cả ngày (ví dụ chiều đi gặp khách
+	# "Làm việc từ xa": vẫn làm đủ ngày nhưng không ngồi văn phòng cả ngày (ví dụ chiều đi gặp khách
 	# hàng). Khác "làm tại nhà" ở chỗ không cố định một nơi, nên mang mã X (đi làm đủ công) chứ
 	# không phải W — bảng chấm công đọc là một ngày công bình thường.
-	"Làm việc từ xa": "X",
-	"Quên chấm công": "X",
-	"Đi muộn/về sớm": "X",
+	"Remote Work": "X",
+	"Missed Punch": "X",  # quên chấm công
+	"Late Or Early Leave": "X",  # đi muộn / về sớm
 }
 DEFAULT_CODE = "X"  # reason lạ / trống → coi như đi làm đủ công
 WORK_CODE = "X"  # buổi còn lại của ngày nửa buổi

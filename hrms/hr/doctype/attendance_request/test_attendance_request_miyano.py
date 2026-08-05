@@ -22,9 +22,11 @@ _FIXTURE = os.path.join(_FIX_DIR, "attendance_code.json")
 EXPECTED_REASONS = {
 	"Work From Home",
 	"On Duty",
-	"Làm việc từ xa",  # thêm 2026-08-05 (HR chốt) → mã X
-	"Quên chấm công",
-	"Đi muộn/về sớm",
+	# Giá trị LƯU là tiếng Anh, UI hiện tiếng Việt qua translations/vi.csv — quy ước 2026-08-05:
+	# code + database nói tiếng Anh, người dùng chỉ thấy tiếng Việt.
+	"Remote Work",  # Làm việc từ xa → mã X
+	"Missed Punch",  # Quên chấm công
+	"Late Or Early Leave",  # Đi muộn/về sớm
 }
 
 
@@ -626,7 +628,7 @@ class TestThreeCodesOnly(FrappeTestCase):
 		from hrms.hr.doctype.attendance_request.attendance_request_miyano import REASON_TO_CODE
 
 		# làm việc từ xa (chiều đi gặp khách hàng) vẫn là một ngày công bình thường → X, không phải W
-		self.assertEqual(REASON_TO_CODE["Làm việc từ xa"], "X")
+		self.assertEqual(REASON_TO_CODE["Remote Work"], "X")
 		self.assertEqual(REASON_TO_CODE["Work From Home"], "W")
 		self.assertEqual(REASON_TO_CODE["On Duty"], "CT")
 
