@@ -109,9 +109,7 @@ class TestAttendanceCodeSync(PerTestRollback, FrappeTestCase):
 
 	def test_unmapped_leave_type_is_not_touched(self):
 		"""Loại nghỉ chưa có mã: không đề xuất gì, tuyệt đối không bịa mã."""
-		lt = frappe.get_doc(
-			{"doctype": "Leave Type", "leave_type_name": "Nghỉ chưa map sync", "is_lwp": 0}
-		)
+		lt = frappe.get_doc({"doctype": "Leave Type", "leave_type_name": "Nghỉ chưa map sync", "is_lwp": 0})
 		lt.insert(ignore_permissions=True)
 		att = self._mismatched(f"{self.year}-04-10", leave_type=lt.name)
 
@@ -149,3 +147,35 @@ class TestAttendanceCodeSync(PerTestRollback, FrappeTestCase):
 
 		rows = preview_sync(self._filters())
 		self.assertNotIn(att.name, [r["attendance"] for r in rows["changes"]])
+
+
+class TestSyncKeepsValidCodes(PerTestRollback, FrappeTestCase):
+	"""Đồng bộ KHÔNG được đè mã đang hợp lệ — nhiều mã chung một status, không thay nhau được.
+
+	Lỗi 2026-08-05: `W` (làm tại nhà, do Yêu cầu chấm công sinh ra) và `CT` (đi công tác) đều mang
+	status `Work From Home`; bộ đồng bộ luôn trả mã "chuẩn" `CT` nên bấm Đồng bộ là mọi ngày làm
+	tại nhà bị đè thành đi công tác."""
+
+	def row(self, code, status="Work From Home", leave_type=None):
+		return frappe._dict(status=status, leave_type=leave_type, custom_attendance_code=code)
+
+	def test_work_from_home_code_is_kept(self):
+		from hrms.hr.attendance_code_sync import expected_code
+
+		self.assertEqual(expected_code(self.row("W")), "W", "W đang hợp lệ → phải giữ, không hoá CT")
+
+	def test_business_trip_code_is_kept_too(self):
+		from hrms.hr.attendance_code_sync import expected_code
+
+		self.assertEqual(expected_code(self.row("CT")), "CT")
+
+	def test_a_code_that_contradicts_the_status_is_still_corrected(self):
+		"""Đây mới là việc của bộ đồng bộ: V kẹt lại trên ngày đã thành đi làm."""
+		from hrms.hr.attendance_code_sync import expected_code
+
+		self.assertEqual(expected_code(self.row("V", status="Present")), "X")
+
+	def test_empty_code_still_gets_filled(self):
+		from hrms.hr.attendance_code_sync import expected_code
+
+		self.assertEqual(expected_code(self.row(None, status="Present")), "X")

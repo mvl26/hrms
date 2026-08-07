@@ -26,10 +26,26 @@ from hrms.hr.doctype.attendance.attendance import _pick_reverse_code
 from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import paid_credit
 
 
-def expected_code(row) -> str | None:
-	"""Mã công đúng ra phải có, suy từ `status` + `leave_type`. None nếu không suy được."""
+def matching_codes(row) -> list[str]:
+	"""Mọi mã công HỢP LỆ với `status` + `leave_type` của ngày đó (thường nhiều hơn một)."""
 	filters = {"maps_to_status": row.status, "leave_type": row.leave_type or ["is", "not set"]}
-	return _pick_reverse_code(row.status, frappe.get_all("Attendance Code", filters=filters, pluck="name"))
+	return frappe.get_all("Attendance Code", filters=filters, pluck="name")
+
+
+def expected_code(row) -> str | None:
+	"""Mã công đúng ra phải có, suy từ `status` + `leave_type`. None nếu không suy được.
+
+	GIỮ NGUYÊN mã hiện tại nếu nó đã hợp lệ với status — nhiều mã cùng chung một status và chúng
+	KHÔNG thay thế được cho nhau: `W` (làm tại nhà) và `CT` (đi công tác) đều mang status
+	`Work From Home`. Trước 2026-08-05 hàm này luôn trả mã "chuẩn" (`CT`), nên bấm "Đồng bộ mã công"
+	là mọi ngày làm tại nhà bị đè thành đi công tác — mất thông tin có thật mà không ai báo.
+
+	Chỉ đề xuất đổi khi mã đang có KHÔNG nằm trong nhóm hợp lệ (vd `V` kẹt lại sau khi đơn nghỉ đã
+	duyệt) — đó mới đúng là việc của bộ đồng bộ."""
+	matches = matching_codes(row)
+	if row.custom_attendance_code in matches:
+		return row.custom_attendance_code
+	return _pick_reverse_code(row.status, matches)
 
 
 def period_bounds(month, year):
