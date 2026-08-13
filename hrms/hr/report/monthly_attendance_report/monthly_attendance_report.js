@@ -105,9 +105,20 @@ frappe.query_reports["Monthly Attendance Report"] = {
 								)}</td>
 								 <td>${c.attendance_date}</td>
 								 <td>${frappe.utils.escape_html(c.leave_type || c.status || "")}</td>
-								 <td><b>${frappe.utils.escape_html(c.old_code || "—")}</b> → <b>${frappe.utils.escape_html(
-										c.new_code,
-									)}</b></td></tr>`,
+								 <td>${
+										c.old_code === c.new_code
+											? frappe.utils.escape_html(c.new_code)
+											: `<b>${frappe.utils.escape_html(
+													c.old_code || "—",
+											  )}</b> → <b>${frappe.utils.escape_html(
+													c.new_code,
+											  )}</b>`
+									}</td>
+								 <td>${
+										c.old_credit === c.new_credit
+											? c.new_credit
+											: `<b>${c.old_credit}</b> → <b>${c.new_credit}</b>`
+									}</td></tr>`,
 						)
 						.join("");
 					const d = new frappe.ui.Dialog({
@@ -123,7 +134,7 @@ frappe.query_reports["Monthly Attendance Report"] = {
 								<table class="table table-bordered"><thead><tr>
 								<th>${__("Nhân viên")}</th><th>${__("Ngày")}</th><th>${__("Loại nghỉ")}</th><th>${__(
 									"Mã công",
-								)}</th>
+								)}</th><th>${__("Công")}</th>
 								</tr></thead><tbody>${rows}</tbody></table></div>`,
 							},
 							{

@@ -32,6 +32,13 @@ def matching_codes(row) -> list[str]:
 	return frappe.get_all("Attendance Code", filters=filters, pluck="name")
 
 
+def expected_credit(code: str) -> float:
+	"""Số công DOANH NGHIỆP TRẢ cho một ngày mang mã này — cùng luật `paid_credit` với cầu nối mã
+	công, form Ngày công và cột "Tổng công" của bảng, nên ba nơi không thể lệch nhau."""
+	row = frappe.db.get_value("Attendance Code", code, ["category", "work_fraction", "is_paid"], as_dict=True)
+	return flt(paid_credit(row)) if row else 0.0
+
+
 def request_code(row) -> str | None:
 	"""Mã do NGUỒN của ngày công quy định: phiếu Yêu cầu chấm công. None nếu ngày không có phiếu.
 
@@ -109,6 +116,7 @@ def preview_sync(filters: str | dict | None = None) -> dict:
 			"custom_attendance_code",
 			"custom_morning_code",
 			"custom_afternoon_code",
+			"custom_work_credit",
 			"attendance_request",  # nguồn có thẩm quyền của mã — xem `request_code`
 		],
 		order_by="attendance_date, employee",
@@ -118,8 +126,14 @@ def preview_sync(filters: str | dict | None = None) -> dict:
 		if row.custom_morning_code or row.custom_afternoon_code:
 			continue
 		want = expected_code(row)
-		if not want or want == row.custom_attendance_code:
+		if not want:
 			continue  # không suy được thì GIỮ NGUYÊN, không bịa
+		# Ô "Công" cũng phải khớp mã. Ngày đi nhánh `db_set` của upstream (đã có bản ghi Vắng rồi mới
+		# duyệt phiếu/đơn) có mã đúng nhưng số công còn nguyên 0.0 của `V`; chỉ so mã thì bộ đồng bộ
+		# coi ngày đó "đã đúng" và không đường nào dọn được.
+		want_credit = expected_credit(want)
+		if want == row.custom_attendance_code and flt(row.custom_work_credit) == want_credit:
+			continue
 		changes.append(
 			{
 				"attendance": row.name,
@@ -130,6 +144,8 @@ def preview_sync(filters: str | dict | None = None) -> dict:
 				"leave_type": row.leave_type,
 				"old_code": row.custom_attendance_code,
 				"new_code": want,
+				"old_credit": flt(row.custom_work_credit),
+				"new_credit": want_credit,
 			}
 		)
 	return {"changes": changes, "count": len(changes)}
@@ -163,17 +179,12 @@ def apply_sync(rows: str | list, reason: str | None = None) -> dict:
 			continue
 
 		want = expected_code(doc)
-		if not want or want == doc.custom_attendance_code:
+		credit = expected_credit(want) if want else 0.0
+		if not want or (want == doc.custom_attendance_code and flt(doc.get("custom_work_credit")) == credit):
 			skipped.append({"attendance": name, "reason": _("Mã đã đúng hoặc không suy được")})
 			continue
 
 		before = payroll_snapshot(doc)
-		# "Công" = công doanh nghiệp trả — cùng luật với form ngày công và cột Tổng công của bảng công
-		credit = paid_credit(
-			frappe.db.get_value(
-				"Attendance Code", want, ["category", "work_fraction", "is_paid"], as_dict=True
-			)
-		)
 		# CHỈ field hiển thị — status/leave_type/half_day_status không nằm trong danh sách này.
 		frappe.db.set_value(
 			"Attendance",

@@ -261,3 +261,83 @@ class TestSyncRespectsAttendanceRequestSource(PerTestRollback, FrappeTestCase):
 			status="Present", leave_type=None, custom_attendance_code="V", attendance_request=None
 		)
 		self.assertEqual(expected_code(row), "X")
+
+
+class TestSyncFixesWorkCredit(PerTestRollback, FrappeTestCase):
+	"""Đồng bộ phải dọn cả ô **Công** (`custom_work_credit`), không chỉ mã.
+
+	Ca thật (Lê Văn Cường 2026-07-14): ngày đã có bản ghi Vắng, phiếu Yêu cầu chấm công duyệt sau
+	đi nhánh `db_set` nên cầu nối không chạy — mã thành `CT` đúng nhưng số công nằm nguyên ở 0.0 của
+	mã `V`. Bộ đồng bộ chỉ so MÃ nên coi ngày đó "đã đúng" và bỏ qua: không có đường nào sửa được ô
+	Công sai đó."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.year = 2093
+		cls.emp = test_employee()
+		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
+
+	def day_with_wrong_credit(self, date, code="CT"):
+		"""Mã đúng, số công sai — dựng thẳng bằng db_set như nhánh db_set của upstream để lại."""
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": date,
+				"company": self.company,
+				"status": "Work From Home",
+			}
+		)
+		att.insert(ignore_permissions=True)
+		att.submit()
+		frappe.db.set_value(
+			"Attendance",
+			att.name,
+			{"custom_attendance_code": code, "custom_work_credit": 0.0},
+			update_modified=False,
+		)
+		return att.name
+
+	def _filters(self, month=3):
+		return {"month": month, "year": self.year, "company": self.company}
+
+	def test_preview_lists_the_wrong_credit(self):
+		name = self.day_with_wrong_credit(f"{self.year}-03-10")
+
+		changes = preview_sync(self._filters())["changes"]
+
+		mine = [c for c in changes if c["attendance"] == name]
+		self.assertEqual(len(mine), 1, "ngày có ô Công sai phải được đề xuất sửa")
+		self.assertEqual(mine[0]["old_code"], "CT")
+		self.assertEqual(mine[0]["new_code"], "CT", "mã đang đúng thì giữ nguyên")
+		self.assertEqual(mine[0]["new_credit"], 1.0)
+
+	def test_apply_fixes_the_credit(self):
+		name = self.day_with_wrong_credit(f"{self.year}-03-11")
+
+		apply_sync(preview_sync(self._filters())["changes"], reason="dọn ô Công")
+
+		self.assertEqual(frappe.db.get_value("Attendance", name, "custom_work_credit"), 1.0)
+
+	def test_credit_fix_leaves_payroll_fields_alone(self):
+		name = self.day_with_wrong_credit(f"{self.year}-03-12")
+		before = frappe.db.get_value(
+			"Attendance", name, ["status", "leave_type", "half_day_status"], as_dict=True
+		)
+
+		apply_sync(preview_sync(self._filters())["changes"], reason="dọn ô Công")
+
+		after = frappe.db.get_value(
+			"Attendance", name, ["status", "leave_type", "half_day_status"], as_dict=True
+		)
+		self.assertEqual(dict(before), dict(after))
+
+	def test_a_fully_correct_day_is_still_not_listed(self):
+		"""Không được biến mọi ngày thành "cần sửa" — đúng cả mã lẫn công thì để yên."""
+		name = self.day_with_wrong_credit(f"{self.year}-03-13")
+		frappe.db.set_value("Attendance", name, "custom_work_credit", 1.0, update_modified=False)
+
+		changes = preview_sync(self._filters())["changes"]
+
+		self.assertEqual([c for c in changes if c["attendance"] == name], [])
