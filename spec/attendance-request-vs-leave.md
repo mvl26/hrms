@@ -71,21 +71,40 @@ Module mới `hrms/hr/doctype/attendance_request/attendance_request_miyano.py`:
 `create_attendance_records` của upstream). Với mỗi Attendance mang `attendance_request == doc.name`,
 ghi `custom_attendance_code` theo `reason` qua `frappe.db.set_value(..., update_modified=False)`:
 
-| reason | mã công |
-|---|---|
-| Work From Home | W |
-| On Duty | CT |
-| Quên chấm công | X |
-| Đi muộn/về sớm | X |
+Kênh này sinh ra **ĐÚNG BA mã: W, CT, X** — cả ba đều là ngày ĐI LÀM, đủ công (HR chốt 2026-08-05).
+Nghỉ đi đường Đơn xin nghỉ, không phải đường này.
 
-Nửa ngày (half_day) → tách `custom_morning_code`/`custom_afternoon_code` (mã ↔ X theo buổi), y pattern
-`leave_single_pool`. **THUẦN HIỂN THỊ**: không đụng `status`/`leave_type`/`half_day_status` → lương
-bất biến. Vá luôn lỗ "db_set bỏ qua bridge" (memory).
+**Giá trị LƯU là tiếng Anh, người dùng chỉ thấy tiếng Việt** (chốt 2026-08-05) — dịch ở lớp hiển thị
+qua `translations/vi.csv`, không lưu tiếng Việt xuống DB.
+
+| reason (giá trị lưu) | nhãn tiếng Việt | mã công | ghi chú |
+|---|---|---|---|
+| `Work From Home` | Làm việc tại nhà | **W** | mã Attendance Code MỚI duy nhất của tính năng |
+| `On Duty` | Đi công tác | **CT** | ra ngoài công việc — tái dùng mã CT sẵn có |
+| `Remote Work` | Làm việc từ xa | **X** | làm ở ngoài, không cố định một nơi (vd chiều đi gặp khách) — vẫn là ngày công thường, KHÔNG phải W |
+| `Missed Punch` | Quên chấm công | **X** | tức "xin chấm công bù" — không có mã riêng |
+| `Late Or Early Leave` | Đi muộn/về sớm | **X** | |
+
+Reason lạ / trống → `DEFAULT_CODE = X`. Ba nguồn phải khớp nhau: Property Setter `reason-options`
+(fixtures) ↔ `REASON_TO_CODE` ↔ `vi.csv`; `test_every_reason_option_on_the_form_has_a_code` chặn
+trôi — thêm lý do mà quên map thì ngày đó âm thầm rơi về X.
+
+**Hệ quả cần biết:** ba lý do cuối cùng đều ra `X` nên **bảng chấm công không phân biệt được** làm
+việc từ xa / quên chấm công / đi muộn-về sớm; lý do chỉ còn nằm trên chính phiếu Yêu cầu chấm công.
+Muốn tách trên bảng thì phải thêm Attendance Code mới (quyết định của HR, không phải của code).
+
+Nửa ngày (half_day): buổi được yêu cầu mang mã theo reason, buổi còn lại suy TỪ `half_day_status`
+native — `Present` → `X` (đủ công cả ngày), `Absent` → `K` (nửa kia không lương). Buổi nào được yêu
+cầu do người nộp chọn ở `custom_half_day_session` (Sáng/Chiều). **THUẦN HIỂN THỊ**: không đụng
+`status`/`leave_type`/`half_day_status` → lương bất biến. Vá luôn lỗ "db_set bỏ qua bridge".
 
 ### 4.6 PWA (bật lại self-service)
 - Khôi phục 3 route `/attendance-requests` (list/new/detail) trong `frontend/src/router/attendance.js`.
 - Tile "Yêu cầu chấm công" ở `Home.vue` + mục "Recent Attendance Requests" ở `attendance/Dashboard.vue`.
-- Form `AttendanceRequestForm.vue`: ô chọn `reason` (4 loại, nhãn VN), tách hẳn khỏi màn Xin nghỉ.
+- Form `AttendanceRequestForm.vue`: ô chọn `reason` (5 loại), tách hẳn khỏi màn Xin nghỉ. Nhãn VN do
+  `FormField.vue` dịch (`label: __(option)`, `value` giữ tiếng Anh); danh sách lấy từ meta nên không
+  hardcode ở frontend. `AttendanceRequestItem.vue` cũng phải bọc `__()` — thiếu là màn danh sách hiện
+  thẳng giá trị tiếng Anh (sửa 2026-08-13).
 - `yarn build-pwa`.
 
 ## 5. Cổng bắt buộc & phi mục tiêu
