@@ -70,6 +70,10 @@ class Attendance(Document):
 		# khi không có Leave Application; restore_code_driven_half_day_status chỉ được hoàn tác ĐÚNG
 		# lần ép đó, tuyệt đối không đè giá trị "Absent" do người gọi cố ý đặt (payroll đọc field này).
 		self.flags.vn_half_day_status_intent = self.half_day_status
+		# Mốc so sánh cho resync_code_after_leave_record: check_leave_record (chạy trong `validate`,
+		# tức SAU cầu nối) có thể lật status/leave_type theo đơn nghỉ đã duyệt. Chụp lại ở đây để
+		# biết chính xác nó có đổi hay không.
+		self.flags.vn_status_before_leave_record = (self.status, self.leave_type)
 
 	def set_lunch_flag(self):
 		"""Miyano: ghi cờ ăn trưa (custom_lunch) từ checkin của ngày này — nguồn duy nhất cho số buổi
@@ -239,6 +243,48 @@ class Attendance(Document):
 			self.custom_morning_code = None
 			self.custom_afternoon_code = None
 
+	def resync_code_after_leave_record(self):
+		"""Suy lại mã công SAU khi `check_leave_record` chốt `status`/`leave_type`.
+
+		**Vì sao cần:** cầu nối mã công chạy ở `before_validate`, còn upstream `check_leave_record`
+		chạy trong `validate` — tức SAU đó — và âm thầm lật `status` sang `On Leave`/`Half Day` +
+		gán `leave_type`/`leave_application` khi ngày đó có đơn nghỉ ĐÃ DUYỆT. Mã vì thế được suy từ
+		status CŨ rồi kẹt lại: auto-attendance chấm Vắng lên ngày đã có phép thì bản ghi lưu xuống
+		là `status = On Leave` nhưng mã `V`. Bảng chấm công ưu tiên mã đã lưu hơn suy ngược từ status
+		(`_resolve_day`) nên ngày nghỉ hiện thành VẮNG, trong khi lương (đọc `status`) tính là nghỉ.
+
+		THUẦN HIỂN THỊ: chỉ ghi mã + `custom_work_credit`, KHÔNG đụng
+		`status`/`leave_type`/`half_day_status` → lương bất biến.
+
+		Hai ràng buộc, giống hệt bộ đồng bộ thủ công (`attendance_code_sync.expected_code`):
+		- **Giữ nguyên** mã đang có nếu nó vẫn hợp lệ với status mới — nhiều mã chung một status và
+		  KHÔNG thay được cho nhau (`W` làm tại nhà vs `CT` đi công tác).
+		- **Không bịa** mã khi loại nghỉ chưa map tới `Attendance Code` nào.
+		"""
+		if not frappe.get_meta("Attendance").has_field("custom_attendance_code"):
+			return  # custom-field fixtures chưa cài
+
+		before = self.flags.get("vn_status_before_leave_record")
+		if before is None or before == (self.status, self.leave_type):
+			return  # check_leave_record không đổi gì → mã hiện tại vẫn suy từ đúng status
+
+		from hrms.hr.attendance_code_sync import matching_codes
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import paid_credit
+
+		matches = matching_codes(self)
+		if self.custom_attendance_code in matches:
+			return  # mã đang có vẫn hợp lệ với status mới
+
+		code = _pick_reverse_code(self.status, matches)
+		if not code:
+			return  # chưa map được thì GIỮ NGUYÊN mã cũ
+
+		self.custom_attendance_code = code
+		# cả ngày đã do đơn nghỉ dẫn dắt → mã nửa buổi cũ (vd V/V) là rác, phải dọn
+		self.custom_morning_code = None
+		self.custom_afternoon_code = None
+		self.custom_work_credit = paid_credit(self._get_attendance_code(code))
+
 	def _get_attendance_code(self, name):
 		if not name:
 			return None
@@ -317,6 +363,8 @@ class Attendance(Document):
 		# check_leave_record forces half_day_status="Absent" when no Leave Application backs the day;
 		# undo that for mã-công half-day leaves (the worked half is present). Runs on every save path.
 		self.restore_code_driven_half_day_status()
+		# ... và nếu chính check_leave_record vừa đổi status theo đơn nghỉ, suy lại mã công cho khớp.
+		self.resync_code_after_leave_record()
 
 	def on_cancel(self):
 		self.unlink_attendance_from_checkins()

@@ -69,6 +69,19 @@ def code_for_leave_type(leave_type, status="On Leave"):
 	return _pick_reverse_code(status, matches)
 
 
+def work_credit(code: str) -> float:
+	"""Field hiển thị "Công" của một mã: số công DOANH NGHIỆP TRẢ cho ngày đó.
+
+	Dùng chung `paid_credit` với cầu nối mã công, báo cáo và bộ đồng bộ — nguồn luật duy nhất. Chỗ
+	này từng ghi thẳng `work_fraction` (công ĐI LÀM thực), nghĩa CŨ mà patch
+	`recompute_work_credit_as_paid_cong` đã bỏ: ngày nghỉ phép năm hiện "Công = 0" dù công ty trả đủ
+	lương, và cùng một ngày đi hai đường (đơn nghỉ vs dựng lại ngày công) ra hai số khác nhau."""
+	from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import paid_credit
+
+	row = frappe.db.get_value("Attendance Code", code, ["category", "work_fraction", "is_paid"], as_dict=True)
+	return flt(paid_credit(row)) if row else 0.0
+
+
 def validate_pool_code(doc, method=None):
 	"""Đơn rút quỹ phép năm: **bắt buộc** chọn Loại nghỉ hợp lệ; nghỉ nửa ngày bắt buộc chọn buổi
 	(Sáng/Chiều). Bỏ qua loại nghỉ khác (miễn trừ/không lương)."""
@@ -117,7 +130,7 @@ def set_leave_attendance_code(doc, method=None):
 			"custom_attendance_code": day_code,
 			"custom_morning_code": None,
 			"custom_afternoon_code": None,
-			"custom_work_credit": flt(frappe.db.get_value("Attendance Code", day_code, "work_fraction")),
+			"custom_work_credit": work_credit(day_code),
 		}
 		for field, value in vals.items():
 			frappe.db.set_value("Attendance", att.name, field, value, update_modified=False)

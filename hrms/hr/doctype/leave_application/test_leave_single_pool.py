@@ -205,3 +205,32 @@ class TestLeaveSinglePool(PerTestRollback, FrappeTestCase):
 				reason="Nghỉ phép năm",
 				half_day=1,
 			)
+
+	def test_work_credit_is_paid_cong_not_work_fraction(self):
+		"""Field "Công" của ngày nghỉ phải là công DOANH NGHIỆP TRẢ, không phải công đi làm thực.
+
+		Nghĩa này do patch `recompute_work_credit_as_paid_cong` chốt và cầu nối mã công + bộ đồng bộ
+		đều dùng `paid_credit`. Hook đơn nghỉ từng ghi thẳng `work_fraction` — nghĩa CŨ đã bị bỏ —
+		nên cùng một ngày, đường đơn nghỉ và đường cầu nối ra hai số khác nhau.
+
+		Nghỉ phép năm là nghỉ CÓ LƯƠNG: cả ngày → 1.0; nửa ngày (nửa kia đi làm) → cũng 1.0.
+		`work_fraction` sẽ là 0.0 và 0.5 tương ứng."""
+		self._alloc("Nghỉ phép năm", 12)
+		la = self._leave_app(
+			"Nghỉ phép năm", f"{self.year}-08-03", f"{self.year}-08-03", reason="Nghỉ phép năm"
+		)
+		credit = frappe.db.get_value("Attendance", {"leave_application": la.name}, "custom_work_credit")
+		self.assertEqual(credit, 1.0, "cả ngày nghỉ phép năm: công ty trả đủ công")
+
+		half = self._leave_app(
+			"Nghỉ phép năm",
+			f"{self.year}-08-04",
+			f"{self.year}-08-04",
+			reason="Nghỉ phép năm",
+			half_day=1,
+			period="Sáng",
+		)
+		half_credit = frappe.db.get_value(
+			"Attendance", {"leave_application": half.name}, "custom_work_credit"
+		)
+		self.assertEqual(half_credit, 1.0, "nửa nghỉ có lương + nửa đi làm = đủ công")

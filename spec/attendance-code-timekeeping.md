@@ -72,13 +72,35 @@ Fields (from the user's plan): `code` (unique, e.g. "X"), `code_name`, `category
 marked Absent (checkin below the hours threshold) or a manual Absent. Display-only: `Absent`
 already docks a full day in payroll, so mapping it to a symbol changes nothing.
 
-### Auto-flows: checkin & leave → Attendance (verified 2026-07-08)
-
-The bridge's reverse-derivation runs in `before_validate`, which Frappe executes **even under
-`flags.ignore_validate=True`** — so both auto-flows populate the mã công with no extra hooks:
+### Auto-flows: checkin & leave → Attendance (verified 2026-07-08, sửa 2026-08-13)
 
 - **Employee Checkin → auto-attendance:** Present→`X`, Absent→`V`, Half Day→`NN` (công from work_fraction).
 - **Leave Application → Attendance:** On Leave + leave_type → `P/Ô/Cô/TS/T/NB/K`; Half Day + leave_type → `1/2P`.
+
+Bản đầu spec ghi rằng cầu nối ở `before_validate` chạy **kể cả** khi `flags.ignore_validate=True`,
+nên hai luồng trên "không cần hook nào thêm". **Sai:** `Document.run_before_save_methods` return
+ngay khi thấy cờ đó, mà đường đơn nghỉ đặt đúng cờ ấy lúc tạo bản ghi mới. Đó là lý do có hai hook
+Miyano ghi mã sau khi đơn duyệt (`leave_single_pool.set_leave_attendance_code`,
+`attendance_request_miyano.set_attendance_request_code`).
+
+#### Thứ tự `before_validate` ↔ `check_leave_record` (lỗi + bản sửa 2026-08-13)
+
+Upstream `Attendance.check_leave_record()` chạy trong `validate()` — **SAU** cầu nối — và âm thầm
+lật `status` sang `On Leave`/`Half Day` + gán `leave_type`/`leave_application` khi ngày đó có đơn
+nghỉ **đã duyệt**. Mã công vì thế được suy từ `status` CŨ rồi kẹt lại:
+
+> đơn nghỉ duyệt trước → ngày công được ghi/dựng lại sau (auto-attendance chấm Vắng vì không có
+> checkin, HR chấm tay, công cụ rebuild) ⇒ bản ghi lưu xuống `status = On Leave` **nhưng mã `V`**.
+
+Bảng chấm công ưu tiên mã đã lưu hơn suy ngược từ status (`_resolve_day`) nên ngày nghỉ hiện thành
+VẮNG, trong khi lương (đọc `status`) tính là nghỉ. Nặng hơn: lần lưu kế tiếp, cầu nối XUÔI đọc mã
+`V` và kéo `status` ngược về `Absent`, kéo theo cờ ăn trưa về 0.
+
+**Sửa:** `Attendance.resync_code_after_leave_record()` chạy cuối `validate()`, so `status`/`leave_type`
+với mốc chụp ở `before_validate`; chỉ khi `check_leave_record` thực sự đổi thì suy lại mã. Hai ràng
+buộc giữ nguyên như bộ đồng bộ thủ công: **giữ** mã đang có nếu vẫn hợp lệ (W ≠ CT), **không bịa**
+mã khi loại nghỉ chưa map. Thuần hiển thị — `payment_days`/`absent_days`/LWP đã đối chiếu bằng phiếu
+lương thật, không đổi.
 
 Half-day payroll: only `half_day_status="Absent"` docks pay (salary_slip.py ~line 555). For `NN`
 (no leave application) `check_leave_record` forces `half_day_status=Absent` → paid half; for `1/2P`/`1/2K`
@@ -119,6 +141,11 @@ công = work_fraction + (phần không đi làm nếu đó là nghỉ CÓ LƯƠN
 Luật nằm ở một chỗ duy nhất — `monthly_attendance_report.paid_credit()` — cả hai chiều của cầu nối
 mã công (`_apply_codes_forward`, `_derive_attendance_code_reverse`), nút Đồng bộ mã công và báo cáo
 đều gọi nó, nên form và bảng công không thể lệch nhau.
+
+Hook đơn nghỉ (`leave_single_pool.set_leave_attendance_code`) là chỗ **sót lại** ghi thẳng
+`work_fraction` — nghĩa CŨ — nên cùng một ngày nghỉ phép năm ra `0` (đường đơn nghỉ) hay `1,0`
+(đường cầu nối) tuỳ ngày công được ghi bằng đường nào. Sửa 2026-08-13: hook gọi chung `paid_credit`
+qua `leave_single_pool.work_credit()`.
 
 **Vì sao đổi:** mang `work_fraction` thì một ngày **nghỉ phép năm hiện Công = 0** dù công ty trả đủ
 lương, và cùng số 0 ấy gộp ba nhóm khác hẳn nhau: nghỉ công ty trả (P/KH/R1/R2/NB/T), nghỉ **BHXH**
