@@ -672,3 +672,73 @@ class TestHalfDaySession(FrappeTestCase):
 		from hrms.hr.doctype.attendance_request.attendance_request_miyano import AFTERNOON, MORNING
 
 		self.assertEqual((MORNING, AFTERNOON), ("Sáng", "Chiều"))
+
+
+class TestAttendanceRequestWorkCredit(PerTestRollback, FrappeTestCase):
+	"""Ngày do Yêu cầu chấm công sinh ra phải mang đủ số "Công" — cả ba mã đều là ngày ĐI LÀM.
+
+	Hook chỉ ghi mã mà quên `custom_work_credit`, nên ngày `CT`/`W`/`X` từ phiếu hiện **Công = 0**
+	trên form Ngày công trong khi ngày CT do Công Tác sinh ra hiện 1,0 — cùng một loại ngày, hai số.
+	Luật nằm ở `paid_credit` (nguồn duy nhất, xem spec §"Field Công")."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.emp = test_employee()
+		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
+
+	def day_from_request(self, date, reason, existing_absent=True):
+		"""Dựng đúng đường sinh ra lỗi: ngày ĐÃ có bản ghi Vắng (auto-attendance chấm vì không có
+		checkin), rồi phiếu mới được duyệt → upstream đi nhánh `db_set`, cầu nối KHÔNG chạy nên
+		`custom_work_credit` nằm nguyên ở 0.0 của mã `V`."""
+		if existing_absent:
+			att = frappe.get_doc(
+				{
+					"doctype": "Attendance",
+					"employee": self.emp,
+					"attendance_date": date,
+					"company": self.company,
+					"status": "Absent",
+				}
+			)
+			att.insert(ignore_permissions=True)
+			att.submit()
+
+		req = frappe.get_doc(
+			{
+				"doctype": "Attendance Request",
+				"employee": self.emp,
+				"from_date": date,
+				"to_date": date,
+				"reason": reason,
+				"company": self.company,
+			}
+		)
+		req.insert(ignore_permissions=True)
+		req.submit()
+		return frappe.db.get_value(
+			"Attendance",
+			{"employee": self.emp, "attendance_date": date, "docstatus": ("<", 2)},
+			["custom_attendance_code", "custom_work_credit", "status"],
+			as_dict=True,
+		)
+
+	def test_on_duty_over_an_absent_day_is_full_credit(self):
+		row = self.day_from_request("2094-04-14", "On Duty")
+		self.assertEqual(row.custom_attendance_code, "CT")
+		self.assertEqual(row.custom_work_credit, 1.0, "đi công tác là ngày đi làm, đủ công")
+
+	def test_work_from_home_over_an_absent_day_is_full_credit(self):
+		row = self.day_from_request("2094-04-15", "Work From Home")
+		self.assertEqual(row.custom_attendance_code, "W")
+		self.assertEqual(row.custom_work_credit, 1.0)
+
+	def test_missed_punch_over_an_absent_day_is_full_credit(self):
+		row = self.day_from_request("2094-04-16", "Missed Punch")
+		self.assertEqual(row.custom_attendance_code, "X")
+		self.assertEqual(row.custom_work_credit, 1.0)
+
+	def test_new_day_without_prior_record_stays_full_credit(self):
+		"""Nhánh tạo mới vốn đã đúng (cầu nối chạy) — chốt lại để bản sửa không làm hỏng."""
+		row = self.day_from_request("2094-04-17", "On Duty", existing_absent=False)
+		self.assertEqual(row.custom_work_credit, 1.0)

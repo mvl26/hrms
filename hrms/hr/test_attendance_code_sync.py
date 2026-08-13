@@ -179,3 +179,85 @@ class TestSyncKeepsValidCodes(PerTestRollback, FrappeTestCase):
 		from hrms.hr.attendance_code_sync import expected_code
 
 		self.assertEqual(expected_code(self.row(None, status="Present")), "X")
+
+
+class TestSyncRespectsAttendanceRequestSource(PerTestRollback, FrappeTestCase):
+	"""Ngày do Yêu cầu chấm công sinh ra: **phiếu là nguồn có thẩm quyền của mã**, không phải status.
+
+	Lỗi thật (Lê Văn Cường 2026-07-14): phiếu lý do `On Duty` → upstream đặt `status = Present`
+	(chỉ riêng lý do WFH mới ra status `Work From Home`), hook Miyano ghi mã `CT`. Nhưng
+	`Attendance Code CT` khai `maps_to_status = Work From Home`, nên bộ đồng bộ tính
+	`matching_codes(Present) = ['X']`, thấy CT không thuộc đó và đề xuất **CT → X** — xoá mất thông
+	tin đi công tác có thật. Cùng họ với lỗi W-hoá-CT (2026-08-05), nhưng nguồn sai là PHIẾU chứ
+	không phải status."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.year = 2095
+		cls.emp = test_employee()
+		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
+
+	def on_duty_day(self, date):
+		"""Dựng đúng đường thật: phiếu Yêu cầu chấm công lý do On Duty, duyệt → sinh ngày công."""
+		req = frappe.get_doc(
+			{
+				"doctype": "Attendance Request",
+				"employee": self.emp,
+				"from_date": date,
+				"to_date": date,
+				"reason": "On Duty",
+				"company": self.company,
+			}
+		)
+		req.insert(ignore_permissions=True)
+		req.submit()
+		return frappe.db.get_value(
+			"Attendance",
+			{"employee": self.emp, "attendance_date": date, "docstatus": ("<", 2)},
+			["name", "status", "leave_type", "custom_attendance_code", "attendance_request"],
+			as_dict=True,
+		)
+
+	def test_on_duty_day_is_present_with_ct_code(self):
+		"""Tiền đề của lỗi: status là Present chứ không phải Work From Home."""
+		row = self.on_duty_day(f"{self.year}-04-14")
+		self.assertEqual(row.status, "Present")
+		self.assertEqual(row.custom_attendance_code, "CT")
+
+	def test_ct_from_an_on_duty_request_is_kept(self):
+		from hrms.hr.attendance_code_sync import expected_code
+
+		row = self.on_duty_day(f"{self.year}-04-15")
+		self.assertEqual(expected_code(row), "CT", "phiếu On Duty quy định CT — không được hoá X")
+
+	def test_preview_does_not_list_the_on_duty_day(self):
+		date = f"{self.year}-04-16"
+		self.on_duty_day(date)
+
+		result = preview_sync({"month": 4, "year": self.year, "company": self.company})
+
+		self.assertEqual(
+			[c for c in result["changes"] if c["attendance_date"] == date],
+			[],
+			"ngày đi công tác đang đúng thì không được nằm trong danh sách đề xuất sửa",
+		)
+
+	def test_a_wiped_code_is_refilled_from_the_request(self):
+		"""Mã bị xoá trên ngày có phiếu → điền lại theo PHIẾU (CT), không suy từ status (X)."""
+		from hrms.hr.attendance_code_sync import expected_code
+
+		row = self.on_duty_day(f"{self.year}-04-17")
+		frappe.db.set_value("Attendance", row.name, "custom_attendance_code", None, update_modified=False)
+		row.custom_attendance_code = None
+
+		self.assertEqual(expected_code(row), "CT")
+
+	def test_day_without_a_request_is_still_corrected(self):
+		"""Không đụng việc chính của bộ đồng bộ: ngày KHÔNG có phiếu, mã lệch → vẫn sửa."""
+		from hrms.hr.attendance_code_sync import expected_code
+
+		row = frappe._dict(
+			status="Present", leave_type=None, custom_attendance_code="V", attendance_request=None
+		)
+		self.assertEqual(expected_code(row), "X")

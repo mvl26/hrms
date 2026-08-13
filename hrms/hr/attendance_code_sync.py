@@ -32,16 +32,44 @@ def matching_codes(row) -> list[str]:
 	return frappe.get_all("Attendance Code", filters=filters, pluck="name")
 
 
-def expected_code(row) -> str | None:
-	"""Mã công đúng ra phải có, suy từ `status` + `leave_type`. None nếu không suy được.
+def request_code(row) -> str | None:
+	"""Mã do NGUỒN của ngày công quy định: phiếu Yêu cầu chấm công. None nếu ngày không có phiếu.
 
-	GIỮ NGUYÊN mã hiện tại nếu nó đã hợp lệ với status — nhiều mã cùng chung một status và chúng
-	KHÔNG thay thế được cho nhau: `W` (làm tại nhà) và `CT` (đi công tác) đều mang status
-	`Work From Home`. Trước 2026-08-05 hàm này luôn trả mã "chuẩn" (`CT`), nên bấm "Đồng bộ mã công"
-	là mọi ngày làm tại nhà bị đè thành đi công tác — mất thông tin có thật mà không ai báo.
+	Ngày sinh từ phiếu thì `status` KHÔNG đủ để suy mã. Upstream `get_attendance_status` chỉ trả
+	`Work From Home` cho đúng lý do WFH; mọi lý do khác — kể cả `On Duty` — đều ra `Present`. Trong
+	khi mã `CT` khai `maps_to_status = Work From Home`, nên cặp (Present, CT) hoàn toàn hợp lệ ngoài
+	đời nhưng lại "lệch" dưới mắt bảng Attendance Code. Hỏi thẳng phiếu là hết nhập nhằng."""
+	name = row.get("attendance_request")
+	if not name:
+		return None
+	from hrms.hr.doctype.attendance_request.attendance_request_miyano import (
+		DEFAULT_CODE,
+		REASON_TO_CODE,
+	)
+
+	reason = frappe.db.get_value("Attendance Request", name, "reason")
+	return REASON_TO_CODE.get(reason, DEFAULT_CODE)
+
+
+def expected_code(row) -> str | None:
+	"""Mã công đúng ra phải có. None nếu không suy được.
+
+	Thứ tự thẩm quyền:
+
+	1. **Phiếu Yêu cầu chấm công** (nếu ngày đó sinh từ phiếu) — xem `request_code`. Lỗi thật
+	   2026-08-13: ngày `On Duty` mang (status `Present`, mã `CT`) bị đề xuất `CT → X`, xoá mất
+	   thông tin đi công tác có thật.
+	2. **Mã hiện tại nếu đã hợp lệ với status** — nhiều mã cùng chung một status và KHÔNG thay thế
+	   được cho nhau: `W` (làm tại nhà) và `CT` (đi công tác) đều mang status `Work From Home`.
+	   Trước 2026-08-05 hàm này luôn trả mã "chuẩn" (`CT`), nên bấm "Đồng bộ mã công" là mọi ngày
+	   làm tại nhà bị đè thành đi công tác — mất thông tin có thật mà không ai báo.
+	3. Suy ngược từ `status` + `leave_type`.
 
 	Chỉ đề xuất đổi khi mã đang có KHÔNG nằm trong nhóm hợp lệ (vd `V` kẹt lại sau khi đơn nghỉ đã
 	duyệt) — đó mới đúng là việc của bộ đồng bộ."""
+	from_request = request_code(row)
+	if from_request:
+		return from_request
 	matches = matching_codes(row)
 	if row.custom_attendance_code in matches:
 		return row.custom_attendance_code
@@ -81,6 +109,7 @@ def preview_sync(filters: str | dict | None = None) -> dict:
 			"custom_attendance_code",
 			"custom_morning_code",
 			"custom_afternoon_code",
+			"attendance_request",  # nguồn có thẩm quyền của mã — xem `request_code`
 		],
 		order_by="attendance_date, employee",
 		limit_page_length=0,

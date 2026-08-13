@@ -132,6 +132,12 @@ def set_attendance_request_code(doc, method=None):
 	Ngày nửa buổi: buổi yêu cầu = mã reason; buổi còn lại suy TỪ half_day_status native (đúng payroll) —
 	đã hiện diện (Present) → X ⇒ **W/X (đi làm đủ, cả ngày trả lương)**; chưa (Absent, native trừ 0.5) →
 	K ⇒ **W/K (chỉ làm nửa ngày, nửa kia không lương)**."""
+	# Số công phải ghi kèm mã: khi ngày đó ĐÃ có bản ghi (Vắng do auto-attendance), upstream đi nhánh
+	# `db_set` nên cầu nối không chạy và `custom_work_credit` nằm nguyên ở 0.0 của mã `V` — form Ngày
+	# công hiện "Công = 0" cho một ngày đi công tác. Dùng chung `paid_credit` như cầu nối và bộ đồng
+	# bộ (`work_credit`), không chép luật sang đây.
+	from hrms.hr.doctype.leave_application.leave_single_pool import work_credit
+
 	code = REASON_TO_CODE.get(doc.get("reason"), DEFAULT_CODE)
 	is_half = cint(doc.get("half_day")) and doc.get("half_day_date")
 	half_date = getdate(doc.get("half_day_date")) if is_half else None
@@ -154,12 +160,14 @@ def set_attendance_request_code(doc, method=None):
 					if doc.get("custom_half_day_session") == AFTERNOON
 					else {"custom_morning_code": code, "custom_afternoon_code": other}
 				),
+				"custom_work_credit": (work_credit(code) + work_credit(other)) * 0.5,
 			}
 		else:
 			vals = {
 				"custom_attendance_code": code,
 				"custom_morning_code": None,
 				"custom_afternoon_code": None,
+				"custom_work_credit": work_credit(code),
 			}
 		for field, value in vals.items():
 			frappe.db.set_value("Attendance", att.name, field, value, update_modified=False)
