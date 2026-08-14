@@ -92,7 +92,7 @@ Xoá `hrms/regional/` (5 file) ⇒ kéo theo: khối `regional_overrides` (`hook
 ### 4.6 Tài liệu
 
 - `CLAUDE.md`: viết lại phần "What this project is" — hiện định nghĩa repo là "in-house customization of Frappe HR".
-- `docs/`, `spec/`, `tasks/`: chỉ sửa chỗ nói về **Frappe HR như sản phẩm/thượng nguồn**. **Giữ nguyên** chỗ nói về **Frappe Framework** (`frappe.db`, doctype, hooks, `bench`) — đó là mô tả kỹ thuật đúng, xoá đi thành sai.
+- `docs/`, `docs/spec/`, `docs/tasks/`: chỉ sửa chỗ nói về **Frappe HR như sản phẩm/thượng nguồn**. **Giữ nguyên** chỗ nói về **Frappe Framework** (`frappe.db`, doctype, hooks, `bench`) — đó là mô tả kỹ thuật đúng, xoá đi thành sai.
 
 ## 5. Ngoài phạm vi
 

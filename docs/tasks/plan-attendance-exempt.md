@@ -4,7 +4,7 @@
 > `superpowers:executing-plans`, làm tuần tự T1 → T11, mỗi task kết thúc bằng **một commit**.
 > Các bước dùng checkbox `- [ ]` để bám tiến độ.
 
-**Spec:** `spec/attendance-exempt-employees.md` (đọc trước khi bắt đầu — plan này lập luận từ spec).
+**Spec:** `docs/spec/attendance-exempt-employees.md` (đọc trước khi bắt đầu — plan này lập luận từ spec).
 Nhánh: `feat/skip-attendance-diag`.
 
 **Goal:** người không quẹt thẻ theo giờ cố định (giám đốc, giờ linh hoạt) **tự động đủ công mỗi
@@ -90,7 +90,7 @@ Ba điều **bắt buộc** nhớ (đã sập bẫy thật):
 3. **Không insert Custom Field trong test** (đó chính là DDL). Field mới lên site bằng `migrate` ở
    T1, test chỉ đọc.
 
-**Baseline test đỏ sẵn** (không phải do mình): 9 error `_Test Company` ở `hrms.hr.test_working_hours`,
+**Baseline test đỏ sẵn** (không phải do mình): 9 error `_Test Company` ở `hrms.hr.tests.test_working_hours`,
 15 error thiếu role `WFC *` ở `business_trip`, 44 error `_Test Company` ở `test_salary_slip`. Nghi
 ngờ mình làm vỡ thì `git stash` rồi chạy lại đúng module đó.
 
@@ -101,7 +101,7 @@ ngờ mình làm vỡ thì `git stash` rồi chạy lại đúng module đó.
 **Files:**
 - Modify: `hrms/fixtures/custom_field.json` (thêm 3 bản ghi)
 - Modify: `hrms/hooks.py` (bộ lọc `fixtures` → `Custom Field` → danh sách `name in [...]`)
-- Test: `hrms/hr/test_attendance_exempt.py` (tạo mới)
+- Test: `hrms/hr/tests/test_attendance_exempt.py` (tạo mới)
 
 **Interfaces:**
 - Produces: 3 Custom Field — `Employee-custom_exempt_from_checkin` (Check),
@@ -110,7 +110,7 @@ ngờ mình làm vỡ thì `git stash` rồi chạy lại đúng module đó.
 
 - [ ] **Bước 1: Dựng harness** — ghi `$SCRATCH/run_test.sh` đúng nội dung ở mục trên, `chmod +x`.
 
-- [ ] **Bước 2: Viết test đỏ** — `hrms/hr/test_attendance_exempt.py`:
+- [ ] **Bước 2: Viết test đỏ** — `hrms/hr/tests/test_attendance_exempt.py`:
 
 ```python
 # Copyright (c) 2026, Miyano Việt Nam.
@@ -173,7 +173,7 @@ class TestExemptFixtures(PerTestRollback, FrappeTestCase):
 
 - [ ] **Bước 3: Chạy để thấy ĐỎ**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt"`
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt"`
 Kỳ vọng: FAIL — "thiếu Custom Field Employee-custom_exempt_from_checkin trong fixtures".
 
 - [ ] **Bước 4: Thêm 3 bản ghi vào `hrms/fixtures/custom_field.json`**
@@ -234,13 +234,13 @@ giá trị dưới đây. Giữ file **sắp xếp theo `name`** như hiện t�
 
 - [ ] **Bước 6: Chạy lại → XANH**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt"` → `RESULT: OK` (3 test)
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt"` → `RESULT: OK` (3 test)
 Run: `bash $SCRATCH/run_test.sh "hrms.tests.test_setup_vn_defaults"` → không có lỗi MỚI so baseline.
 
 - [ ] **Bước 7: Commit**
 
 ```bash
-git add hrms/fixtures/custom_field.json hrms/hooks.py hrms/hr/test_attendance_exempt.py
+git add hrms/fixtures/custom_field.json hrms/hooks.py hrms/hr/tests/test_attendance_exempt.py
 git commit -m "feat(hr): field mien cham cong tren Employee + co cong tu sinh tren Attendance"
 ```
 
@@ -262,7 +262,7 @@ Kiểm: `bench --site miyano execute frappe.client.get_count --args '["Employee"
 
 **Files:**
 - Create: `hrms/hr/attendance_exempt.py`
-- Test: `hrms/hr/test_attendance_exempt.py` (thêm class)
+- Test: `hrms/hr/tests/test_attendance_exempt.py` (thêm class)
 
 **Interfaces:**
 - Produces:
@@ -273,7 +273,7 @@ Kiểm: `bench --site miyano execute frappe.client.get_count --args '["Employee"
     `relieving_date`, `custom_exempt_from_checkin_from`
 - Consumes: `hrms.tests.vn_test_utils.test_employee`, `default_company` (chỉ trong test)
 
-- [ ] **Bước 1: Viết test đỏ** — thêm vào `hrms/hr/test_attendance_exempt.py`:
+- [ ] **Bước 1: Viết test đỏ** — thêm vào `hrms/hr/tests/test_attendance_exempt.py`:
 
 ```python
 from frappe.utils import add_days, getdate
@@ -356,7 +356,7 @@ class TestIsExempt(PerTestRollback, FrappeTestCase):
 
 - [ ] **Bước 2: Chạy để thấy ĐỎ**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt.TestIsExempt"`
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt.TestIsExempt"`
 Kỳ vọng: FAIL — `ModuleNotFoundError: hrms.hr.attendance_exempt`.
 
 - [ ] **Bước 3: Viết `hrms/hr/attendance_exempt.py`**
@@ -431,13 +431,13 @@ def exempt_employees() -> list:
 
 - [ ] **Bước 4: Chạy lại → XANH**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt"` → `RESULT: OK` (E1 + E2, 10 test),
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt"` → `RESULT: OK` (E1 + E2, 10 test),
 `HARNESS_NO_LEAK`.
 
 - [ ] **Bước 5: Commit**
 
 ```bash
-git add hrms/hr/attendance_exempt.py hrms/hr/test_attendance_exempt.py
+git add hrms/hr/attendance_exempt.py hrms/hr/tests/test_attendance_exempt.py
 git commit -m "feat(hr): lõi nhan dien nhan vien mien cham cong (is_exempt)"
 ```
 
@@ -447,7 +447,7 @@ git commit -m "feat(hr): lõi nhan dien nhan vien mien cham cong (is_exempt)"
 
 **Files:**
 - Modify: `hrms/hr/attendance_exempt.py`
-- Test: `hrms/hr/test_attendance_exempt.py`
+- Test: `hrms/hr/tests/test_attendance_exempt.py`
 
 **Interfaces:**
 - Produces: `fill_full_day(employee: str, date) -> str | None` — trả tên Attendance vừa tạo, hoặc
@@ -534,7 +534,7 @@ class TestFillFullDay(PerTestRollback, FrappeTestCase):
 
 	def test_skips_locked_period(self):
 		"""Kỳ đã chốt là ĐÓNG BĂNG. Mock `is_period_locked` — luật khoá kỳ đã có test riêng ở
-		`hrms/hr/test_period_lock.py`; ở đây chỉ chứng minh `fill_full_day` có hỏi nó."""
+		`hrms/hr/tests/test_period_lock.py`; ở đây chỉ chứng minh `fill_full_day` có hỏi nó."""
 		from unittest.mock import patch
 
 		from hrms.hr.attendance_exempt import fill_full_day
@@ -546,7 +546,7 @@ class TestFillFullDay(PerTestRollback, FrappeTestCase):
 
 - [ ] **Bước 2: Chạy để thấy ĐỎ**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt.TestFillFullDay"`
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt.TestFillFullDay"`
 Kỳ vọng: FAIL — `ImportError: cannot import name 'fill_full_day'`.
 
 - [ ] **Bước 3: Cài đặt** — thêm vào `hrms/hr/attendance_exempt.py`:
@@ -594,14 +594,14 @@ def fill_full_day(employee: str, date) -> str | None:
 
 - [ ] **Bước 4: Chạy lại → XANH**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt"` → `RESULT: OK` (E1–E3, 16 test),
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt"` → `RESULT: OK` (E1–E3, 16 test),
 `HARNESS_NO_LEAK`. Thấy `HARNESS_LEAK_DETECTED` ở `Holiday List` → xoá tay bản ghi
 `Miyano Exempt Test 2099` rồi chạy lại.
 
 - [ ] **Bước 5: Commit**
 
 ```bash
-git add hrms/hr/attendance_exempt.py hrms/hr/test_attendance_exempt.py
+git add hrms/hr/attendance_exempt.py hrms/hr/tests/test_attendance_exempt.py
 git commit -m "feat(hr): sinh ngay cong du (ma X) cho nguoi mien cham cong"
 ```
 
@@ -611,7 +611,7 @@ git commit -m "feat(hr): sinh ngay cong du (ma X) cho nguoi mien cham cong"
 
 **Files:**
 - Modify: `hrms/hr/doctype/shift_type/shift_type.py:225-249` (`mark_absent_for_dates_with_no_attendance`)
-- Test: `hrms/hr/test_attendance_exempt.py`
+- Test: `hrms/hr/tests/test_attendance_exempt.py`
 
 **Interfaces:**
 - Consumes: `is_exempt`, `fill_full_day` (T2, T3)
@@ -650,7 +650,7 @@ class TestAbsentBranch(PerTestRollback, FrappeTestCase):
 
 - [ ] **Bước 2: Chạy — hai test này XANH sẵn** (chúng khoá hành vi, chưa cần code mới).
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt.TestAbsentBranch"` → OK.
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt.TestAbsentBranch"` → OK.
 
 - [ ] **Bước 3: Sửa `shift_type.py`** — trong `mark_absent_for_dates_with_no_attendance`, ngay sau
   khối `reapply_attendance_request`:
@@ -671,14 +671,14 @@ Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt.TestAbsentBranch
 
 - [ ] **Bước 4: Chạy lại cả bộ liên quan**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt"` → OK
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt"` → OK
 Run: `bash $SCRATCH/run_test.sh "hrms.hr.doctype.shift_type.test_shift_type"` → **so với baseline**,
 không có lỗi mới.
 
 - [ ] **Bước 5: Commit**
 
 ```bash
-git add hrms/hr/doctype/shift_type/shift_type.py hrms/hr/test_attendance_exempt.py
+git add hrms/hr/doctype/shift_type/shift_type.py hrms/hr/tests/test_attendance_exempt.py
 git commit -m "feat(hr): nguoi mien cham cong khong bi cham vang khi thieu luot cham"
 ```
 
@@ -689,7 +689,7 @@ git commit -m "feat(hr): nguoi mien cham cong khong bi cham vang khi thieu luot 
 **Files:**
 - Modify: `hrms/hr/attendance_exempt.py`
 - Modify: `hrms/hooks.py:207-211` (`scheduler_events["hourly_long"]`)
-- Test: `hrms/hr/test_attendance_exempt.py`
+- Test: `hrms/hr/tests/test_attendance_exempt.py`
 
 **Interfaces:**
 - Produces: `process_exempt_employees()` — không tham số, chạy được từ scheduler và `bench execute`.
@@ -762,7 +762,7 @@ class TestSweep(PerTestRollback, FrappeTestCase):
 
 - [ ] **Bước 2: Chạy để thấy ĐỎ**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt.TestSweep"`
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt.TestSweep"`
 Kỳ vọng: FAIL — `ImportError: cannot import name 'process_exempt_employees'`.
 
 - [ ] **Bước 3: Cài đặt** — thêm vào `hrms/hr/attendance_exempt.py`:
@@ -800,12 +800,12 @@ def process_exempt_employees():
 
 - [ ] **Bước 5: Chạy lại → XANH**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt"` → OK, `HARNESS_NO_LEAK`.
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt"` → OK, `HARNESS_NO_LEAK`.
 
 - [ ] **Bước 6: Commit**
 
 ```bash
-git add hrms/hr/attendance_exempt.py hrms/hooks.py hrms/hr/test_attendance_exempt.py
+git add hrms/hr/attendance_exempt.py hrms/hooks.py hrms/hr/tests/test_attendance_exempt.py
 git commit -m "feat(hr): luot quet sinh cong cho nguoi mien cham cong (khong le thuoc phan ca)"
 ```
 
@@ -816,7 +816,7 @@ git commit -m "feat(hr): luot quet sinh cong cho nguoi mien cham cong (khong le 
 **Files:**
 - Modify: `hrms/hr/doctype/shift_type/shift_type.py:115-134` (sau `get_attendance`)
 - Modify: `hrms/hr/doctype/attendance/attendance.py:203-204` (cuối `apply_vn_half_day_classifier`)
-- Test: `hrms/hr/test_attendance_exempt.py`
+- Test: `hrms/hr/tests/test_attendance_exempt.py`
 
 **Interfaces:**
 - Consumes: `is_exempt`, `EXEMPT_CODE`
@@ -882,7 +882,7 @@ class TestNoDowngradeOnCheckin(PerTestRollback, FrappeTestCase):
 
 - [ ] **Bước 2: Chạy để thấy ĐỎ**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt.TestNoDowngradeOnCheckin"`
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt.TestNoDowngradeOnCheckin"`
 Kỳ vọng: FAIL ở test đầu — mã ra `1/2X` hoặc `V` thay vì `X`.
 
 - [ ] **Bước 3: Sửa `attendance.py`** — cuối `apply_vn_half_day_classifier`, thay hai dòng cuối:
@@ -912,7 +912,7 @@ Kỳ vọng: FAIL ở test đầu — mã ra `1/2X` hoặc `V` thay vì `X`.
 
 - [ ] **Bước 5: Chạy lại → XANH**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt"` → OK
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt"` → OK
 Run: `bash $SCRATCH/run_test.sh "hrms.hr.doctype.attendance.test_vn_half_day_classifier"` → OK
 Run: `bash $SCRATCH/run_test.sh "hrms.hr.doctype.attendance.test_attendance_code_bridge"` → OK
 
@@ -920,7 +920,7 @@ Run: `bash $SCRATCH/run_test.sh "hrms.hr.doctype.attendance.test_attendance_code
 
 ```bash
 git add hrms/hr/doctype/attendance/attendance.py hrms/hr/doctype/shift_type/shift_type.py \
-        hrms/hr/test_attendance_exempt.py
+        hrms/hr/tests/test_attendance_exempt.py
 git commit -m "feat(hr): quet the it gio khong ha ma cong cua nguoi mien cham cong"
 ```
 
@@ -930,7 +930,7 @@ git commit -m "feat(hr): quet the it gio khong ha ma cong cua nguoi mien cham co
 
 **Files:**
 - Modify: `hrms/hr/doctype/shift_type/shift_type.py:371-397` (`mark_absent_for_half_day_dates`)
-- Test: `hrms/hr/test_attendance_exempt.py`
+- Test: `hrms/hr/tests/test_attendance_exempt.py`
 
 - [ ] **Bước 1: Viết test đỏ** (test #5 và #6 của spec — đơn nghỉ duyệt SAU khi đã sinh X):
 
@@ -1002,7 +1002,7 @@ class TestLeaveOverridesGeneratedDay(PerTestRollback, FrappeTestCase):
 
 - [ ] **Bước 2: Chạy — ghi lại kết quả**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt.TestLeaveOverridesGeneratedDay"`
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt.TestLeaveOverridesGeneratedDay"`
 
 Hai khả năng, xử lý khác nhau:
 - **XANH sẵn** → điểm móc (d) chỉ là lưới an toàn (`modify_half_day_status` chỉ bật khi ngày đang
@@ -1024,13 +1024,13 @@ Hai khả năng, xử lý khác nhau:
 
 - [ ] **Bước 4: Chạy lại → XANH**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt"` → OK
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt"` → OK
 Run: `bash $SCRATCH/run_test.sh "hrms.hr.doctype.attendance.test_code_resync_on_leave_record"` → OK
 
 - [ ] **Bước 5: Commit**
 
 ```bash
-git add hrms/hr/doctype/shift_type/shift_type.py hrms/hr/test_attendance_exempt.py
+git add hrms/hr/doctype/shift_type/shift_type.py hrms/hr/tests/test_attendance_exempt.py
 git commit -m "feat(hr): nghi phep nua ngay cua nguoi mien cham cong khong bi tru nua con lai"
 ```
 
@@ -1040,7 +1040,7 @@ git commit -m "feat(hr): nghi phep nua ngay cua nguoi mien cham cong khong bi tr
 
 **Files:**
 - Modify: `hrms/hr/doctype/business_trip/business_trip.py:84-119`
-- Test: `hrms/hr/test_attendance_exempt.py`
+- Test: `hrms/hr/tests/test_attendance_exempt.py`
 
 **Interfaces:**
 - Produces trên `BusinessTrip`: `attendance_row(employee, date) -> frappe._dict | None`,
@@ -1113,7 +1113,7 @@ class TestBusinessTripOverridesGeneratedDay(PerTestRollback, FrappeTestCase):
 
 - [ ] **Bước 2: Chạy để thấy ĐỎ**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt.TestBusinessTripOverridesGeneratedDay"`
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt.TestBusinessTripOverridesGeneratedDay"`
 Kỳ vọng: FAIL — mã vẫn là `X` (Công Tác đang bỏ qua ngày đã có bản ghi).
 
 - [ ] **Bước 3: Sửa `business_trip.py`** — thay `has_attendance` và vòng lặp trong
@@ -1186,14 +1186,14 @@ Nhớ import `cint` và `_` ở đầu file nếu chưa có.
 
 - [ ] **Bước 4: Chạy lại → XANH**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt"` → OK
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt"` → OK
 Run: `bash $SCRATCH/run_test.sh "hrms.hr.doctype.business_trip.test_business_trip"` → **15 error
 baseline** (thiếu role `WFC *`), không có lỗi MỚI.
 
 - [ ] **Bước 5: Commit**
 
 ```bash
-git add hrms/hr/doctype/business_trip/business_trip.py hrms/hr/test_attendance_exempt.py
+git add hrms/hr/doctype/business_trip/business_trip.py hrms/hr/tests/test_attendance_exempt.py
 git commit -m "feat(hr): cong tac ghi de duoc ngay cong tu sinh (X -> CT)"
 ```
 
@@ -1204,7 +1204,7 @@ git commit -m "feat(hr): cong tac ghi de duoc ngay cong tu sinh (X -> CT)"
 **Files:**
 - Modify: `hrms/hr/attendance_exempt.py`
 - Modify: `hrms/hr/doctype/attendance/attendance_list.js`
-- Test: `hrms/hr/test_attendance_exempt.py`
+- Test: `hrms/hr/tests/test_attendance_exempt.py`
 
 **Interfaces:**
 - Produces: `generate_for_month(month, year, employee=None) -> int` (whitelisted, HR Manager /
@@ -1263,7 +1263,7 @@ class TestGenerateForMonth(PerTestRollback, FrappeTestCase):
 
 - [ ] **Bước 2: Chạy để thấy ĐỎ**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt.TestGenerateForMonth"`
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt.TestGenerateForMonth"`
 Kỳ vọng: FAIL — `ImportError: cannot import name 'generate_for_month'`.
 
 - [ ] **Bước 3: Cài đặt** — thêm vào `hrms/hr/attendance_exempt.py`:
@@ -1325,14 +1325,14 @@ def generate_for_month(month, year, employee: str | None = None) -> int:
 
 - [ ] **Bước 5: Chạy lại → XANH + build asset**
 
-Run: `bash $SCRATCH/run_test.sh "hrms.hr.test_attendance_exempt"` → OK
+Run: `bash $SCRATCH/run_test.sh "hrms.hr.tests.test_attendance_exempt"` → OK
 Run: `cd /home/miyano/frappe-bench && bench build --app hrms`
 
 - [ ] **Bước 6: Commit**
 
 ```bash
 git add hrms/hr/attendance_exempt.py hrms/hr/doctype/attendance/attendance_list.js \
-        hrms/hr/test_attendance_exempt.py
+        hrms/hr/tests/test_attendance_exempt.py
 git commit -m "feat(hr): nut sinh cong thang cho nguoi mien cham cong"
 ```
 
@@ -1439,7 +1439,7 @@ baseline** — kiểm bằng `git stash` rồi chạy lại.
 - [ ] **Bước 3: Chạy TOÀN BỘ bộ test VN, so baseline**
 
 ```bash
-for m in hrms.hr.test_attendance_exempt \
+for m in hrms.hr.tests.test_attendance_exempt \
          hrms.hr.doctype.attendance.test_attendance_code_bridge \
          hrms.hr.doctype.attendance.test_vn_half_day_classifier \
          hrms.hr.doctype.attendance.test_code_resync_on_leave_record \
@@ -1467,8 +1467,8 @@ git commit -m "test(hr): gate bat bien luong cho tinh nang mien cham cong"
 
 **Files:**
 - Modify: `CLAUDE.md` (mục "Miyano customizations")
-- Modify: `spec/attendance-exempt-employees.md` (đổi trạng thái)
-- Modify: `tasks/plan-attendance-exempt.md` (ghi STATUS ở đầu)
+- Modify: `docs/spec/attendance-exempt-employees.md` (đổi trạng thái)
+- Modify: `docs/tasks/plan-attendance-exempt.md` (ghi STATUS ở đầu)
 
 - [ ] **Bước 1: Thêm một gạch đầu dòng vào `CLAUDE.md`**, sau mục "Yêu cầu chấm công":
 
@@ -1477,7 +1477,7 @@ git commit -m "test(hr): gate bat bien luong cho tinh nang mien cham cong"
   giờ làm không cố định) được `hrms/hr/attendance_exempt.py` tự sinh **X** cho mọi ngày làm việc —
   qua nhánh chấm vắng của `Shift Type` và một lượt quét `hourly_long` độc lập với phân ca. Nghỉ
   phép / Yêu cầu chấm công ghi đè sẵn; **Công Tác** được sửa để đổi ngày `X` tự sinh
-  (`Attendance.custom_auto_filled`) thành **CT**. Spec `spec/attendance-exempt-employees.md`.
+  (`Attendance.custom_auto_filled`) thành **CT**. Spec `docs/spec/attendance-exempt-employees.md`.
 ```
 
 - [ ] **Bước 2: Đổi trạng thái spec** → `**Implemented** — <ngày>` kèm một dòng kết quả test.
@@ -1488,7 +1488,7 @@ git commit -m "test(hr): gate bat bien luong cho tinh nang mien cham cong"
 - [ ] **Bước 4: Commit**
 
 ```bash
-git add CLAUDE.md spec/attendance-exempt-employees.md tasks/plan-attendance-exempt.md
+git add CLAUDE.md docs/spec/attendance-exempt-employees.md docs/tasks/plan-attendance-exempt.md
 git commit -m "docs(hr): ghi nhan tinh nang mien cham cong vao CLAUDE.md + chot spec"
 ```
 

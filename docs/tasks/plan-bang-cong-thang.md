@@ -1,6 +1,6 @@
 # Plan: "Bảng Công Tháng" submittable DocType + VN print form (Phase 5a)
 
-Derived from `spec/bang-cong-thang-doctype.md`. Branch: `feat/skip-attendance-diag`.
+Derived from `docs/spec/bang-cong-thang-doctype.md`. Branch: `feat/skip-attendance-diag`.
 Read-only snapshot feature — additive, git-revertable, never writes Attendance → no payroll risk.
 Tests run via the session rollback harness (NEVER `bench run-tests` on `miyano`). One commit per task.
 

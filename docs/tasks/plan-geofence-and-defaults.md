@@ -1,6 +1,6 @@
 # Plan: Geofence map improvement + default post-install setup
 
-Spec: `spec/geofence-map-and-default-setup.md` (Phase 1 approved, decisions locked 2026-07-09).
+Spec: `docs/spec/geofence-map-and-default-setup.md` (Phase 1 approved, decisions locked 2026-07-09).
 Branch: `feat/skip-attendance-diag`. All additive + `git revert`-able. Test via the rollback harness
 (NEVER `bench run-tests` on `miyano`).
 

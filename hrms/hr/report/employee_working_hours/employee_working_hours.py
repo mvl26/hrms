@@ -10,7 +10,7 @@ phải thời gian thật ở văn phòng. Vì vậy giờ mỗi ngày được 
 phần giao với khung nghỉ trưa của ca. Giờ quy công vẫn giữ ở cột riêng để đối chiếu bảng chấm công.
 
 Ngày không có giờ vào/ra (WFH, yêu cầu chấm công, nhập tay) không phải ngày làm ở văn phòng → 0 giờ
-và không vào mẫu số TB. Xem `spec/employee-working-hours-report.md`.
+và không vào mẫu số TB. Xem `docs/spec/employee-working-hours-report.md`.
 """
 
 import frappe

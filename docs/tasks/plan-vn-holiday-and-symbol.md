@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended)
 > or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 
-Derived from `spec/vn-holiday-and-symbol-standardization.md`. Branch: `feat/skip-attendance-diag`.
+Derived from `docs/spec/vn-holiday-and-symbol-standardization.md`. Branch: `feat/skip-attendance-diag`.
 
 **Goal:** Standardize VN timekeeping display + a real VN Holiday List using existing ERP doctypes:
 show rest days as `-`, add code `N` for paid personal leave (marriage/funeral, Art. 115), and ship an
@@ -587,7 +587,7 @@ git commit -m "feat(hr): on-demand VN Holiday List generator (weekly-off + solar
 
 **Files:**
 - Test: `hrms/tests/test_setup_vn_holiday.py` (add a resolution test)
-- Modify: `tasks/plan-vn-holiday-and-symbol.md` (tick boxes), `spec/vn-holiday-and-symbol-standardization.md`
+- Modify: `docs/tasks/plan-vn-holiday-and-symbol.md` (tick boxes), `docs/spec/vn-holiday-and-symbol-standardization.md`
   (mark success criteria)
 
 **Interfaces:** Consumes everything above; no new production code.
@@ -640,7 +640,7 @@ holidays show `NL`, and any `N` day shows `N`.
 Mark the checkboxes in this plan and the `## Success Criteria` in the spec.
 
 ```bash
-git add tasks/plan-vn-holiday-and-symbol.md spec/vn-holiday-and-symbol-standardization.md \
+git add docs/tasks/plan-vn-holiday-and-symbol.md docs/spec/vn-holiday-and-symbol-standardization.md \
         hrms/tests/test_setup_vn_holiday.py
 git commit -m "docs(hr): VN holiday+symbol standardization done — resolution test + criteria ticked"
 ```

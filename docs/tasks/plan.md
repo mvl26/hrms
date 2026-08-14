@@ -3,7 +3,7 @@
 Derived from `SPEC.md`. One vertical slice; additive change to `Attendance.on_cancel`.
 
 - [x] Task 0: Write SPEC.md + this plan. Commit as preparatory commit.
-  - Files: SPEC.md, tasks/plan.md
+  - Files: SPEC.md, docs/tasks/plan.md
 
 - [x] Task 1: Reset skipped check-ins when a blocking Attendance is cancelled (TDD).
   - Acceptance:

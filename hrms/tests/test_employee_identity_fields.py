@@ -1,5 +1,5 @@
 # Copyright (c) 2026, Miyano Việt Nam.
-"""Tests for the VN identity custom fields on Employee (spec/employee-vn-identity-fields.md).
+"""Tests for the VN identity custom fields on Employee (docs/spec/employee-vn-identity-fields.md).
 Fixture-level only: creating Custom Fields at runtime would trigger DDL (implicit commit)
 and break the rollback harness — applying to the site is the `bench migrate` deploy step."""
 

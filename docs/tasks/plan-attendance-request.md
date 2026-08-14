@@ -1,6 +1,6 @@
 # Plan — Yêu cầu chấm công (mở lại Attendance Request có duyệt)
 
-Spec: `spec/attendance-request-vs-leave.md`. Nhánh: `feat/skip-attendance-diag`.
+Spec: `docs/spec/attendance-request-vs-leave.md`. Nhánh: `feat/skip-attendance-diag`.
 Commit: **user commit thủ công** (không auto-commit từng task). Test qua rollback harness.
 
 Thứ tự phụ thuộc: T1 → T2 → T3 → T4 → T5 → T6 → T7. T7 (PWA) độc lập backend, làm cuối.

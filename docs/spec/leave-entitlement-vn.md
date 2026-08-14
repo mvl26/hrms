@@ -1,7 +1,7 @@
 # Spec: Định mức phép năm VN (WS3) — cấp phép 12 ngày cộng dồn tháng + thâm niên (Điều 113/114)
 
 > Status: **APPROVED scope 2026-07-16** (3 quyết định chốt qua Q&A; xem `docs/audit-roadmap-2026-07-16.md`
-> Đợt B). Đây là "WS3, spec riêng" đã hoãn từ `spec/vn-holiday-and-symbol-standardization.md`
+> Đợt B). Đây là "WS3, spec riêng" đã hoãn từ `docs/spec/vn-holiday-and-symbol-standardization.md`
 > (quyết định #1, dòng 35 + Out-of-scope dòng 230).
 
 ## Objective
@@ -119,8 +119,8 @@ bench --site miyano execute hrms.setup_vn_leave.assign_annual_leave --kwargs "{'
 hrms/fixtures/leave_type.json        (sửa — Nghỉ phép năm: is_earned_leave/frequency/rounding)
 hrms/setup_vn_leave.py               (mới — entitlement_for / create_leave_period / assign_annual_leave)
 hrms/tests/test_setup_vn_leave.py    (mới — unit + integration qua harness)
-spec/leave-entitlement-vn.md         (spec này)
-tasks/plan-leave-entitlement-and-identity.md
+docs/spec/leave-entitlement-vn.md         (spec này)
+docs/tasks/plan-leave-entitlement-and-identity.md
 ```
 
 ## Testing strategy (rollback harness)

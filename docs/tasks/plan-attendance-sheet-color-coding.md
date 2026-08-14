@@ -1,6 +1,6 @@
 # Implementation Plan: Mã màu cho bảng chấm công (report + bản in)
 
-Spec: `spec/attendance-sheet-color-coding.md` (APPROVED 2026-07-23). Nhánh: `feat/skip-attendance-diag`.
+Spec: `docs/spec/attendance-sheet-color-coding.md` (APPROVED 2026-07-23). Nhánh: `feat/skip-attendance-diag`.
 
 > **STATUS: BUILT (2026-07-24).** 3 task xong theo TDD — commits `3b1e388` (Task 1), `f24fd9e`
 > (Task 2), `be34546` (Task 3). 19 test xanh qua harness rollback; E2E đọc thật xanh (report:

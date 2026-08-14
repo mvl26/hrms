@@ -2,7 +2,7 @@
 
 > Status: **APPROVED (Phase 1 / SPECIFY complete).** 4 open questions resolved by the user on
 > 2026-07-09 (see *Decisions*). Two independent features in one doc; Part A and Part B are built and
-> tested together on `feat/skip-attendance-diag`. Plan/tasks live in `tasks/plan-geofence-and-defaults.md`.
+> tested together on `feat/skip-attendance-diag`. Plan/tasks live in `docs/tasks/plan-geofence-and-defaults.md`.
 
 ## Objective
 
@@ -143,7 +143,7 @@ server helpers small, whitelisted, and read-only where possible.
 - [ ] `after_install` + `after_migrate` wired; `bench --site miyano migrate` clean; defaults present E2E.
 - [ ] Reversible via `git revert`; verified on dev `miyano`.
 
-## Task breakdown (see `tasks/plan-geofence-and-defaults.md` for detail)
+## Task breakdown (see `docs/tasks/plan-geofence-and-defaults.md` for detail)
 
 1. Server: circle-feature geolocation + `get_checkin_geofence` helper + unit tests.
 2. Shift Location `.js`: click-to-set lat/long + regenerate circle on field change (manual verify).

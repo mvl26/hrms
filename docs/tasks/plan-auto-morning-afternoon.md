@@ -4,7 +4,7 @@
 > superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax. **This feature changes payroll
 > classification** → Task 3 is a hard gate; Task 5 requires sign-off before enabling on prod shifts.
 
-Derived from `spec/auto-morning-afternoon-attendance.md`. Branch: `feat/skip-attendance-diag`.
+Derived from `docs/spec/auto-morning-afternoon-attendance.md`. Branch: `feat/skip-attendance-diag`.
 
 **Goal:** Keep one Attendance/day but auto-derive morning/afternoon codes + lunch-excluded net hours from
 the day's in/out and a per-shift schedule, so a person who worked only one session is correctly a Half Day.
@@ -481,7 +481,7 @@ git commit -m "test(hr): gate — classified morning-only Half Day == native Hal
 
 **Files:**
 - Modify: `hrms/hr/working_hours.py` (`compute_net_hours` gains `is_split`; `get_net_hours_map` passes it)
-- Test: `hrms/hr/test_working_hours.py` (create if absent; else append)
+- Test: `hrms/hr/tests/test_working_hours.py` (create if absent; else append)
 
 **Interfaces:**
 - Consumes: split-shift Attendance whose stored `working_hours` is already net (Task 2).
@@ -490,7 +490,7 @@ git commit -m "test(hr): gate — classified morning-only Half Day == native Hal
 
 - [x] **Step 1: Write the failing test**
 
-Create/append `hrms/hr/test_working_hours.py`:
+Create/append `hrms/hr/tests/test_working_hours.py`:
 
 ```python
 # Copyright (c) 2026, Miyano Việt Nam.
@@ -514,7 +514,7 @@ class TestWorkingHoursNet(FrappeTestCase):
 
 - [x] **Step 2: Run — verify it fails**
 
-Run: `bash scratch/run_test.sh "hrms.hr.test_working_hours"`
+Run: `bash scratch/run_test.sh "hrms.hr.tests.test_working_hours"`
 Expected: FAIL — `compute_net_hours() got an unexpected keyword argument 'is_split'`.
 
 - [x] **Step 3: Add the `is_split` branch to `compute_net_hours`**
@@ -554,14 +554,14 @@ In `get_net_hours_map`, before the row loop add a lookup of split-enabled shifts
 
 - [x] **Step 5: Run — verify pass + working-hours regression**
 
-Run: `bash scratch/run_test.sh "hrms.hr.test_working_hours"` → OK.
+Run: `bash scratch/run_test.sh "hrms.hr.tests.test_working_hours"` → OK.
 Run any existing working-hours test module if present:
 `bash scratch/run_test.sh "hrms.hr.report.working_hours"` (skip if no test module) — otherwise rely on Step 5's unit test.
 
 - [x] **Step 6: Commit**
 
 ```bash
-git add hrms/hr/working_hours.py hrms/hr/test_working_hours.py
+git add hrms/hr/working_hours.py hrms/hr/tests/test_working_hours.py
 git commit -m "feat(hr): net-hours dashboard uses stored net for split shifts (no double lunch subtraction)"
 ```
 
@@ -570,7 +570,7 @@ git commit -m "feat(hr): net-hours dashboard uses stored net for split shifts (n
 ## Task 5: Integration — migrate, full regression, docs, sign-off note
 
 **Files:**
-- Modify: `tasks/plan-auto-morning-afternoon.md`, `spec/auto-morning-afternoon-attendance.md` (tick criteria)
+- Modify: `docs/tasks/plan-auto-morning-afternoon.md`, `docs/spec/auto-morning-afternoon-attendance.md` (tick criteria)
 
 - [x] **Step 1: Full regression sweep**
 
@@ -579,7 +579,7 @@ Run each → confirm `HARNESS_RESULT: OK`:
 bash scratch/run_test.sh "hrms.hr.doctype.attendance.test_vn_half_day_classifier"
 bash scratch/run_test.sh "hrms.hr.doctype.attendance.test_attendance_code_bridge"
 bash scratch/run_test.sh "hrms.payroll.doctype.salary_slip.test_attendance_code_payroll_invariance"
-bash scratch/run_test.sh "hrms.hr.test_working_hours"
+bash scratch/run_test.sh "hrms.hr.tests.test_working_hours"
 bash scratch/run_test.sh "hrms.hr.doctype.shift_type.test_shift_type"
 bash scratch/run_test.sh "hrms.hr.report.bang_cham_cong_thang.test_bang_cham_cong_thang"
 ```
@@ -596,7 +596,7 @@ Mark the plan boxes + `## Success Criteria` in the spec. Add a one-line note tha
 `custom_split_half_day` on any real shift + the one-month parallel run is an ask-first, sign-off step**.
 
 ```bash
-git add tasks/plan-auto-morning-afternoon.md spec/auto-morning-afternoon-attendance.md
+git add docs/tasks/plan-auto-morning-afternoon.md docs/spec/auto-morning-afternoon-attendance.md
 git commit -m "docs(hr): Phase-4 morning/afternoon classifier done — criteria ticked, enablement ask-first"
 ```
 

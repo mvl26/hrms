@@ -1,6 +1,6 @@
 # Plan: Vietnamese attendance-code timekeeping (MVP = Phases 1–3)
 
-Derived from `spec/attendance-code-timekeeping.md`. Branch: `feat/skip-attendance-diag`
+Derived from `docs/spec/attendance-code-timekeeping.md`. Branch: `feat/skip-attendance-diag`
 (per user). Baseline: leave the unrelated dirty files (frontend/*, expense_*, .claude/)
 untouched — each task stages ONLY its own files.
 
@@ -8,7 +8,7 @@ untouched — each task stages ONLY its own files.
 running · ⬜ ready to build.
 
 - [x] Task 0: Write this plan (preparatory commit).
-  - Files: `tasks/plan-attendance-code-timekeeping.md`
+  - Files: `docs/tasks/plan-attendance-code-timekeeping.md`
 
 - [x] Task 1 (Phase 0): Leave Type anchors. DONE (`4428184`) — created 6 VN Leave Types
       (create-if-missing; existing English ones untouched), filtered fixture. Integrity test green.
@@ -82,7 +82,7 @@ running · ⬜ ready to build.
       DocType — which shipped the print format at `hrms/hr/print_format/bang_cong_thang/bang_cong_thang.json`
       (grid d01..dN + 8 category totals + symbol legend + 2 sign boxes: Người chấm công + Phòng Nhân
       sự). No separate print format on the Report is needed; the Task 8 report also prints via its
-      report view. See `tasks/plan-bang-cong-thang.md` Task 6.
+      report view. See `docs/tasks/plan-bang-cong-thang.md` Task 6.
 
 ## 2026-07-08 — full symbol set completed (Phases A–C)
 

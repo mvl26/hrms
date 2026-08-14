@@ -1,6 +1,6 @@
 # Plan — Số buổi ăn trưa trên Attendance (nguồn duy nhất)
 
-Spec `spec/lunch-days-attendance.md`. Nhánh `feat/skip-attendance-diag`. **User commit tay** (không
+Spec `docs/spec/lunch-days-attendance.md`. Nhánh `feat/skip-attendance-diag`. **User commit tay** (không
 auto-commit). Test qua rollback harness. Thứ tự: L1→L2→L3→L4→L5→L6→L7→L8.
 
 **Tiến độ 2026-07-25:** L1–L8 ✅ — **62 test xanh** qua harness (gồm gate payroll-invariance L3 +

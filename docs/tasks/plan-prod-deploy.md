@@ -4,7 +4,7 @@
 > A → B → C đã chốt). Đợt này **không có code mới** — chỉ đưa những gì đã build + test xanh trên
 > dev vào site có dữ liệu thật. Mọi bước đánh dấu **[GATE]** là ask-first: dừng, xin sign-off,
 > rồi mới chạy. "Prod" = instance mang dữ liệu HR/lương thật (bản dev `miyano` trên bench này
-> gần trống — 10 nhân viên, 0 salary slip; xem `spec/vn-holiday-and-symbol-standardization.md:73-75`).
+> gần trống — 10 nhân viên, 0 salary slip; xem `docs/spec/vn-holiday-and-symbol-standardization.md:73-75`).
 
 ## Nguyên tắc xuyên suốt
 
@@ -18,7 +18,7 @@
 ## Tasks
 
 - [ ] **T0 (dev, không gate): Verify JS geofence trên browser** — mục treo cuối của
-  `tasks/plan-geofence-and-defaults.md`. **Chỉ còn phần nhìn/tương tác — anh phải tự làm trên Chrome
+  `docs/tasks/plan-geofence-and-defaults.md`. **Chỉ còn phần nhìn/tương tác — anh phải tự làm trên Chrome
   của anh** (Chrome của trợ lý nằm ở máy khác, không nối được tới site này).
   - Acceptance: (a) Shift Location: click bản đồ set lat/long + vòng tròn bán kính vẽ lại theo
     `checkin_radius`; (b) Employee Checkin: overlay vòng tròn geofence + điểm check-in, read-only.

@@ -9,7 +9,7 @@ from frappe.tests.utils import FrappeTestCase
 from hrms.tests.isolation import PerTestRollback
 
 # The VN labels HR must see for the doctypes/reports renamed to English names
-# (tasks/plan-english-naming-standardization.md). Source string -> expected translation.
+# (docs/tasks/plan-english-naming-standardization.md). Source string -> expected translation.
 VN_TIMEKEEPING_LABELS = {
 	"Monthly Attendance Sheet": "Bảng Công Tháng",
 	"Monthly Attendance Sheet Detail": "Chi tiết Bảng Công Tháng",

@@ -1,8 +1,8 @@
 # Spec: Chuẩn hoá chấm công & nghỉ lễ theo chuẩn Việt Nam — Holiday List (WS1) + ký hiệu VN / logic nửa ngày (WS2)
 
 > Status: **DRAFT for approval (Phase 1 / SPECIFY).** Scope + 6 quyết định chốt trong phiên
-> 2026-07-14. Nối tiếp bộ VN attendance-code đã ship (`spec/attendance-code-timekeeping.md`,
-> `spec/bang-cong-thang-doctype.md`). Lưu dưới `spec/` theo quy ước repo. **Không plan/implement
+> 2026-07-14. Nối tiếp bộ VN attendance-code đã ship (`docs/spec/attendance-code-timekeeping.md`,
+> `docs/spec/bang-cong-thang-doctype.md`). Lưu dưới `docs/spec/` theo quy ước repo. **Không plan/implement
 > tới khi được duyệt.**
 
 ## Objective
@@ -74,7 +74,7 @@ của ERP** (không thêm doctype mới). Hai workstream độc lập nhưng b�
   `consider_unmarked_attendance_as = 'Present'`; **chỉ có Holiday List test**. (Đây là bản dev gần trống:
   10 nhân viên, 0 salary structure/slip — dữ liệu thật ở prod.)
 - **Ký hiệu "N" — đã chốt lại:** báo cáo cũ dùng N = *đã nghỉ việc* (suy từ `relieving_date`,
-  `spec/attendance-code-timekeeping.md:98`). HR chốt (2026-07-14): **N = nghỉ việc riêng có lương
+  `docs/spec/attendance-code-timekeeping.md:98`). HR chốt (2026-07-14): **N = nghỉ việc riêng có lương
   (kết hôn/tang)**; ngày sau `relieving_date` chuyển hiển thị **"-"** (ngày nghỉ). (TT200 dùng N = ngừng
   việc — Miyano không dùng khái niệm này.)
 
@@ -96,7 +96,7 @@ của ERP** (không thêm doctype mới). Hai workstream độc lập nhưng b�
 **Cách dùng:** `bench --site <s> execute hrms.setup_vn_holiday.create_vn_holiday_list --kwargs "{...}"`,
 hoặc một nút trên Desk / bước onboarding. **Không** nhét vào `ensure_defaults`/`after_migrate` — tạo
 Holiday List là **tạo dữ liệu**, đụng công ty thật → **ask-first** (nhất quán với quyết định #3 của
-`spec/geofence-map-and-default-setup.md`: "Do NOT seed a sample Holiday List").
+`docs/spec/geofence-map-and-default-setup.md`: "Do NOT seed a sample Holiday List").
 
 ### Rà soát resolve + tiêu thụ
 
@@ -176,7 +176,7 @@ hrms/hr/doctype/attendance/attendance.py             (verify bridge N + nửa ng
 hrms/hr/report/bang_cham_cong_thang/…                (marker "-" thay "CN"; sau relieving_date → "-"; giữ "NL")
 hrms/hr/doctype/bang_cong_thang/…                    (marker "-" trong print/grid nếu cần đồng bộ report)
 hrms/payroll/doctype/salary_slip/test_attendance_code_payroll_invariance.py  (mở rộng: mã N + nửa ngày)
-spec/vn-holiday-and-symbol-standardization.md        (spec này)
+docs/spec/vn-holiday-and-symbol-standardization.md        (spec này)
 ```
 > Chỉ tạo file khi task tương ứng cần. **Không** rename/đổi mã đã có → **không** có patch migrate đợt này.
 

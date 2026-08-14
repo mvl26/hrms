@@ -4,8 +4,8 @@
 > 6 test xanh qua harness rollback; bảng công (feature cũ) 20 test không hỏng. **CHƯA deploy** (field
 > fixture + hook + cấu hình cần migrate/restart + hoà giải allocation = cổng ký, xem cuối plan).
 > Mô hình chốt qua Q&A phiên 2026-07-24.
-> Nối tiếp và **dựa trên** `spec/leave-entitlement-vn.md` (WS3 — cấp quỹ 12+thâm niên) làm bậc nền.
-> Lưu dưới `spec/` theo quy ước repo. **Cổng sign-off cứng:** đụng Leave Type + cầu nối mã-công↔lương
+> Nối tiếp và **dựa trên** `docs/spec/leave-entitlement-vn.md` (WS3 — cấp quỹ 12+thâm niên) làm bậc nền.
+> Lưu dưới `docs/spec/` theo quy ước repo. **Cổng sign-off cứng:** đụng Leave Type + cầu nối mã-công↔lương
 > trên site production có lương đang chạy — mỗi bậc phải chứng minh **lương bất biến** và **không
 > deploy khi chưa duyệt**.
 
@@ -80,7 +80,7 @@ nhưng vẫn hiện **riêng** trên bảng công:
 ## Kiến trúc 3 bậc (làm tuần tự, mỗi bậc một checkpoint + gate lương)
 
 ### Bậc 1 (NỀN) — Cấp quỹ phép năm 12 + thâm niên
-= **`spec/leave-entitlement-vn.md` (WS3), build nguyên trạng.** An toàn nhất, không đụng lương
+= **`docs/spec/leave-entitlement-vn.md` (WS3), build nguyên trạng.** An toàn nhất, không đụng lương
 (allocation không chạm status/leave_type/half_day). Không có bước này thì không gì để trừ.
 **Hoà giải hiện trạng:** site đã có **7 Leave Allocation tạo tay** (5 phép + 2 ốm) + vài đơn đã nộp
 (có thể do phiên khác) — helper `assign_annual_leave` phải **idempotent, không đạp lên** allocation

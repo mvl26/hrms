@@ -5,7 +5,7 @@ Tách khỏi `attendance.py` và giữ THUẦN (không chạm DB, không biết 
 test được đầy đủ mà không cần site/custom field. `Attendance.apply_vn_half_day_classifier` chỉ
 làm phần đọc cấu hình Shift Type rồi gọi vào đây.
 
-Luật (spec/flex-shift-and-timekeeping-pipeline.md §4.2):
+Luật (docs/spec/flex-shift-and-timekeeping-pipeline.md §4.2):
 
 1. **Ca trượt** — khung ca dịch theo giờ check-in, tối đa ±`band_minutes` (mặc định 180). Vào muộn
    hơn biên thì kẹp ở biên: đi muộn quá mức vẫn phải bù đủ giờ tính từ mốc kẹp.

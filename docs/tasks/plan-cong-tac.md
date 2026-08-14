@@ -1,6 +1,6 @@
 # Plan: Công Tác (business trip) workflow (Phase 5b)
 
-Derived from `spec/business-trip-workflow.md`. Branch: `feat/skip-attendance-diag`.
+Derived from `docs/spec/business-trip-workflow.md`. Branch: `feat/skip-attendance-diag`.
 Additive Desk feature — never touches payroll/attendance. Tests via rollback harness.
 
 **Open questions RESOLVED 2026-07-08:** COO = new Role, HCNSPC = HR Manager (existing); giấy đi đường

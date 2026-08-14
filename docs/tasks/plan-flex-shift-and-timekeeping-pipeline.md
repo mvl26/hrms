@@ -1,6 +1,6 @@
 # Plan — Giờ làm linh hoạt + hoàn thiện tuyến chấm công → lương
 
-Spec `spec/flex-shift-and-timekeeping-pipeline.md`. Nhánh `feat/skip-attendance-diag`.
+Spec `docs/spec/flex-shift-and-timekeeping-pipeline.md`. Nhánh `feat/skip-attendance-diag`.
 Thứ tự: T1→T12. Mỗi task kết thúc bằng một commit.
 
 **Tiến độ 2026-07-29: T1–T12 ✅ XONG — 134 test xanh** qua harness rollback. Fixtures đã sync lên
@@ -185,7 +185,7 @@ Hằng số lớp: bỏ `VN_DEFAULT_MIN_FRACTION` / `VN_DEFAULT_GRACE_MINUTES`, 
 
 **Files:**
 - Create: `hrms/hr/attendance_review.py`
-- Test: `hrms/hr/test_attendance_review.py`
+- Test: `hrms/hr/tests/test_attendance_review.py`
 
 **Interfaces — Produces:**
 - `anomaly_flags(employee, date, att_row, checkin_count, is_holiday_day) -> list[str]` ⊂
@@ -202,7 +202,7 @@ Hằng số lớp: bỏ `VN_DEFAULT_MIN_FRACTION` / `VN_DEFAULT_GRACE_MINUTES`, 
 
 **Files:**
 - Modify: `hrms/hr/attendance_review.py`
-- Test: `hrms/hr/test_attendance_review.py`
+- Test: `hrms/hr/tests/test_attendance_review.py`
 
 **Interfaces — Produces:**
 `apply_correction(attendance: str, code: str, reason: str) -> dict` (whitelist, quyền HR User/HR
@@ -234,7 +234,7 @@ Manager): nạp doc → đặt `custom_attendance_code` → chạy `apply_attend
 **Files:**
 - Create: `hrms/hr/period_lock.py`
 - Modify: `hrms/hooks.py` (`doc_events["Attendance"]`)
-- Test: `hrms/hr/test_period_lock.py`
+- Test: `hrms/hr/tests/test_period_lock.py`
 
 **Interfaces — Produces:** `is_period_locked(employee, date) -> str | None` (trả tên bảng chốt);
 `guard_period_not_locked(doc, method=None)` — throw nếu bị khoá.
@@ -264,7 +264,7 @@ Manager): nạp doc → đặt `custom_attendance_code` → chạy `apply_attend
 **Files:**
 - Create: `hrms/vn_payroll/sheet_gate.py`
 - Modify: `hrms/hooks.py` (`doc_events["Salary Slip"]["validate"]`)
-- Test: `hrms/vn_payroll/test_sheet_gate.py`
+- Test: `hrms/vn_payroll/tests/test_sheet_gate.py`
 
 **Interfaces — Produces:** `require_submitted_sheet(doc, method=None)`.
 
@@ -276,7 +276,7 @@ Manager): nạp doc → đặt `custom_attendance_code` → chạy `apply_attend
 
 **Files:**
 - Modify: `hrms/vn_payroll/sheet_gate.py`
-- Test: `hrms/vn_payroll/test_sheet_gate.py`
+- Test: `hrms/vn_payroll/tests/test_sheet_gate.py`
 
 **Interfaces — Produces:** `reconcile_with_sheet(doc, method=None)` — so số công của NV trong bảng
 chốt với `payment_days` / `absent_days`; lệch → throw kèm bảng so sánh.

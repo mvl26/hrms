@@ -270,7 +270,7 @@ class TestPayrollUnmovedByCodeResync(PerTestRollback, FrappeTestCase):
 		from erpnext.setup.doctype.employee.test_employee import make_employee
 
 		from hrms.vn_payroll.setup_mvl import ensure_mvl_defaults
-		from hrms.vn_payroll.test_salary_slip_mvl import (
+		from hrms.vn_payroll.tests.test_salary_slip_mvl import (
 			ensure_fiscal_year_2099,
 			make_slip,
 			make_ssa,

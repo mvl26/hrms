@@ -79,7 +79,7 @@ class TestAttendanceCodeFixtures(PerTestRollback, FrappeTestCase):
 		self.assertFalse(frappe.db.exists("Attendance Code", "KL"), "deprecated code 'KL' should be removed")
 
 	def test_deprecated_nn_code_removed(self):
-		# 'NN' bỏ 2026-07-29, thay bằng '1/2X' (xem spec/flex-shift-and-timekeeping-pipeline.md §4.3).
+		# 'NN' bỏ 2026-07-29, thay bằng '1/2X' (xem docs/spec/flex-shift-and-timekeeping-pipeline.md §4.3).
 		self.assertFalse(frappe.db.exists("Attendance Code", "NN"), "deprecated code 'NN' should be removed")
 
 	def test_attendance_custom_fields_exist(self):

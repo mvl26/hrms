@@ -237,7 +237,7 @@ Add under `[pre_model_sync]`: `hrms.patches.v15_0.rename_cong_tac_doctypes #2026
 
 ## Task 6: VN translations + full regression + docs
 
-**Files:** `hrms/translations/vi.csv` (append DocType/report title translations); `tasks/plan-english-naming-standardization.md` (tick).
+**Files:** `hrms/translations/vi.csv` (append DocType/report title translations); `docs/tasks/plan-english-naming-standardization.md` (tick).
 
 - [x] **Step 1:** Append to `hrms/translations/vi.csv` (create if absent) so HR sees VN titles:
   `Monthly Attendance Sheet,Bảng Công Tháng` · `Monthly Attendance Sheet Detail,Chi tiết Bảng Công Tháng` ·

@@ -1,7 +1,7 @@
 # Spec: Quy trình công tác — "Công Tác" (Business Trip) DocType + duyệt + thanh toán
 
 > Status: **DRAFT for approval (Phase 1 / SPECIFY).** Do not plan/implement until reviewed.
-> Companion to the shipped attendance-code + Bảng Công Tháng features. Saved under `spec/`.
+> Companion to the shipped attendance-code + Bảng Công Tháng features. Saved under `docs/spec/`.
 
 ## Objective
 

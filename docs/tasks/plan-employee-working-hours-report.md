@@ -1,6 +1,6 @@
 # Employee Working Hours Report — Implementation Plan
 
-> Spec: `spec/employee-working-hours-report.md`. Nhánh `feat/skip-attendance-diag`.
+> Spec: `docs/spec/employee-working-hours-report.md`. Nhánh `feat/skip-attendance-diag`.
 > Test qua **rollback harness** (KHÔNG `bench --site miyano run-tests`).
 >
 > **STATUS 2026-07-31 — XONG.** 17 test xanh; tổng giờ 7/2026 = 829,8h khớp 100% với number

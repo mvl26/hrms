@@ -2,13 +2,13 @@
 
 > Status: ✅ **DONE trên dev 2026-07-16** (T1–T7, `/build auto`). **126 test toàn suite xanh**
 > (gồm gate payroll invariance). Dev migrate đã ký duyệt + chạy. Prod deploy = Đợt A
-> (`tasks/plan-prod-deploy.md` T2 + T3b). Harness note: 1 lần deadlock MariaDB transient do
+> (`docs/tasks/plan-prod-deploy.md` T2 + T3b). Harness note: 1 lần deadlock MariaDB transient do
 > background job sau migrate — chạy lại sạch; runner đã có fallback full-rollback khi mất savepoint.
 
-> Specs: `spec/leave-entitlement-vn.md` + `spec/employee-vn-identity-fields.md` (scope approved
+> Specs: `docs/spec/leave-entitlement-vn.md` + `docs/spec/employee-vn-identity-fields.md` (scope approved
 > 2026-07-16). Branch: `feat/skip-attendance-diag`. Test qua **rollback harness** console
 > (KHÔNG `bench run-tests` trên `miyano`). Mỗi task: RED → GREEN → regression → commit riêng.
-> Deploy prod KHÔNG thuộc plan này (gộp vào gate Đợt A — `tasks/plan-prod-deploy.md`).
+> Deploy prod KHÔNG thuộc plan này (gộp vào gate Đợt A — `docs/tasks/plan-prod-deploy.md`).
 
 ## Tasks (theo thứ tự phụ thuộc)
 
@@ -68,8 +68,8 @@
     on dev, chờ deploy Đợt A); ghi chú lệnh vận hành năm mới vào plan prod-deploy (sau T3 thêm bước
     `assign_annual_leave` prod).
   - Verify: đọc lại; commit docs riêng.
-  - Files: `tasks/plan-leave-entitlement-and-identity.md`, `docs/audit-roadmap-2026-07-16.md`,
-    `tasks/plan-prod-deploy.md`.
+  - Files: `docs/tasks/plan-leave-entitlement-and-identity.md`, `docs/audit-roadmap-2026-07-16.md`,
+    `docs/tasks/plan-prod-deploy.md`.
 
 ## Rủi ro & xử lý
 

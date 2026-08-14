@@ -1,8 +1,8 @@
 # Spec: Tự động chấm công sáng/chiều + giờ net loại nghỉ trưa (1 bản ghi/ngày) — Phase 4
 
 > Status: **DRAFT for approval (Phase 1 / SPECIFY).** Nối tiếp bộ mã-công đã ship
-> (`spec/attendance-code-timekeeping.md` — "Phase 4: Morning/afternoon refinement" đã hoãn, nay làm).
-> Độc lập với `spec/vn-holiday-and-symbol-standardization.md` (WS1/WS2 — đã có plan, build được ngay).
+> (`docs/spec/attendance-code-timekeeping.md` — "Phase 4: Morning/afternoon refinement" đã hoãn, nay làm).
+> Độc lập với `docs/spec/vn-holiday-and-symbol-standardization.md` (WS1/WS2 — đã có plan, build được ngay).
 > **Đụng payroll → không plan/implement tới khi được duyệt + ký sign-off.**
 
 ## Objective
@@ -150,7 +150,7 @@ hrms/fixtures/custom_field.json                          (+5 field Shift Type) +
 hrms/hr/working_hours.py                                 (compute_net_hours: ưu tiên working_hours net đã lưu)
 hrms/hr/doctype/attendance/test_vn_half_day_classifier.py    (mới — unit + gate + net-hours)
 hrms/payroll/doctype/salary_slip/test_attendance_code_payroll_invariance.py  (thêm kịch bản sáng/chiều)
-spec/auto-morning-afternoon-attendance.md               (spec này)
+docs/spec/auto-morning-afternoon-attendance.md               (spec này)
 ```
 
 ## Code style

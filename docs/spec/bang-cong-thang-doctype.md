@@ -1,9 +1,9 @@
 # Spec: "Bảng Công Tháng" — submittable monthly timekeeping sheet + VN print form (Phase 5a)
 
 > Status: **DRAFT for approval.** Extends the shipped VN attendance-code feature
-> (`spec/attendance-code-timekeeping.md`, MVP + full 13-symbol set + auto-flows + backfill DONE).
+> (`docs/spec/attendance-code-timekeeping.md`, MVP + full 13-symbol set + auto-flows + backfill DONE).
 > This spec covers the Phase-5 submittable document and its paper print form only. Business Trip
-> DocType and geofence check-in remain out of scope (separate future specs). Saved under `spec/`
+> DocType and geofence check-in remain out of scope (separate future specs). Saved under `docs/spec/`
 > per this repo's convention (same folder as the base spec; discoverable by `/build auto`).
 
 ## Objective

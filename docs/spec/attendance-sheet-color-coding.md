@@ -1,8 +1,8 @@
 # Spec: Mã màu cho bảng chấm công (report + bản in)
 
 > Status: **APPROVED (Phase 1 / SPECIFY).** Chốt trong phiên 2026-07-23. Nối tiếp bộ VN
-> attendance-code đã ship (`spec/attendance-code-timekeeping.md`, `spec/bang-cong-thang-doctype.md`,
-> `spec/vn-holiday-and-symbol-standardization.md`). Lưu dưới `spec/` theo quy ước repo.
+> attendance-code đã ship (`docs/spec/attendance-code-timekeeping.md`, `docs/spec/bang-cong-thang-doctype.md`,
+> `docs/spec/vn-holiday-and-symbol-standardization.md`). Lưu dưới `docs/spec/` theo quy ước repo.
 
 ## Objective
 

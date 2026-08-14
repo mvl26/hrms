@@ -3,8 +3,8 @@
 Trạng thái: **Approved (design)** — 2026-08-13. Nhánh: `feat/skip-attendance-diag`.
 Liên quan: [[project-attendance-code-timekeeping]], [[project-flex-shift-timekeeping-pipeline]],
 [[project-timekeeping-logic-2026-07]], [[project-vn-payroll-mvl]], [[project-attendance-request-locked]].
-Spec nền: `spec/flex-shift-and-timekeeping-pipeline.md`, `spec/attendance-request-vs-leave.md`,
-`spec/business-trip-workflow.md`.
+Spec nền: `docs/spec/flex-shift-and-timekeeping-pipeline.md`, `docs/spec/attendance-request-vs-leave.md`,
+`docs/spec/business-trip-workflow.md`.
 
 ## 1. Vấn đề
 
@@ -229,7 +229,7 @@ suất ăn thì đó là **quy định riêng, làm sau**, không gói vào tín
 ## 5. Kiểm thử
 
 Chạy bằng **rollback harness** (savepoint mỗi test, `frappe.db.commit` bị vô hiệu) — **tuyệt đối
-không** `bench --site miyano run-tests`. File: `hrms/hr/test_attendance_exempt.py` (+ bổ sung ca
+không** `bench --site miyano run-tests`. File: `hrms/hr/tests/test_attendance_exempt.py` (+ bổ sung ca
 Công Tác vào test sẵn có của Business Trip).
 
 | # | Ca kiểm | Kỳ vọng |

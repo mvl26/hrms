@@ -1,5 +1,5 @@
 # Copyright (c) 2026, Miyano Việt Nam.
-"""Tests for the VN annual-leave entitlement layer (spec/leave-entitlement-vn.md).
+"""Tests for the VN annual-leave entitlement layer (docs/spec/leave-entitlement-vn.md).
 Runs via the rollback harness — writes are rolled back, never committed."""
 
 import json

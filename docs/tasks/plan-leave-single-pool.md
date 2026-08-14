@@ -278,7 +278,7 @@ Wire `validate` trong hooks.
 ### Task 7: Docs + tick plan + tổng kết gate deploy
 
 **Files:**
-- Modify: `tasks/plan-leave-single-pool.md` (tick), `spec/leave-single-pool-vn.md` (Status → BUILT on branch).
+- Modify: `docs/tasks/plan-leave-single-pool.md` (tick), `docs/spec/leave-single-pool-vn.md` (Status → BUILT on branch).
 
 - [ ] Tick checkbox; ghi rõ **các bước deploy còn treo (ask-first):** (a) chạy `assign_annual_leave` + hoà giải 7 allocation tay; (b) migrate fixture (field + Attendance Code Ô/Cô leave_type); (c) restart prod; (d) PWA (bậc 3). Commit docs.
 

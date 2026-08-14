@@ -1,7 +1,7 @@
 # Tính lương MVL — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans. Steps use `- [ ]`.
-> Spec: `spec/vn-payroll-mvl.md`. Nhánh: `feat/skip-attendance-diag`.
+> Spec: `docs/spec/vn-payroll-mvl.md`. Nhánh: `feat/skip-attendance-diag`.
 
 **Goal:** Sinh Salary Slip đúng công thức lương NET của Miyano (gross-up nộp thay thuế + BH), số ngày
 công lấy từ hệ thống chấm công; cấu hình chuẩn đóng gói vào app, sửa được trên UI.
@@ -24,11 +24,11 @@ Assignment; Salary Slip.validate gọi engine, gán component + net_pay.
 
 - `hrms/vn_payroll/__init__.py` — package mới.
 - `hrms/vn_payroll/mvl.py` — engine thuần: dataclass input/output + `compute_mvl()` + helpers thuế/gross-up.
-- `hrms/vn_payroll/test_mvl.py` — test engine theo oracle của doc.
+- `hrms/vn_payroll/tests/test_mvl.py` — test engine theo oracle của doc.
 - `hrms/hr/doctype/mvl_payroll_settings/` — Single DocType tham số chuẩn (+ 2 child: bậc thuế, bậc gross-up).
 - `hrms/hr/doctype/mvl_tax_bracket/`, `hrms/hr/doctype/mvl_grossup_bracket/` — child doctypes.
 - `hrms/vn_payroll/salary_slip_hook.py` — cầu nối: đọc SSA + settings + payment_days → engine → slip.
-- `hrms/vn_payroll/test_salary_slip_mvl.py` — test tích hợp qua harness.
+- `hrms/vn_payroll/tests/test_salary_slip_mvl.py` — test tích hợp qua harness.
 - `hrms/vn_payroll/setup_mvl.py` — `ensure_mvl_defaults()`: seed components + structure + settings mặc định.
 - Sửa: `hrms/hooks.py` (doc_events Salary Slip, after_migrate, fixtures), Custom Field fixtures.
 
@@ -39,7 +39,7 @@ Assignment; Salary Slip.validate gọi engine, gán component + net_pay.
 **Files:**
 - Create: `hrms/vn_payroll/__init__.py` (rỗng)
 - Create: `hrms/vn_payroll/mvl.py`
-- Test: `hrms/vn_payroll/test_mvl.py`
+- Test: `hrms/vn_payroll/tests/test_mvl.py`
 
 **Interfaces:**
 - Produces: `compute_mvl(inp: MVLInput, cfg: MVLConfig) -> MVLResult`. `MVLInput(salary_type, base, bhxh_salary, dependents, register_personal_deduction, lunch_days, standard_days, worked_days)`. `MVLConfig(personal_deduction, dependent_deduction, lunch_rate, ins_company, ins_employee, probation_coef, tax_brackets, grossup_brackets)`. `MVLResult(I, J, K, N, O, P, Q, R, S, T, U)` (mọi field float đã ROUND).
@@ -86,7 +86,7 @@ class TestMVLCore(unittest.TestCase):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: harness với `HARNESS_MODULES=hrms.vn_payroll.test_mvl`. Expected: FAIL (import error `compute_mvl`).
+Run: harness với `HARNESS_MODULES=hrms.vn_payroll.tests.test_mvl`. Expected: FAIL (import error `compute_mvl`).
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -208,12 +208,12 @@ def compute_mvl(inp: MVLInput, cfg: MVLConfig) -> MVLResult:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: harness `HARNESS_MODULES=hrms.vn_payroll.test_mvl`. Expected: PASS (2 tests).
+Run: harness `HARNESS_MODULES=hrms.vn_payroll.tests.test_mvl`. Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add hrms/vn_payroll/__init__.py hrms/vn_payroll/mvl.py hrms/vn_payroll/test_mvl.py
+git add hrms/vn_payroll/__init__.py hrms/vn_payroll/mvl.py hrms/vn_payroll/tests/test_mvl.py
 git commit -m "feat(hr): engine luong MVL — buoc loi NET chinh thuc + thu viec"
 ```
 
@@ -223,7 +223,7 @@ git commit -m "feat(hr): engine luong MVL — buoc loi NET chinh thuc + thu viec
 
 **Files:**
 - Modify: `hrms/vn_payroll/mvl.py` (nhánh P/Q theo loại)
-- Test: `hrms/vn_payroll/test_mvl.py`
+- Test: `hrms/vn_payroll/tests/test_mvl.py`
 
 **Interfaces:**
 - Consumes: `compute_mvl` từ Task 1.
@@ -295,7 +295,7 @@ Expected: PASS (toàn bộ test engine).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add hrms/vn_payroll/mvl.py hrms/vn_payroll/test_mvl.py
+git add hrms/vn_payroll/mvl.py hrms/vn_payroll/tests/test_mvl.py
 git commit -m "feat(hr): engine luong MVL — parttime/khoan/cam ket 08 + ca bien bieu thue"
 ```
 
@@ -308,7 +308,7 @@ git commit -m "feat(hr): engine luong MVL — parttime/khoan/cam ket 08 + ca bie
 - Create: `hrms/hr/doctype/mvl_grossup_bracket/{...}`
 - Create: `hrms/hr/doctype/mvl_payroll_settings/{mvl_payroll_settings.json,__init__.py,mvl_payroll_settings.py}`
 - Create: `hrms/vn_payroll/settings.py` — `config_from_settings() -> MVLConfig`
-- Test: `hrms/vn_payroll/test_settings.py`
+- Test: `hrms/vn_payroll/tests/test_settings.py`
 
 **Interfaces:**
 - Produces: `config_from_settings()` đọc Single `MVL Payroll Settings` → `MVLConfig` (dùng ở Task 5).
@@ -371,10 +371,10 @@ def config_from_settings() -> MVLConfig:
 	)
 ```
 
-- [ ] **Step 5:** Run harness `HARNESS_MODULES=hrms.vn_payroll.test_settings` → PASS. Commit.
+- [ ] **Step 5:** Run harness `HARNESS_MODULES=hrms.vn_payroll.tests.test_settings` → PASS. Commit.
 
 ```bash
-git add hrms/hr/doctype/mvl_tax_bracket hrms/hr/doctype/mvl_grossup_bracket hrms/hr/doctype/mvl_payroll_settings hrms/vn_payroll/settings.py hrms/vn_payroll/test_settings.py
+git add hrms/hr/doctype/mvl_tax_bracket hrms/hr/doctype/mvl_grossup_bracket hrms/hr/doctype/mvl_payroll_settings hrms/vn_payroll/settings.py hrms/vn_payroll/tests/test_settings.py
 git commit -m "feat(hr): MVL Payroll Settings + config_from_settings"
 ```
 
@@ -385,7 +385,7 @@ git commit -m "feat(hr): MVL Payroll Settings + config_from_settings"
 **Files:**
 - Create: `hrms/vn_payroll/setup_mvl.py` — `ensure_mvl_defaults()`
 - Create: custom fields Salary Structure Assignment (trong setup, export fixture ở Task 6)
-- Test: `hrms/vn_payroll/test_setup_mvl.py`
+- Test: `hrms/vn_payroll/tests/test_setup_mvl.py`
 
 **Interfaces:**
 - Consumes: engine, settings.
@@ -425,7 +425,7 @@ class TestSetupMVL(FrappeTestCase):
 - [ ] **Step 4:** Run harness → PASS. Commit.
 
 ```bash
-git add hrms/vn_payroll/setup_mvl.py hrms/vn_payroll/test_setup_mvl.py
+git add hrms/vn_payroll/setup_mvl.py hrms/vn_payroll/tests/test_setup_mvl.py
 git commit -m "feat(hr): ensure_mvl_defaults — components + structure + custom fields SSA"
 ```
 
@@ -436,7 +436,7 @@ git commit -m "feat(hr): ensure_mvl_defaults — components + structure + custom
 **Files:**
 - Create: `hrms/vn_payroll/salary_slip_hook.py` — `apply_mvl(doc, method=None)`
 - Modify: `hrms/hooks.py` — `doc_events["Salary Slip"]["validate"]`
-- Test: `hrms/vn_payroll/test_salary_slip_mvl.py`
+- Test: `hrms/vn_payroll/tests/test_salary_slip_mvl.py`
 
 **Interfaces:**
 - Consumes: `compute_mvl`, `config_from_settings`, custom fields SSA.
@@ -495,7 +495,7 @@ class TestSalarySlipMVL(FrappeTestCase):
 - [ ] **Step 4:** Run harness → PASS. Kiểm rò rỉ. Commit.
 
 ```bash
-git add hrms/vn_payroll/salary_slip_hook.py hrms/vn_payroll/test_salary_slip_mvl.py hrms/hooks.py
+git add hrms/vn_payroll/salary_slip_hook.py hrms/vn_payroll/tests/test_salary_slip_mvl.py hrms/hooks.py
 git commit -m "feat(hr): cau Salary Slip MVL — engine -> component + net_pay"
 ```
 
@@ -506,7 +506,7 @@ git commit -m "feat(hr): cau Salary Slip MVL — engine -> component + net_pay"
 **Files:**
 - Modify: `hrms/hooks.py` — `after_migrate` thêm `ensure_mvl_defaults`; `fixtures` thêm components/structure/settings/custom fields.
 - Create: `hrms/hr/print_format/phieu_luong_mvl/` — phiếu lương VN (I, J, K, Q, S, R, T, U).
-- Test: `hrms/vn_payroll/test_fixtures_sync.py` — filter fixtures khớp doctype thật.
+- Test: `hrms/vn_payroll/tests/test_fixtures_sync.py` — filter fixtures khớp doctype thật.
 
 **Interfaces:**
 - Consumes: mọi task trước.
@@ -540,7 +540,7 @@ class TestMVLFixturesSync(FrappeTestCase):
 - [ ] **Step 4:** Run → PASS. Commit.
 
 ```bash
-git add hrms/hooks.py hrms/hr/print_format/phieu_luong_mvl hrms/vn_payroll/test_fixtures_sync.py
+git add hrms/hooks.py hrms/hr/print_format/phieu_luong_mvl hrms/vn_payroll/tests/test_fixtures_sync.py
 git commit -m "feat(hr): dong goi MVL vao app — fixtures + after_migrate + phieu luong"
 ```
 

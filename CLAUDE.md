@@ -56,18 +56,20 @@ The Vue dev page only renders via host `miyano` (vite `allowedHosts`, and Frappe
 
 **Doctypes** live under `hrms/<module>/doctype/<name>/` (JSON schema + `.py` controller + `.js` desk form + `test_*.py`). Only two modules — `HR` (119 doctypes) and `Payroll` (40) — see `hrms/modules.txt`. Shared logic: `hrms/hr/utils.py`, `hrms/controllers/`, `hrms/mixins/`; `hrms/api/` holds the whitelisted endpoints the Vue apps call.
 
+**Where tests go** (reorganised 2026-08-14 — never leave a `test_*.py` next to the module it tests): a doctype's test stays beside it in `hrms/<module>/doctype/<name>/` (Frappe requires that — it binds `test_records.json`). Everything else goes in a `tests/` folder: `hrms/tests/` for app-wide tests (plus the `isolation.PerTestRollback` / `vn_test_utils` harness helpers), `hrms/hr/tests/`, `hrms/vn_payroll/tests/`, `hrms/controllers/tests/` for module-level ones. These `tests/` dirs are namespace packages — no `__init__.py`.
+
 **Two Vue 3 SPAs** (not desk), built with vite + `frappe-ui`, wired via `website_route_rules`:
 - `frontend/` — Ionic PWA, employee self-service (attendance, leave, expense, salary slips) → route `/hrms`.
 - `roster/` — TypeScript, shift roster/planning → route `/hr`. (`frappe-ui/` at repo root is a git submodule.)
 
 ## Miyano customizations (Vietnamese HR / timekeeping)
 
-An additive VN localization layer. Each feature has a spec in `spec/` — read it before extending.
+An additive VN localization layer. Each feature has a spec in `docs/spec/` — read it before extending.
 
 - **Attendance-code timekeeping (mã công):** 13 `Attendance Code` symbols (X, P, Ô, TS, V, …) driving an Excel-style monthly *bảng chấm công* **without changing payroll**. A two-way `Attendance.before_validate` bridge maps codes ↔ `status`/`leave_type`/`half_day_status` and computes `custom_cong`.
 - **Bảng Công Tháng:** submittable monthly-timesheet DocType — a **read-only snapshot** of Attendance (never writes back → payroll-neutral), with a VN print format + sign-off boxes. Detail row totals: `cong/phep/om/thai_san/tnld/nghi_bu/khong_luong/vang`.
 - **Công Tác (business trip):** submittable multi-traveler DocType driven by a Frappe **Workflow** ("Cong Tac Approval"); approval auto-generates trip attendance + per-traveler Expense Claims. Introduces a `COO` role.
-- **Yêu cầu chấm công (Attendance Request):** native Frappe channel re-enabled (was locked 2026-07-24) for days the employee **is working / must count present** — WFH, missed-punch, on-duty, late/early — approved by the **line manager** (`reports_to`), distinct from Leave Application (time off) and Công Tác (trips). Miyano layer in `attendance_request_miyano.py`: default approver + ToDo assign + submit guard + display codes (WFH→`W`, on-duty→`CT`, missed/late→`X`) written display-only → **payroll-neutral**. `reason` options extended via Property Setter. Spec `spec/attendance-request-vs-leave.md`.
+- **Yêu cầu chấm công (Attendance Request):** native Frappe channel re-enabled (was locked 2026-07-24) for days the employee **is working / must count present** — WFH, missed-punch, on-duty, late/early — approved by the **line manager** (`reports_to`), distinct from Leave Application (time off) and Công Tác (trips). Miyano layer in `attendance_request_miyano.py`: default approver + ToDo assign + submit guard + display codes (WFH→`W`, on-duty→`CT`, missed/late→`X`) written display-only → **payroll-neutral**. `reason` options extended via Property Setter. Spec `docs/spec/attendance-request-vs-leave.md`.
 - **Geofence check-in:** server-emitted radius circle on Shift Location maps, click-to-set, read-only overlay on Employee Checkin (enforcement logic unchanged).
 - **Working-hours** report + desk dashboard (net vs. standard hours), in `hrms/hr/working_hours.py`.
 
@@ -81,7 +83,7 @@ Key files & mechanisms:
 
 ## Development workflow
 
-Spec-driven via the **superpowers** skills (brainstorm → spec → plan → build TDD → verify E2E → review → fix), committing each step. Read the relevant artifact before related work: `spec/*.md` (feature specs), `tasks/plan-*.md` (task breakdowns with done/remaining checkboxes), `SPEC.md` (active spec), `docs/superpowers/` (earlier ones).
+Spec-driven via the **superpowers** skills (brainstorm → spec → plan → build TDD → verify E2E → review → fix), committing each step. Read the relevant artifact before related work: `docs/spec/*.md` (feature specs), `docs/tasks/plan-*.md` (task breakdowns with done/remaining checkboxes), `docs/SPEC.md` (active spec), `docs/superpowers/` (earlier ones).
 
 Execution style: the user drives with short prompts ("chạy tiếp", "hoàn thiện") and expects the full lifecycle carried autonomously without per-step check-ins — keep momentum. Still surface genuine product decisions briefly, always honor the high-risk sign-off gates above, and reserve outward/irreversible actions (git push, PRs) for explicit approval.
 
