@@ -56,7 +56,7 @@ The Vue dev page only renders via host `miyano` (vite `allowedHosts`, and Frappe
 
 **Doctypes** live under `hrms/<module>/doctype/<name>/` (JSON schema + `.py` controller + `.js` desk form + `test_*.py`). Only two modules — `HR` (119 doctypes) and `Payroll` (40) — see `hrms/modules.txt`. Shared logic: `hrms/hr/utils.py`, `hrms/controllers/`, `hrms/mixins/`; `hrms/api/` holds the whitelisted endpoints the Vue apps call.
 
-**Where tests go** (reorganised 2026-08-14 — never leave a `test_*.py` next to the module it tests): a doctype's test stays beside it in `hrms/<module>/doctype/<name>/` (Frappe requires that — it binds `test_records.json`). Everything else goes in a `tests/` folder: `hrms/tests/` for app-wide tests (plus the `isolation.PerTestRollback` / `vn_test_utils` harness helpers), `hrms/hr/tests/`, `hrms/vn_payroll/tests/`, `hrms/controllers/tests/` for module-level ones. These `tests/` dirs are namespace packages — no `__init__.py`.
+**Where tests go** — see the **File placement** section under Conventions below.
 
 **Two Vue 3 SPAs** (not desk), built with vite + `frappe-ui`, wired via `website_route_rules`:
 - `frontend/` — Ionic PWA, employee self-service (attendance, leave, expense, salary slips) → route `/hrms`.
@@ -88,6 +88,30 @@ Spec-driven via the **superpowers** skills (brainstorm → spec → plan → bui
 Execution style: the user drives with short prompts ("chạy tiếp", "hoàn thiện") and expects the full lifecycle carried autonomously without per-step check-ins — keep momentum. Still surface genuine product decisions briefly, always honor the high-risk sign-off gates above, and reserve outward/irreversible actions (git push, PRs) for explicit approval.
 
 ## Conventions
+
+### File placement — enforced, not advisory
+
+Every new file must land in the right folder with the right name. This is **gated**, not
+suggested: `scripts/check_file_placement.py` is the single source of truth and runs as a
+Claude Code `PreToolUse` hook (blocks `Write` on a misplaced new file) *and* as a
+pre-commit hook (scans the whole tree). A blocked write prints the rule and the correct
+path. **Read `.claude/skills/file-placement/SKILL.md`** before creating a doctype, report,
+patch, test, or doc — it covers the judgment calls and scaffolding the checker can't make
+for you.
+
+| Kind | Goes in |
+|---|---|
+| Test of one doctype/report/page | beside it, `hrms/<module>/doctype/<name>/` — **mandatory**, Frappe binds `test_records.json` to that path |
+| Test of a module | `hrms/<module>/tests/` (`hr`, `vn_payroll`, `controllers`, …) |
+| Test that is cross-module, or of a patch/setup | `hrms/tests/` (also holds the `isolation.PerTestRollback` / `vn_test_utils` harness helpers) |
+| App source | `hrms/` — including anything run via `bench execute`, which imports by package path so `scripts/` would break it |
+| Repo tooling run by plain `python3` | `scripts/` |
+| Spec / plan / any doc | `docs/spec/<kebab>.md`, `docs/tasks/plan-<kebab>.md`, `docs/` |
+| Frontend | `frontend/src/`, `roster/src/` |
+
+`tests/` dirs are namespace packages — **no `__init__.py`**. Names: no spaces, `.py`
+snake_case, `.vue` PascalCase, tests use the `test_` **prefix** (a `_test.py` suffix is
+never collected). Reorganised 2026-08-14; `spec/` and `tasks/` at the repo root are gone.
 
 - **Conventional Commits**, enforced by `commitlint.config.js`. Miyano commits scope with `(hr)`, e.g. `feat(hr): ...`.
 - **Stage only the files your change touches** (`git add <paths>`, never `git add -A`) — the working tree often carries unrelated in-progress work. `.claude/` is tracked (local tooling config shared across machines).
