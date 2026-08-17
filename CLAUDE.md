@@ -85,6 +85,8 @@ Key files & mechanisms:
 
 Spec-driven via the **superpowers** skills (brainstorm → spec → plan → build TDD → verify E2E → review → fix), committing each step. Read the relevant artifact before related work: `docs/spec/*.md` (feature specs), `docs/tasks/plan-*.md` (task breakdowns with done/remaining checkboxes), `docs/SPEC.md` (active spec), `docs/superpowers/` (earlier ones).
 
+**Which skill pack wins:** the `agent-skills` pack is enabled too and covers the same ground as superpowers for TDD, planning, spec, code review, debugging, simplification and shipping. **superpowers is this repo's workflow** — when both offer the same thing, take superpowers and don't run both. Skip process skills altogether for a one-line fix, a rename, or a question the repo already answers; invoking one there costs more than the work.
+
 Execution style: the user drives with short prompts ("chạy tiếp", "hoàn thiện") and expects the full lifecycle carried autonomously without per-step check-ins — keep momentum. Still surface genuine product decisions briefly, always honor the high-risk sign-off gates above, and reserve outward/irreversible actions (git push, PRs) for explicit approval.
 
 ## Conventions
