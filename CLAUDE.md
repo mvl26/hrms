@@ -97,7 +97,7 @@ Every new file must land in the right folder with the right name. This is **gate
 suggested: `scripts/check_file_placement.py` is the single source of truth and runs as a
 Claude Code `PreToolUse` hook (blocks `Write` on a misplaced new file) *and* as a
 pre-commit hook (scans the whole tree). A blocked write prints the rule and the correct
-path. **Read `.claude/skills/file-placement/SKILL.md`** before creating a doctype, report,
+path. **Read `.claude/skills/code_structure/SKILL.md`** before creating a doctype, report,
 patch, test, or doc — it covers the judgment calls and scaffolding the checker can't make
 for you.
 

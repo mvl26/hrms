@@ -73,7 +73,7 @@ class TestDocPlacement(unittest.TestCase):
 
 	def test_claude_code_config_markdown_is_fine(self):
 		"""Skill/agent của Claude Code buộc phải nằm trong .claude/, không dời sang docs/ được."""
-		self.assertEqual(check_path(".claude/skills/file-placement/SKILL.md"), [])
+		self.assertEqual(check_path(".claude/skills/code_structure/SKILL.md"), [])
 
 	def test_notification_template_markdown_is_fine(self):
 		"""Frappe đọc template thông báo từ chính thư mục notification."""
@@ -220,7 +220,7 @@ class TestSkillDocMatchesTheRules(unittest.TestCase):
 	ROW = re.compile(r"^\|\s*`([^`]+)`\s*\|\s*(✅|❌)\s*\|")
 
 	def skill_examples(self):
-		skill = pathlib.Path(__file__).resolve().parents[2] / ".claude/skills/file-placement/SKILL.md"
+		skill = pathlib.Path(__file__).resolve().parents[2] / ".claude/skills/code_structure/SKILL.md"
 		self.assertTrue(skill.is_file(), f"không thấy skill ở {skill}")
 		found = []
 		for line in skill.read_text(encoding="utf-8").splitlines():

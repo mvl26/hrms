@@ -1,9 +1,9 @@
 ---
-name: file-placement
-description: Use when creating any new file in this repo — a test, a doc, a script, a doctype, a report, a patch — or when a write was just blocked by the file-placement gate and you need to know where the file actually belongs.
+name: code_structure
+description: Use when creating any new file in this repo — a test, a doc, a script, a doctype, a report, a patch — or when a write was just blocked by the structure gate and you need to know where the file actually belongs and what to name it.
 ---
 
-# File placement (Miyano HR)
+# Code structure (Miyano HR)
 
 ## Overview
 

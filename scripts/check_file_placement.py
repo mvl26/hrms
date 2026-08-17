@@ -239,7 +239,7 @@ def run_as_hook() -> int:
 		return 0
 	print(
 		f"{message}\n\nĐặt lại cho đúng rồi ghi lại. "
-		f"Quy ước đầy đủ: .claude/skills/file-placement/SKILL.md",
+		f"Quy ước đầy đủ: .claude/skills/code_structure/SKILL.md",
 		file=sys.stderr,
 	)
 	return 2
@@ -263,7 +263,7 @@ def main(argv: list[str]) -> int:
 	if not found:
 		return 0
 
-	print(f"Sai cấu trúc: {len(found)} file. Xem `.claude/skills/file-placement/SKILL.md`.\n")
+	print(f"Sai cấu trúc: {len(found)} file. Xem `.claude/skills/code_structure/SKILL.md`.\n")
 	for path in sorted(found):
 		print(f"  {path}")
 		for problem in found[path]:
