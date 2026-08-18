@@ -6,7 +6,7 @@ Attendance or payroll. Trip expenses are separate per-traveler Expense Claims li
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import getdate
+from frappe.utils import cint, getdate
 
 
 class BusinessTrip(Document):
@@ -96,28 +96,61 @@ class BusinessTrip(Document):
 		for t in self.travelers:
 			day = start
 			while day <= end:
-				if not self.has_attendance(t.employee, day) and not is_holiday(
-					t.employee, day, raise_exception=False
-				):
-					att = frappe.get_doc(
-						{
-							"doctype": "Attendance",
-							"employee": t.employee,
-							"attendance_date": day,
-							"custom_attendance_code": "CT",
-							"company": self.company or frappe.db.get_value("Employee", t.employee, "company"),
-						}
-					)
-					att.flags.ignore_permissions = True
-					att.insert(ignore_permissions=True)
-					att.submit()
+				if not is_holiday(t.employee, day, raise_exception=False):
+					auto_filled = self.auto_filled_attendance(t.employee, day)
+					if auto_filled:
+						self.convert_auto_filled_to_trip(auto_filled)
+					elif not self.has_attendance(t.employee, day):
+						att = frappe.get_doc(
+							{
+								"doctype": "Attendance",
+								"employee": t.employee,
+								"attendance_date": day,
+								"custom_attendance_code": "CT",
+								"company": self.company
+								or frappe.db.get_value("Employee", t.employee, "company"),
+							}
+						)
+						att.flags.ignore_permissions = True
+						att.insert(ignore_permissions=True)
+						att.submit()
 				day = add_days(day, 1)
 
+	def attendance_row(self, employee, date):
+		return frappe.db.get_value(
+			"Attendance",
+			{"employee": employee, "attendance_date": date, "docstatus": ["<", 2]},
+			["name", "custom_auto_filled", "in_time", "out_time"],
+			as_dict=True,
+		)
+
 	def has_attendance(self, employee, date):
-		return bool(
-			frappe.db.exists(
-				"Attendance", {"employee": employee, "attendance_date": date, "docstatus": ["<", 2]}
-			)
+		return bool(self.attendance_row(employee, date))
+
+	def auto_filled_attendance(self, employee, date) -> str | None:
+		"""Ngày công do máy sinh cho người miễn chấm công (và chưa có giờ vào/ra thật) — coi như ô
+		trống: chuyến công tác được phép ghi đè thành CT. Mọi bản ghi khác là dữ liệu thật."""
+		row = self.attendance_row(employee, date)
+		if row and cint(row.custom_auto_filled) and not row.in_time and not row.out_time:
+			return row.name
+		return None
+
+	def convert_auto_filled_to_trip(self, attendance: str):
+		"""X (tự sinh) -> CT trên bản ghi ĐÃ SUBMIT.
+
+		Dùng `db_set` chứ không `save`: không field mã công nào có `allow_on_submit`, `save` sẽ ném
+		lỗi. Đây đúng khuôn mà `leave_application.create_or_update_attendance` đang dùng.
+		`custom_work_credit` không đổi (X và CT đều `work_fraction = 1.0`), và `Present ->
+		Work From Home` không đụng lương (payroll chỉ trừ theo Absent / Half Day / leave_type LWP)."""
+		from hrms.hr.period_lock import is_period_locked
+
+		doc = frappe.get_doc("Attendance", attendance)
+		if is_period_locked(doc.employee, doc.attendance_date):
+			return
+		doc.db_set({"custom_attendance_code": "CT", "status": "Work From Home", "custom_auto_filled": 0})
+		doc.add_comment(
+			"Comment",
+			_("Chuyển công tự sinh (miễn chấm công) sang CT theo Công Tác {0}").format(self.name),
 		)
 
 	# --- expense claim (per-traveler payment) ---

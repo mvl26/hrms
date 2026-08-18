@@ -495,3 +495,62 @@ class TestLeaveOverridesGeneratedDay(PerTestRollback, FrappeTestCase):
 			"Present",
 			"nửa còn lại của người miễn chấm công bị ép thành Absent → trừ oan 0,5 công",
 		)
+
+
+class TestBusinessTripOverridesGeneratedDay(PerTestRollback, FrappeTestCase):
+	"""E8 — CT phải thắng ngày X tự sinh, nhưng KHÔNG được đè ngày có quẹt thẻ thật."""
+
+	def make_trip(self, employee, date):
+		# `destination` là field BẮT BUỘC của Business Trip; gọi thẳng `create_travel_attendance()`
+		# để test đúng một hàm, không đi qua Workflow duyệt.
+		trip = frappe.get_doc(
+			{
+				"doctype": "Business Trip",
+				"company": frappe.db.get_value("Employee", employee, "company"),
+				"destination": "Hà Nội",
+				"purpose": "Test công tác",
+				"from_date": ANCHOR,
+				"to_date": ANCHOR,
+				"travelers": [{"employee": employee}],
+			}
+		)
+		trip.insert()
+		return trip
+
+	def test_generated_day_becomes_ct(self):
+		from hrms.hr.attendance_exempt import fill_full_day
+
+		emp = make_exempt_employee(email="trip@miyano.test")
+		fill_full_day(emp, ANCHOR)
+		self.make_trip(emp, ANCHOR).create_travel_attendance()
+		att = frappe.db.get_value(
+			"Attendance",
+			{"employee": emp, "attendance_date": ANCHOR, "docstatus": ["<", 2]},
+			["custom_attendance_code", "status", "custom_auto_filled"],
+			as_dict=True,
+		)
+		self.assertEqual(att.custom_attendance_code, "CT")
+		self.assertEqual(att.status, "Work From Home")
+		self.assertEqual(att.custom_auto_filled, 0, "đã thành ngày công tác thật, không còn là ngày tự sinh")
+		self.assertEqual(frappe.db.count("Attendance", {"employee": emp, "attendance_date": ANCHOR}), 1)
+
+	def test_real_checkin_day_is_not_overwritten(self):
+		emp = make_exempt_employee(email="trip2@miyano.test")
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": emp,
+				"attendance_date": ANCHOR,
+				"in_time": f"{ANCHOR} 08:00:00",
+				"out_time": f"{ANCHOR} 17:30:00",
+				"custom_attendance_code": "X",
+			}
+		)
+		att.insert()
+		att.submit()
+		self.make_trip(emp, ANCHOR).create_travel_attendance()
+		self.assertEqual(
+			frappe.db.get_value("Attendance", att.name, "custom_attendance_code"),
+			"X",
+			"ngày có giờ vào/ra thật là dữ liệu thật — Công Tác không được đè",
+		)
