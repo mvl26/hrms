@@ -306,3 +306,64 @@ class TestAbsentBranch(PerTestRollback, FrappeTestCase):
 			all(v == ("Absent", "V") for v in marked.values()),
 			f"người thường phải vẫn bị chấm vắng, nhận: {sorted(set(marked.values()))}",
 		)
+
+
+class TestSweep(PerTestRollback, FrappeTestCase):
+	"""E5 — lượt quét không lệ thuộc phân ca (8/2026 trên site chưa có Shift Assignment nào)."""
+
+	def test_sweep_fills_recent_working_days_without_shift_assignment(self):
+		from hrms.hr.attendance_exempt import process_exempt_employees
+
+		yesterday = add_days(getdate(), -1)
+		emp = make_exempt_employee(email="sweep@miyano.test", from_date=add_days(yesterday, -2))
+		self.assertFalse(
+			frappe.db.exists("Shift Assignment", {"employee": emp, "docstatus": 1}),
+			"test này phải chạy với nhân viên KHÔNG có phân ca",
+		)
+		process_exempt_employees()
+		created = frappe.get_all(
+			"Attendance",
+			filters={"employee": emp, "attendance_date": [">=", add_days(yesterday, -2)]},
+			fields=["attendance_date", "custom_attendance_code"],
+		)
+		self.assertTrue(created, "lượt quét không sinh ngày công nào")
+		self.assertTrue(all(r.custom_attendance_code == "X" for r in created))
+
+	def test_sweep_does_not_touch_today(self):
+		from hrms.hr.attendance_exempt import process_exempt_employees
+
+		emp = make_exempt_employee(email="sweep2@miyano.test", from_date=add_days(getdate(), -2))
+		process_exempt_employees()
+		# ngày hôm nay CHƯA HẾT → chưa kết luận được
+		self.assertFalse(frappe.db.exists("Attendance", {"employee": emp, "attendance_date": getdate()}))
+
+	def test_sweep_is_idempotent(self):
+		from hrms.hr.attendance_exempt import process_exempt_employees
+
+		emp = make_exempt_employee(email="sweep3@miyano.test", from_date=add_days(getdate(), -3))
+		process_exempt_employees()
+		before = frappe.db.count("Attendance", {"employee": emp})
+		process_exempt_employees()
+		self.assertEqual(frappe.db.count("Attendance", {"employee": emp}), before)
+
+	def test_sweep_respects_backfill_window(self):
+		from hrms.hr.attendance_exempt import BACKFILL_DAYS, process_exempt_employees
+
+		old = add_days(getdate(), -(BACKFILL_DAYS + 10))
+		emp = make_exempt_employee(email="sweep4@miyano.test", from_date=old)
+		process_exempt_employees()
+		self.assertFalse(
+			frappe.db.exists("Attendance", {"employee": emp, "attendance_date": old}),
+			"lượt quét tự động không được cày quá cửa sổ BACKFILL_DAYS",
+		)
+
+	def test_scheduler_hook_registered_after_auto_attendance(self):
+		import hrms.hooks as hooks
+
+		jobs = hooks.scheduler_events["hourly_long"]
+		self.assertIn("hrms.hr.attendance_exempt.process_exempt_employees", jobs)
+		self.assertGreater(
+			jobs.index("hrms.hr.attendance_exempt.process_exempt_employees"),
+			jobs.index("hrms.hr.doctype.shift_type.shift_type.process_auto_attendance_for_all_shifts"),
+			"lượt quét phải chạy SAU auto-attendance",
+		)

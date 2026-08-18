@@ -208,6 +208,8 @@ scheduler_events = {
 		"hrms.hr.doctype.shift_type.shift_type.update_last_sync_of_checkin",
 		"hrms.hr.doctype.shift_type.shift_type.process_auto_attendance_for_all_shifts",
 		"hrms.hr.doctype.shift_schedule_assignment.shift_schedule_assignment.process_auto_shift_creation",
+		# Miyano: người miễn chấm công — chạy SAU auto-attendance để không đua với nhánh chấm vắng.
+		"hrms.hr.attendance_exempt.process_exempt_employees",
 	],
 	"daily": [
 		"hrms.controllers.employee_reminders.send_birthday_reminders",

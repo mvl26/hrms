@@ -14,7 +14,7 @@ Xem `docs/spec/attendance-exempt-employees.md`.
 
 import frappe
 from frappe import _
-from frappe.utils import cint, getdate
+from frappe.utils import add_days, cint, getdate
 
 from erpnext.setup.doctype.employee.employee import is_holiday
 
@@ -107,3 +107,25 @@ def fill_full_day(employee: str, date) -> str | None:
 	doc.submit()
 	doc.add_comment("Comment", _("Tự sinh: nhân viên miễn chấm công (full công)"))
 	return doc.name
+
+
+def process_exempt_employees():
+	"""Scheduler `hourly_long`: lấp đầy ngày công cho MỌI người có cờ, kể cả người không được phân
+	ca tháng đó (phân ca ở Miyano cấp theo từng tháng, quên là mất công cả tháng)."""
+	if not exempt_fields_installed():
+		return
+	end = add_days(getdate(), -1)  # hôm nay chưa hết thì chưa kết luận
+	floor = add_days(end, -BACKFILL_DAYS)
+	for emp in exempt_employees():
+		start = getdate(emp.custom_exempt_from_checkin_from or emp.date_of_joining or floor)
+		if start < floor:
+			start = floor
+		stop = end
+		if emp.relieving_date and getdate(emp.relieving_date) < stop:
+			stop = getdate(emp.relieving_date)
+		day = start
+		while day <= stop:
+			fill_full_day(emp.name, day)
+			day = add_days(day, 1)
+		# giữ tiến độ giữa các nhân viên, y như `process_auto_attendance`
+		frappe.db.commit()  # nosemgrep
