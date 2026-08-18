@@ -142,3 +142,87 @@ class TestIsExempt(PerTestRollback, FrappeTestCase):
 		with patch.object(ax, "exempt_fields_installed", return_value=False):
 			self.assertFalse(ax.is_exempt(emp, ANCHOR))
 			self.assertEqual(ax.exempt_employees(), [])
+
+
+class TestFillFullDay(PerTestRollback, FrappeTestCase):
+	"""E3 — sinh một ngày công và các lá chắn."""
+
+	def setUp(self):
+		self.emp = make_exempt_employee()
+
+	def attendance_on(self, date):
+		return frappe.db.get_value(
+			"Attendance",
+			{"employee": self.emp, "attendance_date": getdate(date), "docstatus": ["<", 2]},
+			["name", "status", "custom_attendance_code", "custom_work_credit", "custom_auto_filled"],
+			as_dict=True,
+		)
+
+	def test_creates_full_day_present(self):
+		from hrms.hr.attendance_exempt import fill_full_day
+
+		self.assertIsNotNone(fill_full_day(self.emp, ANCHOR))
+		att = self.attendance_on(ANCHOR)
+		self.assertEqual(att.custom_attendance_code, "X")
+		self.assertEqual(att.status, "Present")
+		self.assertEqual(att.custom_work_credit, 1.0)
+		self.assertEqual(att.custom_auto_filled, 1)
+		self.assertEqual(frappe.db.get_value("Attendance", att.name, "docstatus"), 1)
+
+	def test_is_idempotent(self):
+		from hrms.hr.attendance_exempt import fill_full_day
+
+		fill_full_day(self.emp, ANCHOR)
+		self.assertIsNone(fill_full_day(self.emp, ANCHOR))
+		self.assertEqual(
+			frappe.db.count("Attendance", {"employee": self.emp, "attendance_date": ANCHOR}), 1
+		)
+
+	def test_skips_holiday(self):
+		from hrms.hr.attendance_exempt import fill_full_day
+
+		hl = frappe.get_doc(
+			{
+				"doctype": "Holiday List",
+				"holiday_list_name": "Miyano Exempt Test 2099",
+				"from_date": "2099-01-01",
+				"to_date": "2099-12-31",
+				"holidays": [{"holiday_date": ANCHOR, "description": "Ngày nghỉ test"}],
+			}
+		).insert()
+		frappe.db.set_value("Employee", self.emp, "holiday_list", hl.name)
+		self.assertIsNone(fill_full_day(self.emp, ANCHOR))
+		self.assertIsNone(self.attendance_on(ANCHOR))
+
+	def test_does_not_overwrite_existing_record(self):
+		from hrms.hr.attendance_exempt import fill_full_day
+
+		# HR cố ý chấm vắng — người thật thắng máy
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": ANCHOR,
+				"custom_attendance_code": "V",
+			}
+		)
+		att.insert()
+		att.submit()
+		self.assertIsNone(fill_full_day(self.emp, ANCHOR))
+		self.assertEqual(self.attendance_on(ANCHOR).custom_attendance_code, "V")
+
+	def test_skips_when_not_exempt(self):
+		from hrms.hr.attendance_exempt import fill_full_day
+
+		self.assertIsNone(fill_full_day(make_plain_employee("plain3@miyano.test"), ANCHOR))
+
+	def test_skips_locked_period(self):
+		"""Kỳ đã chốt là ĐÓNG BĂNG. Mock `is_period_locked` — luật khoá kỳ đã có test riêng ở
+		`hrms/hr/tests/test_period_lock.py`; ở đây chỉ chứng minh `fill_full_day` có hỏi nó."""
+		from unittest.mock import patch
+
+		from hrms.hr.attendance_exempt import fill_full_day
+
+		with patch("hrms.hr.period_lock.is_period_locked", return_value=True):
+			self.assertIsNone(fill_full_day(self.emp, ANCHOR))
+		self.assertIsNone(self.attendance_on(ANCHOR))
