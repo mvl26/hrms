@@ -554,3 +554,52 @@ class TestBusinessTripOverridesGeneratedDay(PerTestRollback, FrappeTestCase):
 			"X",
 			"ngày có giờ vào/ra thật là dữ liệu thật — Công Tác không được đè",
 		)
+
+
+class TestGenerateForMonth(PerTestRollback, FrappeTestCase):
+	"""E9 — chạy bù theo tháng (dùng khi bật cờ giữa chừng hoặc sau khi huỷ chốt kỳ)."""
+
+	def last_month(self):
+		from frappe.utils import get_first_day
+
+		return get_first_day(add_days(get_first_day(getdate()), -1))
+
+	def test_generates_past_month_and_returns_count(self):
+		from frappe.utils import get_last_day
+
+		from hrms.hr.attendance_exempt import generate_for_month
+
+		start = self.last_month()
+		emp = make_exempt_employee(email="backfill@miyano.test", from_date=start)
+		count = generate_for_month(start.month, start.year, employee=emp)
+		self.assertGreater(count, 0)
+		self.assertEqual(
+			count,
+			frappe.db.count(
+				"Attendance",
+				{
+					"employee": emp,
+					"attendance_date": ["between", [start, get_last_day(start)]],
+					"custom_auto_filled": 1,
+				},
+			),
+		)
+
+	def test_second_run_generates_nothing(self):
+		from hrms.hr.attendance_exempt import generate_for_month
+
+		start = self.last_month()
+		emp = make_exempt_employee(email="backfill2@miyano.test", from_date=start)
+		generate_for_month(start.month, start.year, employee=emp)
+		self.assertEqual(generate_for_month(start.month, start.year, employee=emp), 0)
+
+	def test_does_not_generate_future_days(self):
+		from hrms.hr.attendance_exempt import generate_for_month
+
+		today = getdate()
+		emp = make_exempt_employee(email="backfill3@miyano.test", from_date=today)
+		generate_for_month(today.month, today.year, employee=emp)
+		self.assertFalse(
+			frappe.db.exists("Attendance", {"employee": emp, "attendance_date": [">=", today]}),
+			"không sinh công cho hôm nay và tương lai",
+		)

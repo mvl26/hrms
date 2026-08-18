@@ -14,6 +14,51 @@ frappe.listview_settings["Attendance"] = {
 	onload: function (list_view) {
 		let me = this;
 
+		// Miyano: sinh bù công cho nhân viên miễn chấm công (giám đốc / giờ không cố định).
+		// Lượt quét tự động chỉ lùi 31 ngày; nút này dùng khi bật cờ giữa chừng hoặc sau khi huỷ chốt kỳ.
+		list_view.page.add_inner_button(__("Sinh công tháng (miễn chấm công)"), function () {
+			const today = frappe.datetime.str_to_obj(frappe.datetime.get_today());
+			const d = new frappe.ui.Dialog({
+				title: __("Sinh công cho nhân viên miễn chấm công"),
+				fields: [
+					{
+						fieldname: "month",
+						fieldtype: "Int",
+						label: __("Tháng"),
+						reqd: 1,
+						default: today.getMonth() + 1,
+					},
+					{
+						fieldname: "year",
+						fieldtype: "Int",
+						label: __("Năm"),
+						reqd: 1,
+						default: today.getFullYear(),
+					},
+					{
+						fieldname: "employee",
+						fieldtype: "Link",
+						options: "Employee",
+						label: __("Nhân viên (bỏ trống = tất cả)"),
+					},
+				],
+				primary_action_label: __("Sinh công"),
+				primary_action(values) {
+					frappe.call({
+						method: "hrms.hr.attendance_exempt.generate_for_month",
+						args: values,
+						freeze: true,
+						callback: function (r) {
+							frappe.msgprint(__("Đã sinh {0} ngày công.", [r.message || 0]));
+							list_view.refresh();
+						},
+					});
+					d.hide();
+				},
+			});
+			d.show();
+		});
+
 		list_view.page.add_inner_button(__("Mark Attendance"), function () {
 			let first_day_of_month = moment().startOf("month");
 

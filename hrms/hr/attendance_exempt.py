@@ -14,7 +14,7 @@ Xem `docs/spec/attendance-exempt-employees.md`.
 
 import frappe
 from frappe import _
-from frappe.utils import add_days, cint, getdate
+from frappe.utils import add_days, cint, get_last_day, getdate
 
 from erpnext.setup.doctype.employee.employee import is_holiday
 
@@ -129,3 +129,25 @@ def process_exempt_employees():
 			day = add_days(day, 1)
 		# giữ tiến độ giữa các nhân viên, y như `process_auto_attendance`
 		frappe.db.commit()  # nosemgrep
+
+
+@frappe.whitelist()
+def generate_for_month(month, year, employee: str | None = None) -> int:
+	"""Chạy bù cả tháng — cho người bật cờ giữa chừng, hoặc sau khi huỷ chốt kỳ để sửa.
+
+	Trả về SỐ NGÀY đã sinh để HR đối chiếu; không sinh ngày hôm nay và tương lai."""
+	frappe.only_for(("HR Manager", "System Manager"))
+	start = getdate(f"{cint(year)}-{cint(month):02d}-01")
+	end = get_last_day(start)
+	yesterday = add_days(getdate(), -1)
+	if end > yesterday:
+		end = yesterday
+	rows = [frappe._dict(name=employee)] if employee else exempt_employees()
+	created = 0
+	for emp in rows:
+		day = start
+		while day <= end:
+			if fill_full_day(emp.name, day):
+				created += 1
+			day = add_days(day, 1)
+	return created
