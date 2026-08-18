@@ -226,3 +226,83 @@ class TestFillFullDay(PerTestRollback, FrappeTestCase):
 		with patch("hrms.hr.period_lock.is_period_locked", return_value=True):
 			self.assertIsNone(fill_full_day(self.emp, ANCHOR))
 		self.assertIsNone(self.attendance_on(ANCHOR))
+
+
+def exempt_test_shift(split=False):
+	"""Ca dùng chung cho test — tạo một lần, các test sau dùng lại (DML, không phải DDL)."""
+	name = "Miyano Exempt Test Shift"
+	if not frappe.db.exists("Shift Type", name):
+		frappe.get_doc(
+			{
+				"doctype": "Shift Type",
+				"__newname": name,
+				"start_time": "08:00:00",
+				"end_time": "17:30:00",
+				"custom_lunch_start": "12:00:00",
+				"custom_lunch_end": "13:30:00",
+			}
+		).insert()
+	frappe.db.set_value("Shift Type", name, "custom_split_half_day", 1 if split else 0)
+	return name
+
+
+def assign_shift(employee, shift, start, end):
+	doc = frappe.get_doc(
+		{
+			"doctype": "Shift Assignment",
+			"employee": employee,
+			"shift_type": shift,
+			"start_date": getdate(start),
+			"end_date": getdate(end),
+			"status": "Active",
+			"company": frappe.db.get_value("Employee", employee, "company"),
+		}
+	)
+	doc.insert()
+	doc.submit()
+	return doc.name
+
+
+class TestAbsentBranch(PerTestRollback, FrappeTestCase):
+	"""E4 — nhánh chấm vắng THẬT của Shift Type: người có cờ ra X, người thường vẫn V."""
+
+	MONTH_START = getdate("2099-06-01")
+	SYNC = "2099-06-06 23:00:00"
+
+	def run_absent_marking(self, employee):
+		shift = frappe.get_doc("Shift Type", exempt_test_shift())
+		shift.db_set("process_attendance_after", self.MONTH_START)
+		shift.db_set("last_sync_of_checkin", self.SYNC)
+		assign_shift(employee, shift.name, self.MONTH_START, "2099-06-30")
+		shift.mark_absent_for_dates_with_no_attendance(employee)
+
+	def codes_for(self, employee):
+		return {
+			r.attendance_date: (r.status, r.custom_attendance_code)
+			for r in frappe.get_all(
+				"Attendance",
+				filters={"employee": employee, "attendance_date": [">=", self.MONTH_START]},
+				fields=["attendance_date", "status", "custom_attendance_code"],
+			)
+		}
+
+	def test_exempt_gets_full_day_instead_of_absent(self):
+		emp = make_exempt_employee(email="absent_exempt@miyano.test", from_date=self.MONTH_START)
+		self.run_absent_marking(emp)
+		marked = self.codes_for(emp)
+		self.assertTrue(marked, "không ngày nào được chấm — test không chứng minh được gì")
+		self.assertTrue(
+			all(v == ("Present", "X") for v in marked.values()),
+			f"người miễn chấm công phải đủ công mọi ngày, nhận: {sorted(set(marked.values()))}",
+		)
+
+	def test_plain_employee_still_marked_absent(self):
+		# BẤT BIẾN: người không có cờ vẫn đi đúng đường cũ
+		emp = make_plain_employee("absent_plain@miyano.test")
+		self.run_absent_marking(emp)
+		marked = self.codes_for(emp)
+		self.assertTrue(marked)
+		self.assertTrue(
+			all(v == ("Absent", "V") for v in marked.values()),
+			f"người thường phải vẫn bị chấm vắng, nhận: {sorted(set(marked.values()))}",
+		)

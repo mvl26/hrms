@@ -218,6 +218,7 @@ class ShiftType(Document):
 		start_time = get_time(self.start_time)
 		dates = self.get_dates_for_attendance(employee)
 
+		from hrms.hr.attendance_exempt import fill_full_day, is_exempt
 		from hrms.hr.doctype.attendance_request.attendance_request_miyano import (
 			reapply_attendance_request,
 		)
@@ -231,6 +232,14 @@ class ShiftType(Document):
 				# on-duty / quên chấm) rồi thôi — chấm vắng đè lên đơn đã duyệt là sai. Đơn chỉ ghi
 				# Attendance đúng một lần lúc submit, nên mỗi lần dựng lại dữ liệu phải hỏi lại nó.
 				if reapply_attendance_request(employee, date):
+					continue
+
+				# Người MIỄN CHẤM CÔNG: không quẹt thẻ là bình thường, không phải vắng. Phải chặn ở
+				# ĐÂY chứ không chỉ ở lượt quét riêng (`process_exempt_employees`): cả hai chạy trong
+				# cùng lượt `hourly_long` và nhánh này chạy TRƯỚC, ghi V xong thì lượt quét đến sau
+				# thấy "đã có bản ghi" và bỏ qua — người có phân ca vẫn vắng cả tháng.
+				if is_exempt(employee, date):
+					fill_full_day(employee, date)
 					continue
 
 				attendance = mark_attendance(employee, date, "Absent", self.name)
