@@ -397,3 +397,101 @@ class TestNoDowngradeOnCheckin(PerTestRollback, FrappeTestCase):
 		# BẤT BIẾN: người không có cờ vẫn đi đúng luật cũ (1/2X / V tuỳ giờ)
 		att = self.mark(make_plain_employee("short2@miyano.test"))
 		self.assertNotEqual(att.custom_attendance_code, "X")
+
+
+class TestLeaveOverridesGeneratedDay(PerTestRollback, FrappeTestCase):
+	"""E7 — đơn nghỉ luôn thắng ngày X tự sinh; nửa ngày phép chỉ trừ 0,5."""
+
+	def setUp(self):
+		self.emp = make_exempt_employee(email="leave@miyano.test")
+
+	def apply_leave(self, half_day=False):
+		from hrms.hr.doctype.leave_application.test_leave_application import make_allocation_record
+
+		# BẮT BUỘC truyền from_date/to_date: mặc định của helper là 2013-01-01..2019-12-31, không
+		# phủ mốc 2099 → đơn nghỉ vỡ vì "không đủ phép" chứ không phải vì code của mình.
+		make_allocation_record(
+			employee=self.emp,
+			leave_type="Nghỉ phép năm",
+			from_date="2099-01-01",
+			to_date="2099-12-31",
+		)
+		leave = frappe.get_doc(
+			{
+				"doctype": "Leave Application",
+				"employee": self.emp,
+				"leave_type": "Nghỉ phép năm",
+				"from_date": ANCHOR,
+				"to_date": ANCHOR,
+				"half_day": 1 if half_day else 0,
+				"half_day_date": ANCHOR if half_day else None,
+				# quy ước Miyano "gộp một quỹ phép năm": đơn rút quỹ bắt buộc chọn Loại nghỉ, nghỉ
+				# nửa ngày bắt buộc chọn buổi (`leave_single_pool.validate_pool_code`)
+				"custom_leave_reason": "Nghỉ phép năm",
+				"custom_half_day_period": "Sáng" if half_day else None,
+				"status": "Approved",
+				"company": frappe.db.get_value("Employee", self.emp, "company"),
+			}
+		)
+		leave.insert()
+		leave.submit()
+		return leave
+
+	def attendance(self):
+		return frappe.db.get_value(
+			"Attendance",
+			{"employee": self.emp, "attendance_date": ANCHOR, "docstatus": ["<", 2]},
+			["status", "leave_type", "half_day_status", "custom_attendance_code"],
+			as_dict=True,
+		)
+
+	def test_full_day_leave_replaces_generated_day(self):
+		from hrms.hr.attendance_exempt import fill_full_day
+
+		fill_full_day(self.emp, ANCHOR)
+		self.apply_leave()
+		att = self.attendance()
+		self.assertEqual(att.status, "On Leave")
+		self.assertEqual(att.leave_type, "Nghỉ phép năm")
+		self.assertEqual(att.custom_attendance_code, "P")
+
+	def test_half_day_leave_keeps_other_half_present(self):
+		from hrms.hr.attendance_exempt import fill_full_day
+
+		fill_full_day(self.emp, ANCHOR)
+		self.apply_leave(half_day=True)
+		att = self.attendance()
+		self.assertEqual(att.status, "Half Day")
+		self.assertEqual(att.half_day_status, "Present", "nửa còn lại của người miễn chấm công LÀ công")
+		self.assertEqual(att.custom_attendance_code, "1/2P")
+
+	def test_other_half_not_flipped_absent_after_manual_v(self):
+		"""Kịch bản duy nhất chạm nhánh `mark_absent_for_half_day_dates`: ngày đang là V (HR chấm
+		tay) rồi xin nghỉ nửa ngày → upstream bật `modify_half_day_status` và sau đó ép nửa còn lại
+		thành Absent vì "thiếu lượt chấm". Với người miễn chấm công, nửa đó LÀ công."""
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": ANCHOR,
+				"custom_attendance_code": "V",
+			}
+		)
+		att.insert()
+		att.submit()
+		self.apply_leave(half_day=True)
+		self.assertEqual(
+			frappe.db.get_value("Attendance", att.name, "modify_half_day_status"),
+			1,
+			"kịch bản không dựng đúng: upstream chưa bật cờ modify_half_day_status",
+		)
+
+		shift = frappe.get_doc("Shift Type", exempt_test_shift())
+		assign_shift(self.emp, shift.name, "2099-06-01", "2099-06-30")
+		shift.mark_absent_for_half_day_dates(self.emp)
+
+		self.assertEqual(
+			frappe.db.get_value("Attendance", att.name, "half_day_status"),
+			"Present",
+			"nửa còn lại của người miễn chấm công bị ép thành Absent → trừ oan 0,5 công",
+		)
