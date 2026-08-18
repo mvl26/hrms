@@ -201,6 +201,13 @@ class Attendance(Document):
 			min_work_hours=flt(cfg.get("custom_min_work_hours")) or self.VN_DEFAULT_MIN_WORK_HOURS,
 		)
 		self.working_hours = ket_qua.hours
+		from hrms.hr.attendance_exempt import EXEMPT_CODE, is_exempt
+
+		if is_exempt(self.employee, self.attendance_date):
+			# Người miễn chấm công: giờ vào/ra chỉ để BÁO CÁO, không bao giờ quyết định công. Bỏ
+			# bước này thì giám đốc ghé một tiếng bị quy 1/2K và mất nửa ngày lương.
+			self.custom_attendance_code = EXEMPT_CODE
+			return
 		self.custom_attendance_code = ket_qua.code
 
 	def apply_attendance_code_bridge(self):

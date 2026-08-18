@@ -121,6 +121,12 @@ class ShiftType(Document):
 				out_time,
 			) = self.get_attendance(single_shift_logs)
 
+			from hrms.hr.attendance_exempt import is_exempt
+
+			if is_exempt(employee, attendance_date):
+				# ngưỡng giờ của ca không áp cho người miễn chấm công
+				attendance_status = "Present"
+
 			mark_attendance_and_link_log(
 				single_shift_logs,
 				attendance_status,

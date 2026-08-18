@@ -367,3 +367,33 @@ class TestSweep(PerTestRollback, FrappeTestCase):
 			jobs.index("hrms.hr.doctype.shift_type.shift_type.process_auto_attendance_for_all_shifts"),
 			"lượt quét phải chạy SAU auto-attendance",
 		)
+
+
+class TestNoDowngradeOnCheckin(PerTestRollback, FrappeTestCase):
+	"""E6 — giám đốc ghé một tiếng vẫn đủ công; giờ vào/ra vẫn ghi thật cho báo cáo."""
+
+	def mark(self, employee):
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": employee,
+				"attendance_date": ANCHOR,
+				"shift": exempt_test_shift(split=True),
+				"in_time": f"{ANCHOR} 10:00:00",
+				"out_time": f"{ANCHOR} 11:00:00",
+				"status": "Present",
+			}
+		)
+		att.insert()
+		return att
+
+	def test_short_attendance_stays_full_day_for_exempt(self):
+		att = self.mark(make_exempt_employee(email="short@miyano.test"))
+		self.assertEqual(att.custom_attendance_code, "X")
+		self.assertEqual(att.status, "Present")
+		self.assertGreater(att.working_hours, 0, "giờ có mặt vẫn phải ghi thật cho báo cáo")
+
+	def test_short_attendance_still_downgrades_for_plain_employee(self):
+		# BẤT BIẾN: người không có cờ vẫn đi đúng luật cũ (1/2X / V tuỳ giờ)
+		att = self.mark(make_plain_employee("short2@miyano.test"))
+		self.assertNotEqual(att.custom_attendance_code, "X")
