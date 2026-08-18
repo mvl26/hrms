@@ -1,6 +1,7 @@
 # Spec — Nhân viên miễn chấm công (full công tự sinh)
 
-Trạng thái: **Approved (design)** — 2026-08-13. Nhánh: `feat/skip-attendance-diag`.
+Trạng thái: **Implemented** — 2026-08-18 (147 test xanh trên 9 module VN, cổng bất biến lương qua).
+Thiết kế duyệt 2026-08-13. Nhánh: `feat/skip-attendance-diag`.
 Liên quan: [[project-attendance-code-timekeeping]], [[project-flex-shift-timekeeping-pipeline]],
 [[project-timekeeping-logic-2026-07]], [[project-vn-payroll-mvl]], [[project-attendance-request-locked]].
 Spec nền: `docs/spec/flex-shift-and-timekeeping-pipeline.md`, `docs/spec/attendance-request-vs-leave.md`,

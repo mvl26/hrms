@@ -4,6 +4,18 @@
 > `superpowers:executing-plans`, làm tuần tự T1 → T11, mỗi task kết thúc bằng **một commit**.
 > Các bước dùng checkbox `- [ ]` để bám tiến độ.
 
+> **STATUS 2026-08-18 — T1–T11 XONG.** 33 test của tính năng + 147 test xanh trên 9 module VN
+> (0 fail, 0 error), cổng bất biến lương qua. Fixtures đã lên site bằng `bench --site miyano migrate`
+> (chủ site duyệt — migrate đầy đủ nên đẩy luôn mọi thứ đang chờ trên nhánh).
+>
+> **Hai lỗi THẬT phát hiện khi viết test, ngoài dự kiến của plan:**
+> 1. `leave_application.validate_attendance` chặn đơn nghỉ khi ngày đã Present → người miễn chấm
+>    công **không bao giờ xin nghỉ được**. Đã nới: bỏ qua ngày `custom_auto_filled`.
+> 2. `mark_absent_for_half_day_dates` ép nửa còn lại thành Absent (trừ oan 0,5 công) khi ngày đang V
+>    rồi xin nghỉ nửa ngày. Plan đoán guard này chỉ là lưới an toàn — test chứng minh ngược lại.
+>
+> **Còn treo:** tick cờ cho người thật + chạy sinh công tháng + restart app (T11 Bước 5).
+
 **Spec:** `docs/spec/attendance-exempt-employees.md` (đọc trước khi bắt đầu — plan này lập luận từ spec).
 Nhánh: `feat/skip-attendance-diag`.
 
