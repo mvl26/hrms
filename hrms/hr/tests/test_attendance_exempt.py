@@ -10,8 +10,10 @@ import os
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from frappe.utils import add_days, getdate
 
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import test_employee
 
 _CF = os.path.join(frappe.get_app_path("hrms"), "fixtures", "custom_field.json")
 
@@ -54,3 +56,89 @@ class TestExemptFixtures(PerTestRollback, FrappeTestCase):
 					names |= set(nf[1])
 		for name in EXEMPT_FIELDS:
 			self.assertIn(name, names, f"{name} chưa có trong bộ lọc fixtures của hooks.py")
+
+
+# --- E2: ai được miễn, ngày nào ------------------------------------------------------------
+
+# Neo ở 2099: không nằm trong Holiday List nào của site → mọi ngày là ngày làm việc, và không đụng
+# dữ liệu thật. Cùng quy ước với các test VN khác.
+ANCHOR = getdate("2099-06-15")
+
+
+def make_exempt_employee(email="exempt@miyano.test", from_date=None):
+	emp = test_employee(email)
+	frappe.db.set_value(
+		"Employee",
+		emp,
+		{
+			"custom_exempt_from_checkin": 1,
+			"custom_exempt_from_checkin_from": from_date,
+			"relieving_date": None,
+			"status": "Active",
+		},
+	)
+	return emp
+
+
+def make_plain_employee(email):
+	emp = test_employee(email)
+	frappe.db.set_value(
+		"Employee", emp, {"custom_exempt_from_checkin": 0, "relieving_date": None, "status": "Active"}
+	)
+	return emp
+
+
+class TestIsExempt(PerTestRollback, FrappeTestCase):
+	"""E2 — ai được miễn, ngày nào."""
+
+	def test_flagged_employee_is_exempt(self):
+		from hrms.hr.attendance_exempt import is_exempt
+
+		self.assertTrue(is_exempt(make_exempt_employee(), ANCHOR))
+
+	def test_unflagged_employee_is_not_exempt(self):
+		from hrms.hr.attendance_exempt import is_exempt
+
+		self.assertFalse(is_exempt(make_plain_employee("plain@miyano.test"), ANCHOR))
+
+	def test_date_before_effective_date_is_not_exempt(self):
+		from hrms.hr.attendance_exempt import is_exempt
+
+		emp = make_exempt_employee(from_date=ANCHOR)
+		self.assertFalse(is_exempt(emp, add_days(ANCHOR, -1)))
+		self.assertTrue(is_exempt(emp, ANCHOR))
+
+	def test_date_before_joining_is_not_exempt(self):
+		from hrms.hr.attendance_exempt import is_exempt
+
+		emp = make_exempt_employee()
+		doj = frappe.db.get_value("Employee", emp, "date_of_joining")
+		self.assertFalse(is_exempt(emp, add_days(getdate(doj), -1)))
+
+	def test_date_after_relieving_is_not_exempt(self):
+		from hrms.hr.attendance_exempt import is_exempt
+
+		emp = make_exempt_employee()
+		frappe.db.set_value("Employee", emp, "relieving_date", ANCHOR)
+		self.assertTrue(is_exempt(emp, ANCHOR))
+		self.assertFalse(is_exempt(emp, add_days(ANCHOR, 1)))
+
+	def test_exempt_employees_lists_only_flagged_active(self):
+		from hrms.hr.attendance_exempt import exempt_employees
+
+		emp = make_exempt_employee()
+		other = make_plain_employee("plain2@miyano.test")
+		names = {r.name for r in exempt_employees()}
+		self.assertIn(emp, names)
+		self.assertNotIn(other, names)
+
+	def test_everything_off_when_fields_not_migrated(self):
+		"""Site chưa `migrate` (chưa có cột) → tính năng im lặng, hành vi cũ y nguyên."""
+		from unittest.mock import patch
+
+		import hrms.hr.attendance_exempt as ax
+
+		emp = make_exempt_employee()
+		with patch.object(ax, "exempt_fields_installed", return_value=False):
+			self.assertFalse(ax.is_exempt(emp, ANCHOR))
+			self.assertEqual(ax.exempt_employees(), [])
