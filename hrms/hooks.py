@@ -337,6 +337,9 @@ fixtures = [
 					"Shift Type-custom_min_work_hours",
 					"Employee-custom_citizen_id",
 					"Employee-custom_social_insurance_no",
+					"Employee-custom_exempt_from_checkin",
+					"Employee-custom_exempt_from_checkin_from",
+					"Attendance-custom_auto_filled",
 				],
 			]
 		},
