@@ -144,7 +144,7 @@ class TestIsExempt(PerTestRollback, FrappeTestCase):
 			self.assertEqual(ax.exempt_employees(), [])
 
 
-class TestFillFullDay(PerTestRollback, FrappeTestCase):
+class TestEnsureFullDay(PerTestRollback, FrappeTestCase):
 	"""E3 — sinh một ngày công và các lá chắn."""
 
 	def setUp(self):
@@ -159,9 +159,9 @@ class TestFillFullDay(PerTestRollback, FrappeTestCase):
 		)
 
 	def test_creates_full_day_present(self):
-		from hrms.hr.attendance_exempt import fill_full_day
+		from hrms.hr.attendance_exempt import ensure_full_day
 
-		self.assertIsNotNone(fill_full_day(self.emp, ANCHOR))
+		self.assertIsNotNone(ensure_full_day(self.emp, ANCHOR))
 		att = self.attendance_on(ANCHOR)
 		self.assertEqual(att.custom_attendance_code, "X")
 		self.assertEqual(att.status, "Present")
@@ -170,16 +170,16 @@ class TestFillFullDay(PerTestRollback, FrappeTestCase):
 		self.assertEqual(frappe.db.get_value("Attendance", att.name, "docstatus"), 1)
 
 	def test_is_idempotent(self):
-		from hrms.hr.attendance_exempt import fill_full_day
+		from hrms.hr.attendance_exempt import ensure_full_day
 
-		fill_full_day(self.emp, ANCHOR)
-		self.assertIsNone(fill_full_day(self.emp, ANCHOR))
+		ensure_full_day(self.emp, ANCHOR)
+		self.assertIsNone(ensure_full_day(self.emp, ANCHOR))
 		self.assertEqual(
 			frappe.db.count("Attendance", {"employee": self.emp, "attendance_date": ANCHOR}), 1
 		)
 
 	def test_skips_holiday(self):
-		from hrms.hr.attendance_exempt import fill_full_day
+		from hrms.hr.attendance_exempt import ensure_full_day
 
 		hl = frappe.get_doc(
 			{
@@ -191,13 +191,15 @@ class TestFillFullDay(PerTestRollback, FrappeTestCase):
 			}
 		).insert()
 		frappe.db.set_value("Employee", self.emp, "holiday_list", hl.name)
-		self.assertIsNone(fill_full_day(self.emp, ANCHOR))
+		self.assertIsNone(ensure_full_day(self.emp, ANCHOR))
 		self.assertIsNone(self.attendance_on(ANCHOR))
 
-	def test_does_not_overwrite_existing_record(self):
-		from hrms.hr.attendance_exempt import fill_full_day
+	def test_repairs_a_bare_absent_day(self):
+		"""ĐỔI LUẬT 2026-08-18 (theo yêu cầu chủ site): ngày V trơ (không đơn từ gì) là ngày SAI do
+		lượt chấm, phải sửa về đủ công. Muốn ghi vắng thật cho người miễn chấm công thì dùng đơn
+		nghỉ (P / K) — ngày có `leave_type` được bảo vệ, xem TestRepairsWrongDays."""
+		from hrms.hr.attendance_exempt import ensure_full_day
 
-		# HR cố ý chấm vắng — người thật thắng máy
 		att = frappe.get_doc(
 			{
 				"doctype": "Attendance",
@@ -208,23 +210,23 @@ class TestFillFullDay(PerTestRollback, FrappeTestCase):
 		)
 		att.insert()
 		att.submit()
-		self.assertIsNone(fill_full_day(self.emp, ANCHOR))
-		self.assertEqual(self.attendance_on(ANCHOR).custom_attendance_code, "V")
+		self.assertIsNotNone(ensure_full_day(self.emp, ANCHOR))
+		self.assertEqual(self.attendance_on(ANCHOR).custom_attendance_code, "X")
 
 	def test_skips_when_not_exempt(self):
-		from hrms.hr.attendance_exempt import fill_full_day
+		from hrms.hr.attendance_exempt import ensure_full_day
 
-		self.assertIsNone(fill_full_day(make_plain_employee("plain3@miyano.test"), ANCHOR))
+		self.assertIsNone(ensure_full_day(make_plain_employee("plain3@miyano.test"), ANCHOR))
 
 	def test_skips_locked_period(self):
 		"""Kỳ đã chốt là ĐÓNG BĂNG. Mock `is_period_locked` — luật khoá kỳ đã có test riêng ở
-		`hrms/hr/tests/test_period_lock.py`; ở đây chỉ chứng minh `fill_full_day` có hỏi nó."""
+		`hrms/hr/tests/test_period_lock.py`; ở đây chỉ chứng minh `ensure_full_day` có hỏi nó."""
 		from unittest.mock import patch
 
-		from hrms.hr.attendance_exempt import fill_full_day
+		from hrms.hr.attendance_exempt import ensure_full_day
 
 		with patch("hrms.hr.period_lock.is_period_locked", return_value=True):
-			self.assertIsNone(fill_full_day(self.emp, ANCHOR))
+			self.assertIsNone(ensure_full_day(self.emp, ANCHOR))
 		self.assertIsNone(self.attendance_on(ANCHOR))
 
 
@@ -446,9 +448,9 @@ class TestLeaveOverridesGeneratedDay(PerTestRollback, FrappeTestCase):
 		)
 
 	def test_full_day_leave_replaces_generated_day(self):
-		from hrms.hr.attendance_exempt import fill_full_day
+		from hrms.hr.attendance_exempt import ensure_full_day
 
-		fill_full_day(self.emp, ANCHOR)
+		ensure_full_day(self.emp, ANCHOR)
 		self.apply_leave()
 		att = self.attendance()
 		self.assertEqual(att.status, "On Leave")
@@ -456,9 +458,9 @@ class TestLeaveOverridesGeneratedDay(PerTestRollback, FrappeTestCase):
 		self.assertEqual(att.custom_attendance_code, "P")
 
 	def test_half_day_leave_keeps_other_half_present(self):
-		from hrms.hr.attendance_exempt import fill_full_day
+		from hrms.hr.attendance_exempt import ensure_full_day
 
-		fill_full_day(self.emp, ANCHOR)
+		ensure_full_day(self.emp, ANCHOR)
 		self.apply_leave(half_day=True)
 		att = self.attendance()
 		self.assertEqual(att.status, "Half Day")
@@ -518,10 +520,10 @@ class TestBusinessTripOverridesGeneratedDay(PerTestRollback, FrappeTestCase):
 		return trip
 
 	def test_generated_day_becomes_ct(self):
-		from hrms.hr.attendance_exempt import fill_full_day
+		from hrms.hr.attendance_exempt import ensure_full_day
 
 		emp = make_exempt_employee(email="trip@miyano.test")
-		fill_full_day(emp, ANCHOR)
+		ensure_full_day(emp, ANCHOR)
 		self.make_trip(emp, ANCHOR).create_travel_attendance()
 		att = frappe.db.get_value(
 			"Attendance",
@@ -608,7 +610,7 @@ class TestGenerateForMonth(PerTestRollback, FrappeTestCase):
 class TestAttendanceRequestWins(PerTestRollback, FrappeTestCase):
 	"""E10 — Yêu cầu chấm công đã duyệt thắng ngày X tự sinh (bảng luật §3.7 của spec).
 
-	Nhánh `reapply_attendance_request` trong `fill_full_day` trước đây không có test nào."""
+	Nhánh `reapply_attendance_request` trong `ensure_full_day` trước đây không có test nào."""
 
 	def setUp(self):
 		self.emp = make_exempt_employee(email="req@miyano.test")
@@ -638,10 +640,10 @@ class TestAttendanceRequestWins(PerTestRollback, FrappeTestCase):
 
 	def test_request_code_wins_when_day_generated_after(self):
 		"""Đơn duyệt TRƯỚC, lượt quét chạy SAU: không được đè mã của đơn, không đẻ bản ghi thứ hai."""
-		from hrms.hr.attendance_exempt import fill_full_day
+		from hrms.hr.attendance_exempt import ensure_full_day
 
 		req = self.approve_request()
-		self.assertIsNone(fill_full_day(self.emp, ANCHOR), "đã có đơn duyệt thì không sinh thêm")
+		self.assertIsNone(ensure_full_day(self.emp, ANCHOR), "đã có đơn duyệt thì không sinh thêm")
 		att = self.attendance()
 		self.assertEqual(att.custom_attendance_code, "W", "mã WFH của đơn bị mất")
 		self.assertEqual(att.attendance_request, req.name)
@@ -649,9 +651,9 @@ class TestAttendanceRequestWins(PerTestRollback, FrappeTestCase):
 
 	def test_request_overwrites_generated_day(self):
 		"""Ngày đã tự sinh X rồi mới có đơn duyệt: đơn phải ghi đè được."""
-		from hrms.hr.attendance_exempt import fill_full_day
+		from hrms.hr.attendance_exempt import ensure_full_day
 
-		fill_full_day(self.emp, ANCHOR)
+		ensure_full_day(self.emp, ANCHOR)
 		self.approve_request(reason="On Duty")
 		att = self.attendance()
 		self.assertEqual(att.custom_attendance_code, "CT", "đơn on-duty phải ghi đè ngày X tự sinh")
@@ -664,7 +666,7 @@ class TestLateCheckinAfterGeneratedDay(PerTestRollback, FrappeTestCase):
 	`process_auto_attendance` chạy cho TOÀN BỘ nhân viên, vỡ ở đây là chết cả lượt."""
 
 	def test_checkin_arriving_after_autofill_does_not_break(self):
-		from hrms.hr.attendance_exempt import fill_full_day
+		from hrms.hr.attendance_exempt import ensure_full_day
 
 		emp = make_exempt_employee(email="late@miyano.test")
 		shift = frappe.get_doc("Shift Type", exempt_test_shift())
@@ -673,7 +675,7 @@ class TestLateCheckinAfterGeneratedDay(PerTestRollback, FrappeTestCase):
 		shift.db_set("last_sync_of_checkin", "2099-06-20 23:00:00")
 		assign_shift(emp, shift.name, "2099-06-01", "2099-06-30")
 
-		self.assertIsNotNone(fill_full_day(emp, ANCHOR))
+		self.assertIsNotNone(ensure_full_day(emp, ANCHOR))
 
 		for t in ("08:05:00", "17:35:00"):
 			frappe.get_doc(
@@ -743,3 +745,162 @@ class TestHolidayIsNotAWorkingDay(PerTestRollback, FrappeTestCase):
 		)
 		att.insert()
 		self.assertNotEqual(att.custom_attendance_code, "X", "10 phút ngày lễ không được thành đủ công")
+
+
+class TestRepairsWrongDays(PerTestRollback, FrappeTestCase):
+	"""E13 — sinh công cho người miễn chấm công phải SỬA ĐƯỢC ngày cũ sai.
+
+	Auto-attendance chạy trước (hoặc dữ liệu cũ trước khi bật cờ) đã ghi V / 1/2X từ lượt chấm lỗi.
+	Bỏ qua ngày "đã có bản ghi" nghĩa là không bao giờ sửa được. Nhưng ngày do NGƯỜI hoặc kênh có
+	chủ ý ghi — nghỉ phép, công tác, WFH/từ xa, yêu cầu chấm công — phải giữ nguyên."""
+
+	def setUp(self):
+		self.emp = make_exempt_employee(email="repair@miyano.test")
+
+	def existing(self, code, **kwargs):
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": ANCHOR,
+				"custom_attendance_code": code,
+				**kwargs,
+			}
+		)
+		att.insert()
+		att.submit()
+		return att
+
+	def day(self):
+		return frappe.db.get_value(
+			"Attendance",
+			{"employee": self.emp, "attendance_date": ANCHOR, "docstatus": ["<", 2]},
+			["name", "status", "custom_attendance_code", "custom_work_credit", "leave_type", "in_time"],
+			as_dict=True,
+		)
+
+	def test_repairs_absent_day(self):
+		from hrms.hr.attendance_exempt import ensure_full_day
+
+		self.existing("V")
+		self.assertIsNotNone(ensure_full_day(self.emp, ANCHOR))
+		d = self.day()
+		self.assertEqual(d.custom_attendance_code, "X")
+		self.assertEqual(d.status, "Present")
+		self.assertEqual(d.custom_work_credit, 1.0)
+
+	def test_repairs_short_hours_half_day_and_keeps_punches(self):
+		from hrms.hr.attendance_exempt import ensure_full_day
+
+		self.existing("1/2X", in_time=f"{ANCHOR} 09:00:00", out_time=f"{ANCHOR} 12:00:00")
+		ensure_full_day(self.emp, ANCHOR)
+		d = self.day()
+		self.assertEqual(d.custom_attendance_code, "X")
+		self.assertIsNotNone(d.in_time, "giờ vào/ra thật phải giữ cho báo cáo giờ làm")
+
+	def test_keeps_leave_day(self):
+		from hrms.hr.attendance_exempt import ensure_full_day
+
+		self.existing("P")
+		self.assertIsNone(ensure_full_day(self.emp, ANCHOR))
+		self.assertEqual(self.day().custom_attendance_code, "P")
+
+	def test_keeps_unpaid_leave_day(self):
+		from hrms.hr.attendance_exempt import ensure_full_day
+
+		self.existing("K")
+		self.assertIsNone(ensure_full_day(self.emp, ANCHOR))
+		self.assertEqual(self.day().custom_attendance_code, "K")
+
+	def test_keeps_business_trip_day(self):
+		from hrms.hr.attendance_exempt import ensure_full_day
+
+		self.existing("CT")
+		self.assertIsNone(ensure_full_day(self.emp, ANCHOR))
+		self.assertEqual(self.day().custom_attendance_code, "CT")
+
+	def test_keeps_work_from_home_day(self):
+		from hrms.hr.attendance_exempt import ensure_full_day
+
+		self.existing("W")
+		self.assertIsNone(ensure_full_day(self.emp, ANCHOR))
+		self.assertEqual(self.day().custom_attendance_code, "W")
+
+	def test_repair_is_idempotent(self):
+		from hrms.hr.attendance_exempt import ensure_full_day
+
+		self.existing("V")
+		ensure_full_day(self.emp, ANCHOR)
+		self.assertIsNone(ensure_full_day(self.emp, ANCHOR), "ngày đã đúng thì không sửa nữa")
+		self.assertEqual(frappe.db.count("Attendance", {"employee": self.emp, "attendance_date": ANCHOR}), 1)
+
+	def test_does_not_repair_locked_period(self):
+		from unittest.mock import patch
+
+		from hrms.hr.attendance_exempt import ensure_full_day
+
+		self.existing("V")
+		with patch("hrms.hr.period_lock.is_period_locked", return_value=True):
+			self.assertIsNone(ensure_full_day(self.emp, ANCHOR))
+		self.assertEqual(self.day().custom_attendance_code, "V")
+
+	def test_does_not_repair_plain_employee(self):
+		from hrms.hr.attendance_exempt import ensure_full_day
+
+		plain = make_plain_employee("repair_plain@miyano.test")
+		att = frappe.get_doc(
+			{"doctype": "Attendance", "employee": plain, "attendance_date": ANCHOR, "custom_attendance_code": "V"}
+		)
+		att.insert()
+		att.submit()
+		self.assertIsNone(ensure_full_day(plain, ANCHOR))
+		self.assertEqual(frappe.db.get_value("Attendance", att.name, "custom_attendance_code"), "V")
+
+	def test_generate_for_month_repairs_wrong_days(self):
+		"""Đúng tình huống anh nêu: auto chạy trước, sinh công tháng phải sửa được."""
+		from frappe.utils import get_first_day
+
+		from hrms.hr.attendance_exempt import generate_for_month
+
+		start = get_first_day(add_days(get_first_day(getdate()), -1))
+		emp = make_exempt_employee(email="repair2@miyano.test", from_date=start)
+		att = frappe.get_doc(
+			{"doctype": "Attendance", "employee": emp, "attendance_date": start, "custom_attendance_code": "V"}
+		)
+		att.insert()
+		att.submit()
+		generate_for_month(start.month, start.year, employee=emp)
+		self.assertEqual(frappe.db.get_value("Attendance", att.name, "custom_attendance_code"), "X")
+
+
+class TestAutoAttendanceRepairsExemptDays(PerTestRollback, FrappeTestCase):
+	"""E14 — chính hàm auto-attendance phải hỏi "người này có miễn chấm công không" và sửa ngày sai."""
+
+	def test_process_auto_attendance_fixes_absent_days_of_exempt_employee(self):
+		emp = make_exempt_employee(email="autofix@miyano.test", from_date="2099-06-01")
+		shift = frappe.get_doc("Shift Type", exempt_test_shift())
+		shift.db_set("enable_auto_attendance", 1)
+		shift.db_set("process_attendance_after", "2099-06-01")
+		shift.db_set("last_sync_of_checkin", "2099-06-10 23:00:00")
+		assign_shift(emp, shift.name, "2099-06-01", "2099-06-30")
+
+		# ngày công SAI có sẵn (do lượt chấm lỗi / do chạy trước khi bật cờ)
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": emp,
+				"attendance_date": "2099-06-02",
+				"custom_attendance_code": "V",
+				"shift": shift.name,
+			}
+		)
+		att.insert()
+		att.submit()
+
+		shift.process_auto_attendance()
+
+		self.assertEqual(
+			frappe.db.get_value("Attendance", att.name, "custom_attendance_code"),
+			"X",
+			"auto-attendance phải sửa ngày vắng sai của người miễn chấm công",
+		)

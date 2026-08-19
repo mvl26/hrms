@@ -13,7 +13,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase, change_settings
 from frappe.utils import add_days, flt, getdate
 
-from hrms.hr.attendance_exempt import fill_full_day, process_exempt_employees
+from hrms.hr.attendance_exempt import ensure_full_day, process_exempt_employees
 from hrms.tests.isolation import PerTestRollback
 from hrms.tests.vn_test_utils import default_company, test_employee
 
@@ -71,7 +71,7 @@ class TestExemptPayroll(PerTestRollback, FrappeTestCase):
 		)
 		day = MONTH_START
 		while day <= MONTH_END:
-			fill_full_day(emp, day)
+			ensure_full_day(emp, day)
 			day = add_days(day, 1)
 
 		res = working_days_details(emp, MONTH_START, MONTH_END)
