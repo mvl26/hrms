@@ -603,3 +603,100 @@ class TestGenerateForMonth(PerTestRollback, FrappeTestCase):
 			frappe.db.exists("Attendance", {"employee": emp, "attendance_date": [">=", today]}),
 			"không sinh công cho hôm nay và tương lai",
 		)
+
+
+class TestAttendanceRequestWins(PerTestRollback, FrappeTestCase):
+	"""E10 — Yêu cầu chấm công đã duyệt thắng ngày X tự sinh (bảng luật §3.7 của spec).
+
+	Nhánh `reapply_attendance_request` trong `fill_full_day` trước đây không có test nào."""
+
+	def setUp(self):
+		self.emp = make_exempt_employee(email="req@miyano.test")
+
+	def approve_request(self, reason="Work From Home"):
+		req = frappe.get_doc(
+			{
+				"doctype": "Attendance Request",
+				"employee": self.emp,
+				"from_date": ANCHOR,
+				"to_date": ANCHOR,
+				"reason": reason,
+				"company": frappe.db.get_value("Employee", self.emp, "company"),
+			}
+		)
+		req.insert()
+		req.submit()
+		return req
+
+	def attendance(self):
+		return frappe.db.get_value(
+			"Attendance",
+			{"employee": self.emp, "attendance_date": ANCHOR, "docstatus": ["<", 2]},
+			["name", "status", "custom_attendance_code", "attendance_request"],
+			as_dict=True,
+		)
+
+	def test_request_code_wins_when_day_generated_after(self):
+		"""Đơn duyệt TRƯỚC, lượt quét chạy SAU: không được đè mã của đơn, không đẻ bản ghi thứ hai."""
+		from hrms.hr.attendance_exempt import fill_full_day
+
+		req = self.approve_request()
+		self.assertIsNone(fill_full_day(self.emp, ANCHOR), "đã có đơn duyệt thì không sinh thêm")
+		att = self.attendance()
+		self.assertEqual(att.custom_attendance_code, "W", "mã WFH của đơn bị mất")
+		self.assertEqual(att.attendance_request, req.name)
+		self.assertEqual(frappe.db.count("Attendance", {"employee": self.emp, "attendance_date": ANCHOR}), 1)
+
+	def test_request_overwrites_generated_day(self):
+		"""Ngày đã tự sinh X rồi mới có đơn duyệt: đơn phải ghi đè được."""
+		from hrms.hr.attendance_exempt import fill_full_day
+
+		fill_full_day(self.emp, ANCHOR)
+		self.approve_request(reason="On Duty")
+		att = self.attendance()
+		self.assertEqual(att.custom_attendance_code, "CT", "đơn on-duty phải ghi đè ngày X tự sinh")
+		self.assertEqual(frappe.db.count("Attendance", {"employee": self.emp, "attendance_date": ANCHOR}), 1)
+
+
+class TestLateCheckinAfterGeneratedDay(PerTestRollback, FrappeTestCase):
+	"""E11 — lượt chấm về SAU khi ngày đã tự sinh (spec không nhắc; đây là thứ tự có thật vì
+	`last_sync_of_checkin` có thể trễ). Không được ném lỗi và không được đẻ bản ghi trùng —
+	`process_auto_attendance` chạy cho TOÀN BỘ nhân viên, vỡ ở đây là chết cả lượt."""
+
+	def test_checkin_arriving_after_autofill_does_not_break(self):
+		from hrms.hr.attendance_exempt import fill_full_day
+
+		emp = make_exempt_employee(email="late@miyano.test")
+		shift = frappe.get_doc("Shift Type", exempt_test_shift())
+		shift.db_set("enable_auto_attendance", 1)
+		shift.db_set("process_attendance_after", "2099-06-01")
+		shift.db_set("last_sync_of_checkin", "2099-06-20 23:00:00")
+		assign_shift(emp, shift.name, "2099-06-01", "2099-06-30")
+
+		self.assertIsNotNone(fill_full_day(emp, ANCHOR))
+
+		for t in ("08:05:00", "17:35:00"):
+			frappe.get_doc(
+				{
+					"doctype": "Employee Checkin",
+					"employee": emp,
+					"time": f"{ANCHOR} {t}",
+					"shift": shift.name,
+				}
+			).insert()
+
+		shift.process_auto_attendance()  # không được ném lỗi
+
+		self.assertEqual(
+			frappe.db.count("Attendance", {"employee": emp, "attendance_date": ANCHOR, "docstatus": ["<", 2]}),
+			1,
+			"lượt chấm về sau đẻ ra bản ghi ngày công thứ hai",
+		)
+		self.assertEqual(
+			frappe.db.get_value(
+				"Attendance",
+				{"employee": emp, "attendance_date": ANCHOR, "docstatus": ["<", 2]},
+				"custom_attendance_code",
+			),
+			"X",
+		)
