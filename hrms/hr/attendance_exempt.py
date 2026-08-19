@@ -58,6 +58,15 @@ def is_exempt(employee: str, date) -> bool:
 	return True
 
 
+def is_exempt_working_day(employee: str, date) -> bool:
+	"""Ngày mà luật miễn chấm công được áp: có cờ VÀ là ngày làm việc.
+
+	Ngày nghỉ (T7/CN/lễ) KHÔNG thuộc "full công hàng tháng" — cả công ty đều nghỉ. Ca có bật
+	`mark_auto_attendance_on_holidays` mà ép X ở đây thì chấm 10 phút ngày lễ cũng thành đủ công,
+	và trên cấu hình trả lương ngày lễ là cộng dư. Ngày nghỉ đi đúng luật chung như mọi người."""
+	return is_exempt(employee, date) and not is_holiday(employee, date, raise_exception=False)
+
+
 def exempt_employees() -> list:
 	"""Mọi nhân viên đang làm việc có bật cờ miễn chấm công."""
 	if not exempt_fields_installed():

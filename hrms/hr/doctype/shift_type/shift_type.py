@@ -121,9 +121,9 @@ class ShiftType(Document):
 				out_time,
 			) = self.get_attendance(single_shift_logs)
 
-			from hrms.hr.attendance_exempt import is_exempt
+			from hrms.hr.attendance_exempt import is_exempt_working_day
 
-			if is_exempt(employee, attendance_date):
+			if is_exempt_working_day(employee, attendance_date):
 				# ngưỡng giờ của ca không áp cho người miễn chấm công
 				attendance_status = "Present"
 
@@ -384,7 +384,7 @@ class ShiftType(Document):
 		return True
 
 	def mark_absent_for_half_day_dates(self, employee):
-		from hrms.hr.attendance_exempt import is_exempt
+		from hrms.hr.attendance_exempt import is_exempt_working_day
 
 		half_day_attendances = frappe.get_all(
 			"Attendance",
@@ -396,7 +396,7 @@ class ShiftType(Document):
 			timestamp = datetime.combine(attendance.attendance_date, start_time)
 			shift_details = get_employee_shift(employee, timestamp, True)
 			if shift_details and shift_details.shift_type.name == self.name:
-				if is_exempt(employee, attendance.attendance_date):
+				if is_exempt_working_day(employee, attendance.attendance_date):
 					# Nửa còn lại của người miễn chấm công là CÔNG, không phải vắng vì thiếu lượt
 					# chấm. `get_half_absent_days` đọc `half_day_status` để trừ 0,5 → ép Absent ở đây
 					# là trừ oan đúng nửa ngày.

@@ -231,10 +231,17 @@ class TestHolidayFollowsTheShiftSetting(PerTestRollback, FrappeTestCase):
 	def setUpClass(cls):
 		super().setUpClass()
 		ensure_short_hours_code()
-		cls.emp = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		# TỰ DỰNG nhân viên, không vớ người có sẵn trên site: `get_value("Employee", {"status":
+		# "Active"})` bám vào bất kỳ ai — hôm site có người bật cờ MIỄN CHẤM CÔNG thì test này đỏ oan
+		# vì người đó luôn đủ công. Cùng bẫy đã vá ở 6 chỗ khác (commit 40331d5).
+		cls.emp = test_employee("holiday_rule@codes.com")
+		holiday_list = frappe.db.get_value(
+			"Company", frappe.db.get_value("Employee", cls.emp, "company"), "default_holiday_list"
+		)
+		frappe.db.set_value("Employee", cls.emp, "holiday_list", holiday_list)
 		cls.holiday = frappe.db.get_value(
 			"Holiday",
-			{"parent": frappe.db.get_value("Employee", cls.emp, "holiday_list")},
+			{"parent": holiday_list},
 			"holiday_date",
 			order_by="holiday_date desc",
 		)

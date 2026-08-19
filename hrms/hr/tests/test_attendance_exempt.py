@@ -700,3 +700,46 @@ class TestLateCheckinAfterGeneratedDay(PerTestRollback, FrappeTestCase):
 			),
 			"X",
 		)
+
+
+class TestHolidayIsNotAWorkingDay(PerTestRollback, FrappeTestCase):
+	"""E12 — luật miễn chấm công CHỈ áp cho ngày làm việc.
+
+	Ngày nghỉ cả công ty đều nghỉ; ép X ở đó thì chấm 10 phút ngày lễ cũng thành đủ công (và trên
+	cấu hình trả lương ngày lễ là cộng dư). Ngày nghỉ phải đi đúng luật chung như mọi người."""
+
+	def setUp(self):
+		self.emp = make_exempt_employee(email="holiday@miyano.test")
+		hl = frappe.get_doc(
+			{
+				"doctype": "Holiday List",
+				"holiday_list_name": "Miyano Exempt Holiday 2099",
+				"from_date": "2099-01-01",
+				"to_date": "2099-12-31",
+				"holidays": [{"holiday_date": ANCHOR, "description": "Lễ test"}],
+			}
+		).insert()
+		frappe.db.set_value("Employee", self.emp, "holiday_list", hl.name)
+
+	def test_exempt_rule_does_not_apply_on_a_holiday(self):
+		from hrms.hr.attendance_exempt import is_exempt, is_exempt_working_day
+
+		self.assertTrue(is_exempt(self.emp, ANCHOR), "cờ vẫn bật")
+		self.assertFalse(is_exempt_working_day(self.emp, ANCHOR), "nhưng ngày lễ không phải ngày công")
+
+	def test_short_stint_on_marked_holiday_is_not_a_full_day(self):
+		shift = exempt_test_shift(split=True)
+		frappe.db.set_value("Shift Type", shift, "mark_auto_attendance_on_holidays", 1)
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": ANCHOR,
+				"shift": shift,
+				"in_time": f"{ANCHOR} 09:00:00",
+				"out_time": f"{ANCHOR} 09:10:00",
+				"status": "Present",
+			}
+		)
+		att.insert()
+		self.assertNotEqual(att.custom_attendance_code, "X", "10 phút ngày lễ không được thành đủ công")
