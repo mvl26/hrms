@@ -102,7 +102,7 @@ lượt quét không hỏi DB mỗi ngày mỗi người.
 
 | Điều kiện bỏ qua | Vì sao |
 |---|---|
-| Đã có Attendance ngày đó (`docstatus < 2`) | không đè lên dữ liệu đã có — kể cả V do HR cố ý chấm |
+| Ngày đã ghi CÓ CHỦ Ý (xem §3.3b) | nghỉ phép / công tác / WFH / yêu cầu chấm công — người quyết định |
 | Ngày thuộc Holiday List của nhân viên (T7/CN/lễ) | ngày nghỉ không có công; lễ đã được `paid_holidays_in_period` trả riêng |
 | `is_period_locked(employee, date)` (`period_lock.py:50`) | kỳ đã chốt là đóng băng |
 | Có Yêu cầu chấm công đã duyệt phủ ngày đó | gọi `reapply_attendance_request` trước rồi thôi — đơn đã duyệt thắng |
@@ -116,6 +116,29 @@ Còn lại thì tạo Attendance: `custom_attendance_code = "X"`, `custom_auto_f
 Không tự đặt `status` bằng tay: **mã công là đầu vào duy nhất**, native fields là đầu ra của cầu
 nối. Đặt cả hai là mở đường cho hai nguồn sự thật lệch nhau.
 
+### 3.3b Sửa ngày đã ghi sai (đổi luật 2026-08-18)
+
+`ensure_full_day` (tên cũ `fill_full_day`) **tạo mới khi trống và SỬA khi sai**. Chỉ "tạo khi trống"
+là bế tắc có thật: auto-attendance chạy **trước** trong cùng lượt `hourly_long` và ghi `V` từ lượt
+chấm lỗi, hoặc site đã có sẵn ngày sai từ trước khi bật cờ — những ngày đó vĩnh viễn không sửa được,
+kể cả bấm nút sinh công tháng, chỉ còn cách Cancel → Amend từng bản ghi.
+
+Ranh giới lấy thẳng từ dữ liệu `Attendance Code`, không phải danh sách bịa:
+
+| Nhóm | Mã | Xử lý |
+|---|---|---|
+| Có `leave_type` | P, 1/2P, Ô, Cô, TS, T, NB, K, 1/2K, KH, R1, R2 | **giữ nguyên** — nghỉ có lý do |
+| Status `Work From Home` | CT (công tác), W (làm ở nhà / từ xa) | **giữ nguyên** |
+| Có `leave_application` / `attendance_request` | — | **giữ nguyên** |
+| Còn lại — do lượt chấm suy ra | X (thiếu công), 1/2X, V | **sửa về X đủ công** |
+
+Sửa bằng `db_set` (bản ghi đã submit, không field mã công nào có `allow_on_submit`) và **giữ nguyên
+`in_time` / `out_time`** để báo cáo giờ làm không mất dữ liệu.
+
+**Hệ quả phải nói rõ:** HR chấm `V` bằng tay cho người miễn chấm công **không còn đứng yên** — lượt
+quét kế tiếp sẽ lật về `X`. Muốn ghi vắng thật cho họ thì nộp đơn nghỉ (`P` có lương / `K` không
+lương); ngày có `leave_type` được bảo vệ.
+
 **`process_exempt_employees()`** — vào `scheduler_events["hourly_long"]` (`hooks.py:207`), **đặt
 SAU** `shift_type.process_auto_attendance_for_all_shifts`. Với mỗi người có cờ, quét
 `[max(hôm qua − BACKFILL_DAYS, hiệu lực, DOJ) … min(hôm qua, relieving_date)]` và gọi
@@ -126,6 +149,10 @@ Cửa sổ 31 ngày là **chốt chặn chi phí**, không phải quy tắc nghi
 `generate_for_month` (§3.6), có chủ đích và có số ngày trả về để đối chiếu.
 
 ### 3.4 Bốn điểm móc vào tuyến sẵn có
+
+**(a0) Chính lượt auto-attendance hỏi trước** — `process_auto_attendance` gọi
+`ensure_exempt_days(employee, *self.get_start_and_end_dates(employee))` cho từng nhân viên **trước**
+nhánh chấm vắng: mỗi ngày làm việc của người có cờ phải là đủ công, kể cả ngày đã có bản ghi sai.
 
 **(a) Thay chấm vắng bằng full công** — `shift_type.mark_absent_for_dates_with_no_attendance`
 (`shift_type.py:225`): trong vòng lặp, ngay sau nhánh `reapply_attendance_request`, nếu
@@ -206,7 +233,8 @@ sinh** để đối chiếu. Nút "Sinh công tháng (miễn chấm công)" đ�
 | Nghỉ phép nửa ngày | **1/2P** — nửa còn lại là công (Present), không bị trừ |
 | Đi công tác (Công Tác duyệt) | **CT** — ghi đè ngày X tự sinh (§3.5) |
 | Yêu cầu chấm công đã duyệt | mã của đơn (W / CT / X), đơn thắng |
-| HR nhập tay V / K | **giữ nguyên** — người thật quyết định thắng máy |
+| HR nhập tay `K` (có loại nghỉ) | **giữ nguyên** |
+| HR nhập tay `V` trơ | **bị sửa về X** — coi là ngày sai do lượt chấm (§3.3b) |
 | Ngày thuộc kỳ đã chốt | không đụng |
 | Ngày trước ngày hiệu lực / trước DOJ / sau ngày nghỉ việc | không sinh |
 
