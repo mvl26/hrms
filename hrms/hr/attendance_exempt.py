@@ -12,6 +12,8 @@ Ngày tự sinh ghi bằng MÃ CÔNG (`X`) — `status` / `leave_type` / `custom
 Xem `docs/spec/attendance-exempt-employees.md`.
 """
 
+from datetime import datetime
+
 import frappe
 from frappe import _
 from frappe.utils import add_days, cint, get_last_day, getdate
@@ -138,8 +140,9 @@ def ensure_full_day(employee: str, date) -> str | None:
 	if is_protected_day(row):
 		return None  # nghỉ phép / công tác / WFH / yêu cầu chấm công — người quyết định, không đụng
 	if row:
+		attached = attach_late_checkins(row, employee, date)
 		if row.custom_attendance_code == EXEMPT_CODE and row.status == "Present":
-			return None  # đã đúng rồi
+			return row.name if attached else None  # đã đúng rồi
 		return repair_day(row)
 
 	if reapply_attendance_request(employee, date):
@@ -188,6 +191,61 @@ def repair_day(row) -> str:
 		),
 	)
 	return doc.name
+
+
+def attach_late_checkins(row, employee: str, date) -> bool:
+	"""Gắn lượt chấm VỀ SAU vào ngày công đã tự sinh: ghi giờ vào/ra + link log. Trả True nếu có ghi.
+
+	`mark_attendance_and_link_log` bỏ qua ngày đã có bản ghi, nên lượt chấm về sau ngày tự sinh sẽ
+	không bao giờ được ghi: báo cáo giờ làm hiện 0 cho ngày người ta thật sự có mặt, và lượt chấm
+	nằm mãi ở trạng thái chưa gắn nên lần nào chạy auto-attendance cũng đụng lại. Mã công KHÔNG đổi
+	(vẫn đủ công) — đây thuần là dữ liệu giờ.
+	"""
+	if row.get("in_time") or row.get("out_time"):
+		return False
+	logs = frappe.get_all(
+		"Employee Checkin",
+		filters={
+			"employee": employee,
+			"attendance": ("is", "not set"),
+			"time": ("between", [f"{date} 00:00:00", f"{date} 23:59:59"]),
+		},
+		fields=["name", "time"],
+		order_by="time",
+	)
+	if not logs:
+		return False
+
+	doc = frappe.get_doc("Attendance", row.name)
+	in_time, out_time = logs[0].time, logs[-1].time
+	doc.db_set({"in_time": in_time, "out_time": out_time, "working_hours": worked_hours(doc, in_time, out_time)})
+	for log in logs:
+		frappe.db.set_value("Employee Checkin", log.name, "attendance", row.name)
+	return True
+
+
+def worked_hours(doc, in_time, out_time) -> float:
+	"""Giờ làm thật của một ngày, trừ nghỉ trưa — dùng chính bộ phân loại VN để không đẻ công thức thứ hai."""
+	from frappe.utils import get_datetime
+
+	from hrms.hr.doctype.attendance.vn_day_classifier import classify_day, resolve_lunch_window
+
+	cfg = doc.get_split_shift_config()
+	if not cfg:
+		return round((get_datetime(out_time) - get_datetime(in_time)).total_seconds() / 3600, 2)
+	lunch_start, lunch_end = resolve_lunch_window(cfg.custom_lunch_start, cfg.custom_lunch_end)
+	return classify_day(
+		get_datetime(in_time),
+		get_datetime(out_time),
+		day=datetime.combine(getdate(doc.attendance_date), datetime.min.time()),
+		start_time=cfg.start_time,
+		end_time=cfg.end_time,
+		lunch_start=lunch_start,
+		lunch_end=lunch_end,
+		flexible=bool(cint(cfg.get("custom_flexible_shift"))),
+		band_minutes=cint(cfg.get("custom_flex_band_minutes") or 180),
+		min_work_hours=float(cfg.get("custom_min_work_hours") or 8.0),
+	).hours
 
 
 def ensure_exempt_days(employee: str, start_date, end_date) -> int:

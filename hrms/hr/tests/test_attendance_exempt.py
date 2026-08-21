@@ -904,3 +904,42 @@ class TestAutoAttendanceRepairsExemptDays(PerTestRollback, FrappeTestCase):
 			"X",
 			"auto-attendance phải sửa ngày vắng sai của người miễn chấm công",
 		)
+
+
+class TestLateCheckinsGetAttached(PerTestRollback, FrappeTestCase):
+	"""E15 — lượt chấm về SAU khi ngày đã tự sinh phải được GẮN vào ngày đó.
+
+	`mark_attendance_and_link_log` thấy ngày đã có bản ghi thì bỏ qua, nên giờ vào/ra không bao giờ
+	được ghi và báo cáo giờ làm hiện 0 cho ngày người ta thật sự có mặt. Mã công vẫn là X (đủ công),
+	nhưng dữ liệu giờ phải thật."""
+
+	def test_checkins_are_attached_to_generated_day(self):
+		from hrms.hr.attendance_exempt import ensure_full_day
+
+		emp = make_exempt_employee(email="attach@miyano.test")
+		frappe.db.set_value("Employee", emp, "default_shift", exempt_test_shift(split=True))
+		name = ensure_full_day(emp, ANCHOR)
+		self.assertIsNone(frappe.db.get_value("Attendance", name, "in_time"))
+
+		logs = [
+			frappe.get_doc(
+				{"doctype": "Employee Checkin", "employee": emp, "time": f"{ANCHOR} {t}", "log_type": lt}
+			).insert()
+			for t, lt in (("10:05:00", "IN"), ("11:40:00", "OUT"))
+		]
+
+		ensure_full_day(emp, ANCHOR)
+
+		att = frappe.db.get_value(
+			"Attendance", name, ["custom_attendance_code", "in_time", "out_time", "working_hours"], as_dict=True
+		)
+		self.assertEqual(att.custom_attendance_code, "X", "vẫn đủ công")
+		self.assertIsNotNone(att.in_time, "giờ vào phải được ghi")
+		self.assertIsNotNone(att.out_time)
+		self.assertGreater(att.working_hours, 0)
+		for log in logs:
+			self.assertEqual(
+				frappe.db.get_value("Employee Checkin", log.name, "attendance"),
+				name,
+				"lượt chấm phải được gắn vào ngày công, nếu không nó bị xử lý lại mãi",
+			)
