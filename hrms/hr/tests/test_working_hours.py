@@ -11,7 +11,7 @@ from erpnext.setup.doctype.employee.test_employee import make_employee
 from hrms.hr.doctype.attendance.attendance import mark_attendance
 from hrms.hr.working_hours import (
 	compute_net_hours,
-	format_hours_hhmm,
+	format_hours_hm,
 	get_active_employee_count,
 	get_avg_working_hours_card,
 	get_effective_days_in_month,
@@ -217,24 +217,28 @@ class TestPrepareFilters(PerTestRollback, FrappeTestCase):
 		self.assertIn(child.name, f.companies)
 
 
-class TestFormatHoursHhmm(PerTestRollback, FrappeTestCase):
-	"""Bảng chấm công đọc giờ theo đồng hồ: 7,75 giờ là "07:45", không phải "7.75"."""
+class TestFormatHoursHm(PerTestRollback, FrappeTestCase):
+	"""Bảng chấm công đọc giờ thành thời lượng: 7,75 giờ là "7h45", không phải "7.75"."""
 
 	def test_whole_hours(self):
-		self.assertEqual(format_hours_hhmm(8.0), "08:00")
+		self.assertEqual(format_hours_hm(8.0), "8h00")
 
 	def test_fraction_becomes_minutes(self):
-		self.assertEqual(format_hours_hhmm(7.75), "07:45")
-		self.assertEqual(format_hours_hhmm(8.5), "08:30")
+		self.assertEqual(format_hours_hm(7.75), "7h45")
+		self.assertEqual(format_hours_hm(8.5), "8h30")
+
+	def test_single_digit_minutes_keep_two_digits(self):
+		# "8h05" chứ không phải "8h5" — cột phải so được với nhau bằng mắt
+		self.assertEqual(format_hours_hm(8.09), "8h05")
 
 	def test_rounds_to_the_nearest_minute(self):
 		# 8.008h = 8h00.5' -> làm tròn lên 1 phút, không để lẻ giây trên bảng
-		self.assertEqual(format_hours_hhmm(8.008), "08:00")
-		self.assertEqual(format_hours_hhmm(8.01), "08:01")
+		self.assertEqual(format_hours_hm(8.008), "8h00")
+		self.assertEqual(format_hours_hm(8.01), "8h01")
 
-	def test_over_ten_hours_keeps_two_digits(self):
-		self.assertEqual(format_hours_hhmm(12.25), "12:15")
+	def test_over_ten_hours(self):
+		self.assertEqual(format_hours_hm(12.25), "12h15")
 
 	def test_no_hours_is_blank(self):
-		self.assertEqual(format_hours_hhmm(0.0), "")
-		self.assertEqual(format_hours_hhmm(None), "")
+		self.assertEqual(format_hours_hm(0.0), "")
+		self.assertEqual(format_hours_hm(None), "")

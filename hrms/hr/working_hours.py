@@ -123,14 +123,15 @@ def avg_office_hours(totals: dict | None) -> float:
 	return round(totals["hours"] / totals["days"], 2)
 
 
-def format_hours_hhmm(hours) -> str:
-	"""Giờ thập phân -> "hh:mm" (bảng chấm công đọc theo đồng hồ: 7,75 giờ là 07:45).
+def format_hours_hm(hours) -> str:
+	"""Giờ thập phân -> "8h12" (7,75 giờ là "7h45").
 
-	Không có giờ nào thì để trống — "00:00" chỉ làm rối bảng."""
+	Lối viết thời lượng của bảng chấm công VN. Không dùng "08:12" vì đọc ra thành giờ đồng hồ
+	(8 giờ 12 sáng) chứ không phải "làm 8 tiếng 12 phút". Không có giờ nào thì để trống."""
 	minutes = round(flt(hours) * 60)
 	if minutes <= 0:
 		return ""
-	return f"{minutes // 60:02d}:{minutes % 60:02d}"
+	return f"{minutes // 60}h{minutes % 60:02d}"
 
 
 def get_week_buckets(year, month):
