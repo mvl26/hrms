@@ -23,7 +23,7 @@ from frappe.utils.nestedset import get_descendants_of
 from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
 
 from hrms.hr.attendance_legend import legend_html
-from hrms.hr.working_hours import avg_office_hours, office_hours_map
+from hrms.hr.working_hours import avg_office_hours, format_hours_hhmm, office_hours_map
 
 Filters = frappe._dict
 
@@ -410,14 +410,15 @@ def get_columns(days: int, year: int, month: int) -> list:
 	columns.append(
 		{"fieldname": "lunch_days", "label": _("Số buổi ăn trưa"), "fieldtype": "Int", "width": 90}
 	)
-	# Giờ CÓ MẶT trung bình, không phải giờ quy công — xem `office_hours_map`
+	# Giờ CÓ MẶT trung bình, không phải giờ quy công — xem `office_hours_map`.
+	# Đọc theo đồng hồ ("07:45") nên là Data, không phải Float: 7,75 giờ không ai đọc ra 7 giờ 45.
 	columns.append(
 		{
 			"fieldname": "avg_office_hours",
 			"label": _("TB giờ/ngày"),
-			"fieldtype": "Float",
+			"fieldtype": "Data",
 			"width": 90,
-			"precision": 2,
+			"align": "center",
 		}
 	)
 	return columns
@@ -555,7 +556,7 @@ def _rows_to_report_data(rows: list[dict], days: int, code_map: dict) -> list:
 			"employee": r["employee"],
 			"employee_name": r["employee_name"],
 			"lunch_days": cint(r.get("lunch_days")),
-			"avg_office_hours": flt(r.get("avg_office_hours")),
+			"avg_office_hours": format_hours_hhmm(r.get("avg_office_hours")),
 			"tong_cong": flt(totals.get(TOTAL_PAID)),
 			**{f"cat_{i}": flt(totals.get(cat)) for i, (cat, _label) in enumerate(REPORT_CATEGORIES)},
 		}

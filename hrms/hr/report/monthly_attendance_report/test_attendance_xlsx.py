@@ -190,7 +190,8 @@ class TestAttendanceXlsx(PerTestRollback, FrappeTestCase):
 
 		ws = self.sheet()
 		cell = ws.cell(self.find_row(ws, self.emp), self.col_of(ws, "TB giờ/ngày"))
-		self.assertEqual(cell.value, 8.0)  # 9.5h trừ 1.5h nghỉ trưa
+		self.assertEqual(cell.value, "08:00")  # 9.5h trừ 1.5h nghỉ trưa, đọc theo đồng hồ
+		self.assertEqual(cell.alignment.horizontal, "center", "cột đọc như số thì không dạt trái")
 
 	# ── thứ trong tuần ──────────────────────────────────────────────────────────────────────
 

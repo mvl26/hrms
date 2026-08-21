@@ -312,7 +312,8 @@ def write_row(ws, columns: list[dict], data_row: dict, row: int, stt: int) -> No
 			fill, font = fill_for(data_row.get(f"_state_{fieldname[4:]}"))
 			if fill:
 				cell.fill, cell.font = fill, font
-		elif col.get("fieldtype") in ("Float", "Int"):
+		elif col.get("fieldtype") in ("Float", "Int") or col.get("align") == "center":
+			# `align` để cột chữ nhưng đọc như số (TB giờ/ngày dạng hh:mm) không bị dạt trái
 			cell.alignment = CENTER
 			cell.font = NUMBER_FONTS.get(fieldname, PLAIN_FONT)
 		else:

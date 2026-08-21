@@ -652,7 +652,25 @@ class TestAvgOfficeHours(PerTestRollback, FrappeTestCase):
 		labels = {c["fieldname"]: c["label"] for c in columns}
 		self.assertEqual(labels["avg_office_hours"], "TB giờ/ngày")
 		row = next(r for r in data if r["employee"] == self.emp)
-		self.assertEqual(row["avg_office_hours"], 8.0)
+		# Trên bảng đọc theo đồng hồ (hh:mm), không phải giờ thập phân
+		self.assertEqual(row["avg_office_hours"], "08:00")
+
+	def test_the_grid_shows_odd_minutes_as_clock_time(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
+
+		# 08:00 -> 17:15 = 9.25h, trừ 1.5h nghỉ trưa = 7.75h -> "07:45", không phải 7.75
+		self.mk(4, in_time="08:00:00", out_time="17:15:00")
+		_columns, data, _msg = execute({"month": self.month, "year": self.year})
+		row = next(r for r in data if r["employee"] == self.emp)
+		self.assertEqual(row["avg_office_hours"], "07:45")
+
+	def test_no_office_day_leaves_the_grid_cell_blank(self):
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
+
+		self.mk(6, code="P")
+		_columns, data, _msg = execute({"month": self.month, "year": self.year})
+		row = next(r for r in data if r["employee"] == self.emp)
+		self.assertEqual(row["avg_office_hours"], "", "không có ngày ở văn phòng thì để trống")
 
 
 class TestHolidayCountsAsPaid(PerTestRollback, FrappeTestCase):

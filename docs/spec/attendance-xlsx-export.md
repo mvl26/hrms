@@ -147,6 +147,12 @@ từ `hr/report/employee_working_hours/` về `hrms/hr/working_hours.py` (module
 `office_hours_map()` + `avg_office_hours()`. Báo cáo Giờ làm việc nhân viên import lại từ đó, nên
 hai báo cáo không thể lệch nhau — đã đối chiếu trên dữ liệu thật tháng 7/2026: khớp cả 6 nhân viên.
 
+**Hiển thị `hh:mm` (2026-08-21):** trên bảng (màn hình, bản in và Excel) cột này đọc theo đồng hồ —
+`07:45`, không phải `7.75`. Không ai đọc giờ thập phân ra "7 giờ 45 phút" khi soát công. Cột đổi
+`fieldtype` sang `Data` + `align: center` và đi qua `format_hours_hhmm()`; phần tính toán
+(`avg_office_hours()`) vẫn trả về float, làm tròn tới phút chỉ ở lớp hiển thị. Không có ngày nào ở
+văn phòng thì để **trống**, không in `00:00`.
+
 ### 2f. Khối trình ký cuối bảng (2026-08-21)
 
 Biểu mẫu Excel gốc của Miyano (`docs/2. Bang_Cham_Cong_06-2026_final.xlsx`) kết thúc bằng khối
