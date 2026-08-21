@@ -215,12 +215,58 @@ kênh khác.
 Nghỉ phép và Yêu cầu chấm công **không cần sửa gì** — cả hai đã ghi đè bản ghi sẵn có, và
 `resync_code_after_leave_record` (`attendance.py:246`) suy lại mã sau khi đơn nghỉ lật status.
 
-### 3.6 Chạy bù theo tháng
+### 3.6 Chạy bù theo tháng — xem trước rồi mới ghi (sửa 2026-08-21)
 
-`generate_for_month(month, year, employee=None)` — whitelisted, quyền HR Manager. Dùng khi bật cờ
-giữa chừng, khi hủy chốt kỳ để sửa, hoặc khi cửa sổ 31 ngày không phủ hết. Trả về **số ngày đã
-sinh** để đối chiếu. Nút "Sinh công tháng (miễn chấm công)" đặt trong menu của danh sách Attendance
-(`attendance_list.js`), hỏi tháng/năm/nhân viên trước khi chạy.
+**Việc nút này làm, và ba lúc cần tới nó.** Lượt quét mỗi giờ đã lo hết ngày thường trong cửa sổ 31
+ngày, nên nút KHÔNG dành cho việc hằng ngày. Nó tồn tại cho đúng ba tình huống lượt quét không với
+tới:
+
+1. **Bù ngoài cửa sổ 31 ngày** — bật cờ giữa chừng, hoặc dọn lại một tháng cũ.
+2. **Dựng lại sau khi huỷ chốt** một kỳ đã khoá (lượt quét bỏ qua kỳ khoá, và kỳ đó thường đã cũ).
+3. **Chạy ngay lúc soát/chốt công**, không đợi tới đầu giờ sau.
+
+**Vì sao phải xem trước.** Bản cũ chỉ trả về một con số và ghi thẳng. Người dùng bấm lần hai thấy
+"0 ngày" nên tưởng nút hỏng, và không có gì cho biết ngày nào bị **cố ý** không đụng — đúng phản hồi
+thu được ngày 2026-08-21 ("nó không ghi đè được data đã có"). Nút này ghi vào số liệu quyết định
+lương, nên phải cho xem trước.
+
+**Tách quyết định khỏi thực thi.** `ensure_full_day` vừa quyết vừa ghi nên không xem trước được.
+Rút phần quyết định ra thành hàm thuần:
+
+```
+plan_day(employee, date) -> {action, reason, code_cu, attendance}
+```
+
+| `action` | `reason` | Nghĩa |
+|---|---|---|
+| `create` | — | ngày trống → sẽ tạo mã X |
+| `repair` | — | ngày sai (V / 1/2X / X thiếu công) → sẽ sửa về X, kèm `code_cu` |
+| `attach` | — | ngày đã đúng nhưng có lượt chấm chưa gắn → sẽ ghi giờ vào/ra |
+| `skip` | `leave` | nghỉ phép / nghỉ có loại (P, K, Ô…) |
+| `skip` | `trip_wfh` | công tác hoặc làm ở nhà / từ xa (CT, W) |
+| `skip` | `request` | có Yêu cầu chấm công đã duyệt |
+| `skip` | `locked` | kỳ đã chốt công |
+| `skip` | `rest_day` | T7 / CN / lễ |
+| `skip` | `not_exempt` | không thuộc diện miễn chấm công |
+| `skip` | `ok` | đã đúng rồi, không cần đụng |
+
+Ba hàm dùng chung một bộ luật, không thể hứa một đằng làm một nẻo:
+
+- `ensure_full_day(employee, date)` = `plan_day` + thực thi (giữ nguyên chữ ký; lượt quét và mọi
+  test hiện có không đổi).
+- `preview_month(month, year, employee=None)` — **chỉ đọc, không ghi một dòng nào**.
+- `generate_for_month(month, year, employee=None)` — `plan_day` + ghi, trả về **cùng cấu trúc** với
+  preview thay vì một con số:
+  `{"rows": [...], "summary": {"create": n, "repair": n, "attach": n, "skip": n}}`.
+
+**Vị trí: màn Soát công tháng** (`hrms/hr/page/attendance_review/attendance_review.js`), cạnh
+"Về bảng công tháng" / "Chốt công tháng" — đúng chỗ HR làm việc cuối kỳ. Dùng luôn bộ lọc
+tháng/năm của trang, không thêm ô nhập ngày. Nút cũ trong `attendance_list.js` **gỡ bỏ** để chỉ còn
+một lối vào.
+
+Bấm nút → dialog bảng **nhân viên | ngày | việc sẽ làm | lý do**. Không có gì để làm thì nói thẳng
+"Mọi ngày đã đúng — không cần sửa gì" (không bao giờ hiện "0 ngày" trơ trọi). Có việc thì nút
+**"Ghi N thay đổi"**, ghi xong báo số thật rồi tải lại lưới.
 
 ### 3.7 Luật ngày — bảng tổng hợp
 
