@@ -2,6 +2,14 @@
 
 > Thực thi tuần tự T1 → T4, mỗi task kết thúc bằng **một commit**. Bước dùng checkbox `- [ ]`.
 
+> **STATUS 2026-08-21 — T1–T4 XONG.** 194 test xanh trên 8 module (0 fail, 0 error, không rò rỉ);
+> riêng bộ tính năng 62 test. Đã `clear-cache`, kiểm trên site thật: preview tháng 8 trả
+> `{create: 0, repair: 0, attach: 0, skip: 40}` kèm **7 dòng giải thích ngày bị chừa ra** (W/CT do
+> đơn chấm công, K/P do nghỉ phép, CT do công tác) — đúng thứ nút cũ giấu đi. Nút cũ đã gỡ khỏi
+> danh sách Ngày công.
+>
+> Còn treo: 16 ngày V tháng 6 của Giám đốc (ngoài phạm vi, chờ quyết định lùi ngày hiệu lực).
+
 **Spec:** `docs/spec/attendance-exempt-employees.md` §3.6 (đọc trước khi bắt đầu).
 Nhánh: `feat/skip-attendance-diag`. Duyệt thiết kế: 2026-08-21.
 
