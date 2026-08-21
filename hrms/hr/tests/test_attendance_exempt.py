@@ -943,3 +943,68 @@ class TestLateCheckinsGetAttached(PerTestRollback, FrappeTestCase):
 				name,
 				"lượt chấm phải được gắn vào ngày công, nếu không nó bị xử lý lại mãi",
 			)
+
+
+class TestPlanDay(PerTestRollback, FrappeTestCase):
+	"""E16 — quyết định (không ghi) tách khỏi thực thi."""
+
+	def setUp(self):
+		self.emp = make_exempt_employee(email="plan@miyano.test")
+
+	def mark(self, code, **kwargs):
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": ANCHOR,
+				"custom_attendance_code": code,
+				**kwargs,
+			}
+		)
+		att.insert()
+		att.submit()
+		return att
+
+	def plan(self):
+		from hrms.hr.attendance_exempt import plan_day
+
+		return plan_day(self.emp, ANCHOR)
+
+	def test_empty_day_plans_create(self):
+		self.assertEqual(self.plan().action, "create")
+
+	def test_absent_day_plans_repair_with_old_code(self):
+		self.mark("V")
+		p = self.plan()
+		self.assertEqual(p.action, "repair")
+		self.assertEqual(p.code_cu, "V")
+
+	def test_leave_day_plans_skip_leave(self):
+		self.mark("P")
+		p = self.plan()
+		self.assertEqual((p.action, p.reason), ("skip", "leave"))
+
+	def test_trip_day_plans_skip_trip_wfh(self):
+		self.mark("CT")
+		self.assertEqual(self.plan().reason, "trip_wfh")
+
+	def test_correct_day_plans_skip_ok(self):
+		self.mark("X")
+		self.assertEqual(self.plan().reason, "ok")
+
+	def test_plain_employee_plans_skip_not_exempt(self):
+		from hrms.hr.attendance_exempt import plan_day
+
+		plain = make_plain_employee("plan_plain@miyano.test")
+		self.assertEqual(plan_day(plain, ANCHOR).reason, "not_exempt")
+
+	def test_locked_period_plans_skip_locked(self):
+		from unittest.mock import patch
+
+		with patch("hrms.hr.period_lock.is_period_locked", return_value=True):
+			self.assertEqual(self.plan().reason, "locked")
+
+	def test_plan_day_writes_nothing(self):
+		before = frappe.db.count("Attendance", {"employee": self.emp})
+		self.plan()
+		self.assertEqual(frappe.db.count("Attendance", {"employee": self.emp}), before)

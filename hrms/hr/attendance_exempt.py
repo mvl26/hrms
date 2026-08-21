@@ -115,45 +115,108 @@ def is_protected_day(row) -> bool:
 	return row.get("status") in PROTECTED_STATUSES
 
 
-def ensure_full_day(employee: str, date) -> str | None:
-	"""Bảo đảm ngày làm việc của người miễn chấm công là ĐỦ CÔNG (mã X).
+def pending_checkins(employee: str, date, row) -> list:
+	"""Lượt chấm của ngày này chưa gắn vào ngày công nào — CHỈ ĐỌC.
 
-	Tạo mới nếu chưa có; SỬA nếu đang sai (V / 1/2X / X thiếu công do lượt chấm lỗi). Trả tên
-	Attendance nếu có tạo/sửa, None nếu không cần đụng.
+	Một chỗ duy nhất truy vấn lượt chấm chưa gắn: `plan_day` (xem trước) và `attach_late_checkins`
+	(lúc ghi) đều hỏi qua đây, nếu không hai bên sẽ đếm theo hai luật khác nhau."""
+	if row.get("in_time") or row.get("out_time"):
+		return []
+	day = getdate(date)
+	return frappe.get_all(
+		"Employee Checkin",
+		filters={
+			"employee": employee,
+			"attendance": ("is", "not set"),
+			"time": ("between", [f"{day} 00:00:00", f"{day} 23:59:59"]),
+		},
+		fields=["name", "time"],
+		order_by="time",
+	)
 
-	Vì sao phải sửa chứ không chỉ tạo: auto-attendance chạy TRƯỚC và ghi V từ lượt chấm lỗi (hoặc dữ
-	liệu có sẵn từ trước khi bật cờ). Nếu chỉ "tạo khi trống" thì những ngày đó vĩnh viễn sai, không
-	công cụ nào sửa được ngoài Cancel → Amend từng bản ghi.
+
+def plan_day(employee: str, date) -> frappe._dict:
+	"""QUYẾT ĐỊNH sẽ làm gì với một ngày — thuần đọc, không ghi.
+
+	Nguồn luật DUY NHẤT cho cả xem trước lẫn lúc ghi, nên hai bên không thể hứa một đằng làm một nẻo.
+	`action` ∈ create / repair / attach / skip; `reason` giải thích vì sao bỏ qua (xem spec §3.6).
 	"""
-	from hrms.hr.doctype.attendance_request.attendance_request_miyano import reapply_attendance_request
+	from hrms.hr.doctype.attendance_request.attendance_request_miyano import approved_request_for
 	from hrms.hr.period_lock import is_period_locked
 
 	date = getdate(date)
+	out = frappe._dict(
+		action="skip", reason=None, code_cu=None, attendance=None, date=date, employee=employee
+	)
 	if not is_exempt(employee, date):
-		return None
+		out.reason = "not_exempt"
+		return out
 	if is_holiday(employee, date, raise_exception=False):
-		return None  # T7/CN/lễ: không ai có công, kể cả người miễn chấm công
+		out.reason = "rest_day"  # T7/CN/lễ: không ai có công, kể cả người miễn chấm công
+		return out
 	if is_period_locked(employee, date):
-		return None  # kỳ đã chốt là đóng băng
+		out.reason = "locked"  # kỳ đã chốt là đóng băng
+		return out
 
 	row = existing_day(employee, date)
-	if is_protected_day(row):
-		return None  # nghỉ phép / công tác / WFH / yêu cầu chấm công — người quyết định, không đụng
 	if row:
-		attached = attach_late_checkins(row, employee, date)
+		out.attendance = row.name
+		out.code_cu = row.custom_attendance_code
+		if is_protected_day(row):
+			if row.get("attendance_request"):
+				out.reason = "request"
+			elif row.get("status") == "Work From Home":
+				out.reason = "trip_wfh"
+			else:
+				out.reason = "leave"
+			return out
 		if row.custom_attendance_code == EXEMPT_CODE and row.status == "Present":
-			return row.name if attached else None  # đã đúng rồi
+			if pending_checkins(employee, date, row):
+				out.action = "attach"  # ngày đúng rồi, chỉ thiếu giờ vào/ra
+			else:
+				out.reason = "ok"
+			return out
+		out.action = "repair"
+		return out
+
+	if approved_request_for(employee, date):
+		out.reason = "request"  # đơn đã duyệt dựng lại ngày công theo đơn — đơn thắng
+		return out
+	out.action = "create"
+	return out
+
+
+def ensure_full_day(employee: str, date) -> str | None:
+	"""Bảo đảm ngày làm việc của người miễn chấm công là ĐỦ CÔNG (mã X) = `plan_day` + thực thi.
+
+	Trả tên Attendance nếu có tạo/sửa/ghi giờ, None nếu không cần đụng.
+	"""
+	from hrms.hr.doctype.attendance_request.attendance_request_miyano import reapply_attendance_request
+
+	date = getdate(date)
+	plan = plan_day(employee, date)
+	if plan.action == "skip":
+		return None
+	if plan.action in ("attach", "repair"):
+		row = existing_day(employee, date)
+		attached = attach_late_checkins(row, employee, date)
+		if plan.action == "attach":
+			return row.name if attached else None
 		return repair_day(row)
 
 	if reapply_attendance_request(employee, date):
-		return None  # đơn đã duyệt dựng lại ngày công theo đơn — đơn thắng
+		return None  # đơn vừa dựng lại ngày công (plan_day chỉ đọc nên không làm được việc này)
+	return create_full_day(employee, date)
 
+
+def create_full_day(employee: str, date) -> str:
+	"""Tạo MỚI một ngày công đủ (mã X) — cầu nối mã công suy ra status/work_credit."""
 	emp = frappe.db.get_value("Employee", employee, ["company", "default_shift"], as_dict=True)
 	doc = frappe.get_doc(
 		{
 			"doctype": "Attendance",
 			"employee": employee,
-			"attendance_date": date,
+			"attendance_date": getdate(date),
 			"company": emp.company,
 			"shift": emp.default_shift,
 			"custom_attendance_code": EXEMPT_CODE,
@@ -201,18 +264,7 @@ def attach_late_checkins(row, employee: str, date) -> bool:
 	nằm mãi ở trạng thái chưa gắn nên lần nào chạy auto-attendance cũng đụng lại. Mã công KHÔNG đổi
 	(vẫn đủ công) — đây thuần là dữ liệu giờ.
 	"""
-	if row.get("in_time") or row.get("out_time"):
-		return False
-	logs = frappe.get_all(
-		"Employee Checkin",
-		filters={
-			"employee": employee,
-			"attendance": ("is", "not set"),
-			"time": ("between", [f"{date} 00:00:00", f"{date} 23:59:59"]),
-		},
-		fields=["name", "time"],
-		order_by="time",
-	)
+	logs = pending_checkins(employee, date, row)
 	if not logs:
 		return False
 
