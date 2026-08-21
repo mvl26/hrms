@@ -147,6 +147,35 @@ từ `hr/report/employee_working_hours/` về `hrms/hr/working_hours.py` (module
 `office_hours_map()` + `avg_office_hours()`. Báo cáo Giờ làm việc nhân viên import lại từ đó, nên
 hai báo cáo không thể lệch nhau — đã đối chiếu trên dữ liệu thật tháng 7/2026: khớp cả 6 nhân viên.
 
+### 2f. Khối trình ký cuối bảng (2026-08-21)
+
+Biểu mẫu Excel gốc của Miyano (`docs/2. Bang_Cham_Cong_06-2026_final.xlsx`) kết thúc bằng khối
+trình ký mà file xuất ra đang thiếu — không có nó thì bản in không ký được, phải gõ tay thêm:
+
+```
+                                        Hà Nội, ngày 02 tháng 7 năm 2026   (nghiêng)
+              Người lập                          Người duyệt              (đậm, giữa khối)
+              (6 dòng trống — chỗ ký tay)
+          Phan Thị Thu Lan                     Đoàn Ngọc Anh
+```
+
+- Đặt dưới khối chú thích, cách một dòng trống: `write_legend()` nay **trả về dòng cuối nó dùng**
+  nên khối ký tự tìm được chỗ, không phải đếm lại số mã.
+- **Hai khối nằm ở nửa phải bảng** như biểu mẫu gốc (`sign_blocks(last_col)`): người duyệt sát mép
+  phải, người lập lùi vào giữa, giữa hai khối chừa quãng trống. Mỗi khối gộp tối đa 10 cột ngày và
+  **co lại** khi bảng ít cột — không bao giờ tràn sang cột STT/Nhân viên.
+- Dòng ngày tháng nằm trên chữ ký **người duyệt**: `<địa danh>, ngày DD tháng M năm YYYY`, ngày là
+  **ngày xuất file** (ngày trình ký). Địa danh lấy `city` của Address công ty khi có, không thì
+  `MIYANO_LETTERHEAD["city"]` — cùng lối "master data thắng ở đâu có" như §2d.
+- **Tên người ký gõ ở hộp thoại Export** (hai ô `Người lập` / `Người duyệt`, chỉ hiện khi chọn
+  Excel), đi qua `download(..., prepared_by, approved_by)`. Không thêm field nào vào master data
+  cho việc này: người lập/người duyệt đổi theo từng lần trình, không phải thuộc tính của công ty.
+  - `Người lập` để trống → lấy tên nhân viên của người đang đăng nhập (`Employee.user_id`), lùi về
+    `User.full_name`. `Administrator`/`Guest` coi như không có tên — in mấy chữ đó lên bản trình ký
+    thì vô nghĩa, thà để trống cho ký tay.
+  - `Người duyệt` để trống → chỉ in chức danh. Không đoán ai duyệt.
+- Khối ký **không kẻ khung**: đây là chỗ ký tay, kẻ ô vào chỉ vướng chữ ký.
+
 ### 2c. Thứ trong tuần
 
 `weekday_label(year, month, day)` trong `monthly_attendance_report.py` (suy từ `date.weekday()`,
@@ -205,3 +234,8 @@ nhớ rồi soi ô:
 9. Tiêu đề thư: ba dòng pháp nhân căn trái ở dòng 1–3, `BẢNG CHẤM CÔNG` + `Tháng 07 Năm 2026` căn
    giữa, dòng ngay trên bảng để trống; điền `Company.tax_id` là số đó lên bản in ngay.
 10. Cột đầu là `STT` chạy 1, 2, 3…; không ô nào trong file còn chuỗi bắt đầu bằng `HR-EMP`.
+11. Khối trình ký: nằm dưới khối chú thích; `Người lập`/`Người duyệt` đậm, căn giữa khối cột của
+    mình, khối người duyệt sát mép phải bảng; dòng ngày tháng in nghiêng đúng ngày xuất file; giữa
+    chức danh và tên còn 6 dòng trống để ký; tên rỗng khi không ai được điền (không in
+    `Administrator`); `sign_blocks()` không cho hai khối chồng nhau hay tràn sang cột tên với mọi
+    bề rộng bảng; tên gõ ở hộp thoại theo được tới file qua `download()`.

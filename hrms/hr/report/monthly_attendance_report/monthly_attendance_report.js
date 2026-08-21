@@ -256,9 +256,27 @@ function vn_export_dialog(report) {
 				default: "Excel",
 				reqd: 1,
 			},
+			{
+				fieldtype: "Section Break",
+				label: __("Khối trình ký"),
+				depends_on: "eval:doc.file_format=='Excel'",
+			},
+			{
+				fieldname: "prepared_by",
+				label: __("Người lập"),
+				fieldtype: "Data",
+				description: __("Để trống = tên người đang đăng nhập"),
+			},
+			{ fieldtype: "Column Break" },
+			{
+				fieldname: "approved_by",
+				label: __("Người duyệt"),
+				fieldtype: "Data",
+				description: __("Để trống = chỉ in chức danh, ký tên tay"),
+			},
 		],
 		primary_action_label: __("Tải về"),
-		primary_action: ({ file_format }) => {
+		primary_action: ({ file_format, prepared_by, approved_by }) => {
 			d.hide();
 			report.make_access_log("Export", file_format);
 
@@ -273,6 +291,8 @@ function vn_export_dialog(report) {
 					cmd: "hrms.hr.attendance_xlsx.download",
 					filters,
 					visible_idx,
+					prepared_by: prepared_by || "",
+					approved_by: approved_by || "",
 				});
 			} else {
 				open_url_post(frappe.request.url, {

@@ -27,7 +27,7 @@ from openpyxl.utils import get_column_letter
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt
+from frappe.utils import cint, flt, getdate, nowdate
 
 from hrms.hr.attendance_legend import legend_pairs
 from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
@@ -100,7 +100,20 @@ MIYANO_LETTERHEAD = {
 	"name": "CÔNG TY TNHH MIYANO VIỆT NAM",
 	"tax_id": "0109529507",
 	"address": ("số 20, Khu C17, ngõ 264/63, đường Ngọc Thụy, Phường Bồ Đề, Thành phố Hà Nội, Việt Nam"),
+	# địa danh mở đầu dòng ngày tháng của khối trình ký ("Hà Nội, ngày 02 tháng 7 năm 2026")
+	"city": "Hà Nội",
 }
+
+# Khối trình ký cuối bảng — bản Excel gốc của Miyano (`docs/2. Bang_Cham_Cong_06-2026_final.xlsx`)
+# xếp cả hai chữ ký ở NỬA PHẢI: người duyệt sát mép phải, người lập lùi vào giữa.
+SIGN_PREPARED_LABEL = "Người lập"
+SIGN_APPROVED_LABEL = "Người duyệt"
+
+# Bề ngang mỗi khối ký, tính bằng cột ngày (bản gốc gộp 10 cột: AF..AO). Bảng hẹp thì co lại.
+SIGN_BLOCK_WIDTH = 10
+
+# Số dòng từ chức danh xuống dòng tên — chỗ trống để ký tay (bản gốc: dòng 28 → dòng 34).
+SIGN_NAME_GAP = 6
 
 
 def legend_layout(count: int, max_rows: int = MAX_LEGEND_ROWS) -> tuple[int, int]:
@@ -153,8 +166,8 @@ def company_lines(company: str | None) -> list[str]:
 	return lines
 
 
-def company_address(company: str | None) -> str | None:
-	"""Địa chỉ chính của Company gộp thành một dòng; None nếu chưa có Address nào liên kết."""
+def company_address_row(company: str | None) -> frappe._dict | None:
+	"""Address chính liên kết với Company; None nếu chưa có Address nào."""
 	if not company:
 		return None
 	names = frappe.get_all(
@@ -171,14 +184,33 @@ def company_address(company: str | None) -> str | None:
 		order_by="is_primary_address desc",
 		limit=1,
 	)
-	if not addresses:
+	return addresses[0] if addresses else None
+
+
+def company_address(company: str | None) -> str | None:
+	"""Địa chỉ chính của Company gộp thành một dòng; None nếu chưa có Address nào liên kết."""
+	a = company_address_row(company)
+	if not a:
 		return None
-	a = addresses[0]
 	return ", ".join(p for p in (a.address_line1, a.address_line2, a.city, a.state, a.country) if p)
 
 
-def build_workbook(columns: list[dict], data: list[dict], filters: dict | None = None) -> Workbook:
-	"""Dựng workbook đã tô màu từ đúng `columns`/`data` mà `execute()` của report trả về."""
+def company_city(company: str | None) -> str | None:
+	"""Địa danh đứng đầu dòng ngày tháng — lấy `city` của Address chính khi có."""
+	a = company_address_row(company)
+	return (a.city or None) if a else None
+
+
+def build_workbook(
+	columns: list[dict],
+	data: list[dict],
+	filters: dict | None = None,
+	signatures: dict | None = None,
+) -> Workbook:
+	"""Dựng workbook đã tô màu từ đúng `columns`/`data` mà `execute()` của report trả về.
+
+	`signatures` là hai cái tên trên khối trình ký (`prepared_by` / `approved_by`) — người xuất
+	file điền ở hộp thoại Export; để trống thì chỉ in chức danh, ký tên bằng tay."""
 	filters = frappe._dict(filters or {})
 	rows = [r for r in data if r and r.get("employee")]
 	columns = excel_columns(columns)
@@ -196,7 +228,8 @@ def build_workbook(columns: list[dict], data: list[dict], filters: dict | None =
 	# đóng băng dưới tiêu đề, bên phải cột tên: cuộn kiểu gì cũng còn biết đang xem ai, ngày nào
 	ws.freeze_panes = f"{get_column_letter(FIRST_DAY_COLUMN)}{FIRST_DATA_ROW}"
 
-	write_legend(ws, columns, end_row + 2)
+	legend_end = write_legend(ws, columns, end_row + 2)
+	write_signatures(ws, last_col, legend_end + 2, signatures, filters.get("company"))
 	setup_print(ws, last_col)
 	return wb
 
@@ -319,12 +352,15 @@ def legend_span(ws, total_cols: int, groups: int) -> int:
 	return max(3, min(desired, room))
 
 
-def write_legend(ws, columns: list[dict], top: int) -> None:
+def write_legend(ws, columns: list[dict], top: int) -> int:
 	"""Khối chú thích dạng lưới: `Chú thích` một ô, mỗi ký hiệu một ô (tô đúng màu của nó), nghĩa
-	ở ô ngang hàng ngay bên phải. Tối đa `MAX_LEGEND_ROWS` dòng — quá thì sang cụm cột kế tiếp."""
+	ở ô ngang hàng ngay bên phải. Tối đa `MAX_LEGEND_ROWS` dòng — quá thì sang cụm cột kế tiếp.
+
+	Trả về dòng cuối đã dùng (hoặc `top - 1` nếu không có ký hiệu nào) để khối trình ký biết
+	đặt xuống đâu."""
 	pairs = legend_pairs()
 	if not pairs:
-		return
+		return top - 1
 
 	groups, rows = legend_layout(len(pairs))
 	span = legend_span(ws, len(columns), groups)
@@ -350,6 +386,84 @@ def write_legend(ws, columns: list[dict], top: int) -> None:
 		meaning.alignment = LEFT
 		ws.merge_cells(start_row=row, start_column=col + 1, end_row=row, end_column=col + span)
 
+	return top + rows - 1
+
+
+def sign_blocks(last_col: int) -> tuple[tuple[int, int], tuple[int, int]]:
+	"""(cột đầu, cột cuối) của khối "Người lập" và khối "Người duyệt".
+
+	Cả hai nằm ở nửa phải bảng như biểu mẫu gốc: người duyệt sát mép phải, người lập lùi vào giữa,
+	giữa hai khối chừa một quãng trống. Bảng ít cột thì khối co lại chứ không tràn sang cột tên."""
+	room = max(last_col - FIRST_DAY_COLUMN + 1, 2)
+	# 2 khối + ít nhất 1 cột ngăn cách phải lọt trong `room`
+	width = max(1, min(SIGN_BLOCK_WIDTH, (room - 1) // 2))
+	approved = (last_col - width + 1, last_col)
+	start = max(FIRST_DAY_COLUMN, approved[0] - width - max(1, width // 2))
+	return (start, start + width - 1), approved
+
+
+def signature_date_line(company: str | None) -> str:
+	"""Dòng trên chữ ký người duyệt: `Hà Nội, ngày 02 tháng 7 năm 2026`.
+
+	Ngày là ngày xuất file (ngày trình ký), địa danh lấy `city` của Address công ty khi có."""
+	today = getdate(nowdate())
+	city = company_city(company) or MIYANO_LETTERHEAD["city"]
+	return _("{0}, ngày {1} tháng {2} năm {3}").format(city, f"{today.day:02d}", today.month, today.year)
+
+
+def signature_names(signatures: dict | None) -> tuple[str, str]:
+	"""Tên dưới hai chữ ký. Người lập bỏ trống thì lấy người đang xuất file; người duyệt thì không
+	đoán — ai duyệt là việc của người trình ký, để trống cho ký tay."""
+	signatures = frappe._dict(signatures or {})
+	prepared = (signatures.prepared_by or "").strip() or session_signer_name()
+	return prepared, (signatures.approved_by or "").strip()
+
+
+def session_signer_name() -> str:
+	"""Tên người đang đăng nhập, theo hồ sơ nhân viên rồi mới tới tên User.
+
+	`Administrator` / `Guest` là tài khoản hệ thống — in mấy chữ đó lên bản trình ký thì vô nghĩa,
+	thà để trống ô tên cho người ký điền tay."""
+	user = frappe.session.user
+	if not user or user in ("Guest", "Administrator"):
+		return ""
+	return (
+		frappe.db.get_value("Employee", {"user_id": user, "status": "Active"}, "employee_name")
+		or frappe.db.get_value("User", user, "full_name")
+		or ""
+	)
+
+
+def write_signatures(ws, last_col: int, top: int, signatures: dict | None, company: str | None) -> None:
+	"""Khối trình ký cuối bảng: dòng địa danh + ngày, hai chức danh, chừa chỗ ký rồi tới tên.
+
+	Không kẻ khung: đây là chỗ ký tay trên bản in, kẻ ô vào chỉ vướng chữ ký."""
+	prepared_block, approved_block = sign_blocks(last_col)
+	prepared_name, approved_name = signature_names(signatures)
+
+	date_cell = ws.cell(top, approved_block[0], signature_date_line(company))
+	date_cell.font, date_cell.alignment = Font(italic=True), CENTER
+	merge_across(ws, top, approved_block)
+
+	name_row = top + 1 + SIGN_NAME_GAP
+	for block, label, name in (
+		(prepared_block, SIGN_PREPARED_LABEL, prepared_name),
+		(approved_block, SIGN_APPROVED_LABEL, approved_name),
+	):
+		title = ws.cell(top + 1, block[0], label)
+		title.font, title.alignment = Font(bold=True), CENTER
+		merge_across(ws, top + 1, block)
+
+		signer = ws.cell(name_row, block[0], name or None)
+		signer.alignment = CENTER
+		merge_across(ws, name_row, block)
+
+
+def merge_across(ws, row: int, block: tuple[int, int]) -> None:
+	"""Gộp một dòng qua cả khối cột — bỏ qua khối rộng đúng một cột (openpyxl không nhận)."""
+	if block[1] > block[0]:
+		ws.merge_cells(start_row=row, start_column=block[0], end_row=row, end_column=block[1])
+
 
 def setup_print(ws, last_col: int) -> None:
 	"""In ngang, co vừa một trang ngang, lặp cả hai dòng tiêu đề bảng ở mọi trang."""
@@ -362,7 +476,7 @@ def setup_print(ws, last_col: int) -> None:
 
 
 @frappe.whitelist()
-def download(filters=None, visible_idx=None):
+def download(filters=None, visible_idx=None, prepared_by=None, approved_by=None):
 	"""Endpoint của nút Export (Excel có màu) trên `Monthly Attendance Report`."""
 	from frappe.desk.utils import provide_binary_file
 
@@ -385,7 +499,8 @@ def download(filters=None, visible_idx=None):
 		data = [row for i, row in enumerate(data) if i in keep]
 
 	stream = BytesIO()
-	build_workbook(columns, data, filters).save(stream)
+	signatures = {"prepared_by": prepared_by, "approved_by": approved_by}
+	build_workbook(columns, data, filters, signatures).save(stream)
 
 	filters = frappe._dict(filters)
 	name = f"Bang cham cong {cint(filters.month):02d}-{cint(filters.year)}"
