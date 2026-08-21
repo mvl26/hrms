@@ -74,6 +74,108 @@ class AttendanceReview {
 		// chặng nối của luồng: soát xong thì về báo cáo xem lại, rồi chốt công
 		this.page.add_inner_button(__("Về bảng công tháng"), () => this.go_to_report());
 		this.page.add_inner_button(__("Chốt công tháng"), () => this.go_to_sheet());
+		// Sinh bù công cho nhân viên miễn chấm công. KHÔNG dành cho việc hằng ngày (lượt quét mỗi
+		// giờ đã lo) — chỉ cho ba lúc nó không với tới: bù ngoài cửa sổ 31 ngày, dựng lại sau khi
+		// huỷ chốt kỳ, và chạy ngay lúc soát công. Xem trước rồi mới ghi vì nó đụng số liệu lương.
+		this.page.add_inner_button(__("Sinh công miễn chấm công"), () => this.preview_exempt());
+	}
+
+	preview_exempt() {
+		frappe.call({
+			method: "hrms.hr.attendance_exempt.preview_month",
+			args: this.filters(),
+			freeze: true,
+			freeze_message: __("Đang kiểm tra ngày công..."),
+			callback: (r) => this.show_exempt_plan(r.message),
+		});
+	}
+
+	show_exempt_plan(plan) {
+		if (!plan) return;
+		const s = plan.summary || {};
+		const viec = (s.create || 0) + (s.repair || 0) + (s.attach || 0);
+		if (!viec && !(plan.rows || []).length) {
+			frappe.msgprint({
+				title: __("Không có gì để sửa"),
+				message: __("Mọi ngày công của nhân viên miễn chấm công trong tháng này đã đúng."),
+				indicator: "green",
+			});
+			return;
+		}
+
+		const NHAN = {
+			create: __("Tạo mới (X)"),
+			repair: __("Sửa về đủ công"),
+			attach: __("Ghi giờ vào/ra"),
+			leave: __("Giữ nguyên — nghỉ phép"),
+			trip_wfh: __("Giữ nguyên — công tác / làm ở nhà"),
+			request: __("Giữ nguyên — có đơn chấm công"),
+			locked: __("Bỏ qua — kỳ đã chốt"),
+		};
+		const hang = (plan.rows || [])
+			.map(
+				(r) => `<tr>
+					<td>${frappe.utils.escape_html(r.employee_name || r.employee)}</td>
+					<td>${frappe.datetime.str_to_user(r.date)}</td>
+					<td>${NHAN[r.action] || NHAN[r.reason] || r.action}</td>
+					<td>${r.code_cu ? frappe.utils.escape_html(r.code_cu) : ""}</td>
+				</tr>`,
+			)
+			.join("");
+
+		const d = new frappe.ui.Dialog({
+			title: __("Sinh công cho nhân viên miễn chấm công"),
+			size: "large",
+			fields: [
+				{
+					fieldtype: "HTML",
+					options: `<p>${
+						viec
+							? __("Sẽ tạo {0} ngày, sửa {1} ngày, ghi giờ vào/ra {2} ngày.", [
+									s.create || 0,
+									s.repair || 0,
+									s.attach || 0,
+								])
+							: __(
+									"Không có ngày nào cần sửa. {0} ngày dưới đây được giữ nguyên có chủ ý:",
+									[(plan.rows || []).length],
+								)
+					}</p>
+					<div style="max-height:50vh;overflow:auto">
+					<table class="table table-bordered">
+						<thead><tr>
+							<th>${__("Nhân viên")}</th><th>${__("Ngày")}</th>
+							<th>${__("Việc sẽ làm")}</th><th>${__("Mã cũ")}</th>
+						</tr></thead>
+						<tbody>${hang}</tbody>
+					</table></div>`,
+				},
+			],
+			primary_action_label: __("Ghi {0} thay đổi", [viec]),
+			primary_action: () => {
+				d.hide();
+				frappe.call({
+					method: "hrms.hr.attendance_exempt.generate_for_month",
+					args: this.filters(),
+					freeze: true,
+					freeze_message: __("Đang ghi ngày công..."),
+					callback: (r) => {
+						const done = (r.message && r.message.summary) || {};
+						frappe.show_alert({
+							message: __("Đã tạo {0}, sửa {1}, ghi giờ {2} ngày.", [
+								done.create || 0,
+								done.repair || 0,
+								done.attach || 0,
+							]),
+							indicator: "green",
+						});
+						this.refresh();
+					},
+				});
+			},
+		});
+		if (!viec) d.get_primary_btn().hide();
+		d.show();
 	}
 
 	go_to_report() {
