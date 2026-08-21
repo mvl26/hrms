@@ -573,7 +573,7 @@ class TestGenerateForMonth(PerTestRollback, FrappeTestCase):
 
 		start = self.last_month()
 		emp = make_exempt_employee(email="backfill@miyano.test", from_date=start)
-		count = generate_for_month(start.month, start.year, employee=emp)
+		count = generate_for_month(start.month, start.year, employee=emp)["summary"]["create"]
 		self.assertGreater(count, 0)
 		self.assertEqual(
 			count,
@@ -593,7 +593,8 @@ class TestGenerateForMonth(PerTestRollback, FrappeTestCase):
 		start = self.last_month()
 		emp = make_exempt_employee(email="backfill2@miyano.test", from_date=start)
 		generate_for_month(start.month, start.year, employee=emp)
-		self.assertEqual(generate_for_month(start.month, start.year, employee=emp), 0)
+		lai = generate_for_month(start.month, start.year, employee=emp)["summary"]
+		self.assertEqual((lai["create"], lai["repair"], lai["attach"]), (0, 0, 0))
 
 	def test_does_not_generate_future_days(self):
 		from hrms.hr.attendance_exempt import generate_for_month
@@ -1008,3 +1009,54 @@ class TestPlanDay(PerTestRollback, FrappeTestCase):
 		before = frappe.db.count("Attendance", {"employee": self.emp})
 		self.plan()
 		self.assertEqual(frappe.db.count("Attendance", {"employee": self.emp}), before)
+
+
+class TestPreviewMonth(PerTestRollback, FrappeTestCase):
+	"""E17 — xem trước không ghi, và hứa gì thì apply làm đúng thế."""
+
+	def setUp(self):
+		from frappe.utils import get_first_day
+
+		self.start = get_first_day(add_days(get_first_day(getdate()), -1))
+		self.emp = make_exempt_employee(email="preview@miyano.test", from_date=self.start)
+
+	def test_preview_writes_nothing(self):
+		from hrms.hr.attendance_exempt import preview_month
+
+		before = frappe.db.count("Attendance")
+		res = preview_month(self.start.month, self.start.year, employee=self.emp)
+		self.assertEqual(frappe.db.count("Attendance"), before, "xem trước KHÔNG được ghi gì")
+		self.assertGreater(res["summary"]["create"], 0)
+
+	def test_apply_matches_preview(self):
+		from hrms.hr.attendance_exempt import generate_for_month, preview_month
+
+		planned = preview_month(self.start.month, self.start.year, employee=self.emp)
+		done = generate_for_month(self.start.month, self.start.year, employee=self.emp)
+		self.assertEqual(done["summary"]["create"], planned["summary"]["create"])
+		self.assertEqual(len(done["rows"]), len(planned["rows"]))
+
+	def test_protected_days_are_reported_not_hidden(self):
+		from hrms.hr.attendance_exempt import preview_month
+
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": self.start,
+				"custom_attendance_code": "P",
+			}
+		)
+		att.insert()
+		att.submit()
+		res = preview_month(self.start.month, self.start.year, employee=self.emp)
+		giu = [r for r in res["rows"] if r["reason"] == "leave"]
+		self.assertTrue(giu, "ngày nghỉ phép bị chừa ra phải được BÁO, không im lặng")
+
+	def test_second_run_has_nothing_to_do(self):
+		from hrms.hr.attendance_exempt import generate_for_month, preview_month
+
+		generate_for_month(self.start.month, self.start.year, employee=self.emp)
+		res = preview_month(self.start.month, self.start.year, employee=self.emp)
+		self.assertEqual(res["summary"]["create"], 0)
+		self.assertEqual(res["summary"]["repair"], 0)

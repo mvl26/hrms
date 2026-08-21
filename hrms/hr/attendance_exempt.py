@@ -334,23 +334,61 @@ def process_exempt_employees():
 		frappe.db.commit()  # nosemgrep
 
 
-@frappe.whitelist()
-def generate_for_month(month, year, employee: str | None = None) -> int:
-	"""Chạy bù cả tháng — cho người bật cờ giữa chừng, hoặc sau khi huỷ chốt kỳ để sửa.
+# Ngày bị chừa ra vì lý do NÀY thì phải báo cho người dùng thấy — im lặng bỏ qua chính là thứ làm
+# nút cũ trông như hỏng. Còn `ok` / `rest_day` / `not_exempt` là nhiễu, không nhồi vào bảng.
+REPORTED_SKIPS = ("leave", "trip_wfh", "request", "locked")
 
-	Trả về SỐ NGÀY đã sinh để HR đối chiếu; không sinh ngày hôm nay và tương lai."""
-	frappe.only_for(("HR Manager", "System Manager"))
+
+def plan_month(month, year, employee: str | None = None) -> list:
+	"""Kế hoạch cho cả tháng — thuần đọc. Không đụng ngày hôm nay và tương lai."""
 	start = getdate(f"{cint(year)}-{cint(month):02d}-01")
-	end = get_last_day(start)
-	yesterday = add_days(getdate(), -1)
-	if end > yesterday:
-		end = yesterday
+	end = min(get_last_day(start), add_days(getdate(), -1))
 	rows = [frappe._dict(name=employee)] if employee else exempt_employees()
-	created = 0
+	plans = []
 	for emp in rows:
 		day = start
 		while day <= end:
-			if ensure_full_day(emp.name, day):
-				created += 1
+			plans.append(plan_day(emp.name, day))
 			day = add_days(day, 1)
-	return created
+	return plans
+
+
+def as_result(plans: list) -> dict:
+	"""Gom kế hoạch thành {rows, summary} — cùng một cấu trúc cho xem trước và cho lúc ghi."""
+	summary = {"create": 0, "repair": 0, "attach": 0, "skip": 0}
+	rows = []
+	for p in plans:
+		summary[p.action] += 1
+		if p.action != "skip" or p.reason in REPORTED_SKIPS:
+			rows.append(
+				{
+					"employee": p.employee,
+					"employee_name": frappe.db.get_value("Employee", p.employee, "employee_name"),
+					"date": str(p.date),
+					"action": p.action,
+					"reason": p.reason,
+					"code_cu": p.code_cu,
+				}
+			)
+	return {"rows": rows, "summary": summary}
+
+
+@frappe.whitelist()
+def preview_month(month, year, employee: str | None = None) -> dict:
+	"""Xem trước việc sẽ làm — KHÔNG ghi một dòng nào."""
+	frappe.only_for(("HR Manager", "System Manager"))
+	return as_result(plan_month(month, year, employee))
+
+
+@frappe.whitelist()
+def generate_for_month(month, year, employee: str | None = None) -> dict:
+	"""Chạy bù cả tháng. Trả CÙNG cấu trúc với `preview_month` để đối chiếu được với bản xem trước.
+
+	Dùng khi bật cờ giữa chừng, sau khi huỷ chốt kỳ, hoặc muốn chạy ngay lúc soát công thay vì đợi
+	lượt quét đầu giờ sau. Việc thường ngày đã có `process_exempt_employees` lo."""
+	frappe.only_for(("HR Manager", "System Manager"))
+	plans = plan_month(month, year, employee)
+	for p in plans:
+		if p.action != "skip":
+			ensure_full_day(p.employee, p.date)
+	return as_result(plans)
