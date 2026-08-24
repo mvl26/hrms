@@ -22,21 +22,15 @@ import frappe
 from frappe import _
 from frappe.utils import escape_html, flt
 
+from hrms.hr.attendance_category import CATEGORIES
+
 # Hai ký hiệu suy từ lịch chứ không phải Attendance Code, nhưng vẫn hiện trong lưới nên phải chú thích
 CALENDAR_MARKERS = [("-", "Ngày nghỉ / ngoài thời gian làm việc"), ("NL", "Nghỉ lễ hưởng lương")]
 
-# đi làm trước → nghỉ có lương → không lương → vắng: đọc từ trái sang là đi từ "trả đủ" tới "không trả"
-CATEGORY_ORDER = [
-	"Công",
-	"Phép",
-	"Ốm",
-	"Thai sản",
-	"Tai nạn LĐ",
-	"Nghỉ bù",
-	"Việc riêng",
-	"Không lương",
-	"Vắng",
-]
+# đi làm trước → nghỉ có lương → không lương → vắng: đọc từ trái sang là đi từ "trả đủ" tới "không
+# trả". Nguồn duy nhất là `attendance_category.CATEGORIES` — chú thích KHÔNG giữ bản chép riêng,
+# nếu không thêm nhóm mới là mã tụt xuống cuối chú thích mà không ai biết.
+CATEGORY_ORDER = list(CATEGORIES)
 
 
 def legend_pairs() -> list[tuple[str, str]]:

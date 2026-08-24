@@ -14,6 +14,7 @@ def create_attendance_code(code, **kwargs):
 			"doctype": "Attendance Code",
 			"code": code,
 			"code_name": kwargs.pop("code_name", code),
+			"category": kwargs.pop("category", "Công"),
 			"maps_to_status": kwargs.pop("maps_to_status", "Present"),
 		}
 	)
@@ -40,6 +41,7 @@ class TestAttendanceCode(PerTestRollback, FrappeTestCase):
 					"doctype": "Attendance Code",
 					"code": "P",
 					"code_name": "duplicate",
+					"category": "Phép",
 					"maps_to_status": "On Leave",
 				}
 			).insert()

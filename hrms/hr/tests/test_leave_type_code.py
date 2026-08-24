@@ -41,6 +41,7 @@ class TestLeaveTypeCode(PerTestRollback, FrappeTestCase):
 				"doctype": "Attendance Code",
 				"code": "ZZ",
 				"code_name": "Mã thử",
+				"category": "Phép",
 				"maps_to_status": "On Leave",
 				"work_fraction": 0,
 			}
@@ -59,6 +60,7 @@ class TestLeaveTypeCode(PerTestRollback, FrappeTestCase):
 					"doctype": "Attendance Code",
 					"code": code,
 					"code_name": f"Mã thử {code}",
+					"category": "Phép",
 					"maps_to_status": "On Leave",
 					"work_fraction": 0,
 				}
@@ -90,6 +92,7 @@ class TestLeaveTypeCode(PerTestRollback, FrappeTestCase):
 				"doctype": "Attendance Code",
 				"code": "ZZ",
 				"code_name": "Mã thử",
+				"category": "Phép",
 				"maps_to_status": "On Leave",
 				"work_fraction": 0,
 			}
