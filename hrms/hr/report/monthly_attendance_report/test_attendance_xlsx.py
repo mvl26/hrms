@@ -19,17 +19,19 @@ from hrms.hr.attendance_xlsx import (
 	LEGEND_LABEL,
 	LEGEND_LABEL_COLUMN,
 	MAX_LEGEND_ROWS,
+	WEEKDAY_ROW,
+	build_workbook,
+	legend_layout,
+)
+from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import STATE_STYLE, execute
+from hrms.miyano_xlsx import (
 	MIYANO_LETTERHEAD,
 	SIGN_APPROVED_LABEL,
 	SIGN_NAME_GAP,
 	SIGN_PREPARED_LABEL,
-	WEEKDAY_ROW,
-	build_workbook,
-	legend_layout,
 	sign_blocks,
 	signature_date_line,
 )
-from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import STATE_STYLE, execute
 from hrms.tests.isolation import PerTestRollback
 from hrms.tests.vn_test_utils import test_employee
 

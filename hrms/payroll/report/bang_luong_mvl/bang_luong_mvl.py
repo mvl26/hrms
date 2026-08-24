@@ -16,6 +16,10 @@ from frappe.utils import cint, flt, get_first_day, get_last_day, getdate
 
 from hrms.vn_payroll.setup_mvl import STRUCTURE_NAMES
 
+# Nhãn dòng cuối bảng. Hằng số vì bộ xuất Excel (`hrms/vn_payroll/salary_xlsx.py`) in đậm đúng
+# dòng này — hai nơi gõ tay hai chuỗi là sớm muộn lệch nhau.
+TOTAL_LABEL = "TỔNG CỘNG"
+
 # (fieldname, nhãn, kiểu, tên Salary Component | None, width). Thứ tự = thứ tự cột Excel.
 COLUMNS = [
 	("employee", "Mã NV", "Link", None, 110),
@@ -72,7 +76,10 @@ def get_data(filters):
 	end = get_last_day(start)
 
 	slip_filters = {
-		"docstatus": 1,
+		# Mặc định CHỈ phiếu đã duyệt: bảng lương là chứng từ đem trình ký, lẫn phiếu chưa chốt vào
+		# là ký lên số có thể còn đổi. Bật `include_drafts` để soát trước khi duyệt — khi đó bản
+		# xuất Excel tự đóng dấu cảnh báo lên tiêu đề (xem `salary_xlsx.subtitle_line`).
+		"docstatus": ["in", [0, 1]] if cint(filters.include_drafts) else 1,
 		"salary_structure": ["in", list(STRUCTURE_NAMES)],
 		"start_date": [">=", start],
 		"end_date": ["<=", end],
@@ -123,7 +130,7 @@ def get_data(filters):
 			totals[key] = totals.get(key, 0.0) + flt(row.get(key))
 
 	if data:
-		data.append(frappe._dict(employee_name=_("TỔNG CỘNG"), **totals))
+		data.append(frappe._dict(employee_name=_(TOTAL_LABEL), **totals))
 	return data
 
 

@@ -19,6 +19,16 @@ from hrms.vn_payroll.tests.test_salary_slip_mvl import (
 
 
 class TestBangLuongMVL(PerTestRollback, FrappeTestCase):
+	def setUp(self):
+		super().setUp()
+		# Kỳ 2099 dựng riêng cho test không có Bảng Công Tháng nào, nên cổng "phải chốt công trước
+		# khi tính lương" (`vn_payroll.sheet_gate`) chặn mọi phiếu ở đây — nhưng CHỈ trên site đã
+		# bật cờ `hrms_enforce_sheet_gate` (miyano), không phải trên CI. Không tắt thì bộ test đỏ
+		# hay xanh tuỳ site đang chạy. Cửa thoát `skip_sheet_gate` dựng sẵn cho đúng tình huống
+		# này; bản thân cổng vẫn được kiểm đầy đủ ở `tests/test_sheet_gate.py`.
+		frappe.flags.skip_sheet_gate = True
+		self.addCleanup(lambda: frappe.flags.pop("skip_sheet_gate", None))
+
 	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
 	def test_report_rows_and_total(self):
 		ensure_fiscal_year_2099()

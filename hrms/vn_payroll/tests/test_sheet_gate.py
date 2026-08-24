@@ -116,7 +116,11 @@ class TestGateAgainstLiveData(PerTestRollback, FrappeTestCase):
 			fields=["name", "employee", "start_date", "end_date", "payment_days", "company"],
 			order_by="start_date",
 		)
-		self.assertTrue(slips, "site không có phiếu lương đã submit để đối soát")
+		# Chưa có phiếu nào submit thì phép đối soát rỗng — nói thẳng là BỎ QUA. Trước đây chỗ này
+		# `assertTrue` nên site sạch phiếu (mọi phiếu còn nháp, 2026-08-24) bị báo đỏ y như khi
+		# lương thật lệch khỏi bảng đã chốt — hai chuyện khác hẳn nhau, không được lẫn.
+		if not slips:
+			self.skipTest("site chưa có phiếu lương đã submit để đối soát")
 
 		blocked = []
 		for s in slips:
