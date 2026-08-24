@@ -156,8 +156,10 @@ doc_events = {
 			"hrms.hr.leave_type_code.warn_if_unmapped",
 		],
 	},
-	# Miyano: gộp một quỹ phép năm — validate mã lý do; sau duyệt ghi mã lên Attendance (thuần hiển thị).
+	# Miyano: chốt chặn loại nghỉ phải có mã công (before_validate — phải nổ TRƯỚC chốt số dư phép
+	# của upstream); validate mã lý do; sau duyệt ghi mã lên Attendance (thuần hiển thị).
 	"Leave Application": {
+		"before_validate": "hrms.hr.doctype.leave_application.leave_single_pool.validate_leave_type_has_code",
 		"validate": "hrms.hr.doctype.leave_application.leave_single_pool.validate_pool_code",
 		"on_submit": "hrms.hr.doctype.leave_application.leave_single_pool.set_leave_attendance_code",
 	},

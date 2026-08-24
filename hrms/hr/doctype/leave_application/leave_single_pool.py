@@ -82,6 +82,40 @@ def work_credit(code: str) -> float:
 	return flt(paid_credit(row)) if row else 0.0
 
 
+def validate_leave_type_has_code(doc, method=None):
+	"""Loại nghỉ của đơn phải có mã công ứng với TRẠNG THÁI mà đơn sẽ sinh ra.
+
+	Không có mã thì ngày nghỉ ra 0 công và bảng chấm công để trống — hoặc tệ hơn, giữ nguyên mã
+	``V`` của bản ghi vắng có sẵn, làm lương (đọc ``status``) và bảng công (đọc mã) nói ngược nhau.
+
+	Gắn vào ``before_validate``, KHÔNG phải ``validate``: ``Document.hook`` chạy method của
+	controller TRƯỚC rồi mới tới hook ``doc_events``, nên ở ``validate`` thì mọi chốt của upstream
+	(số dư phép, trùng đơn, ngày lễ) nổ trước và người dùng thấy sai nguyên nhân. Thiếu mã công là
+	vấn đề gốc hơn số dư phép, phải báo trước.
+
+	Đơn nghỉ nửa ngày cần THÊM một mã ``Half Day`` (token đơn kiểu ``1/2P``) — mã cả ngày không mô
+	tả được nửa ngày đi làm. Cách chữa cho cả hai là tạo một Mã Công, một dòng master data.
+	"""
+	leave_type = doc.get("leave_type")
+	if not leave_type:
+		return
+
+	needed = ["On Leave"]
+	if cint(doc.get("half_day")):
+		needed.append("Half Day")
+
+	for status in needed:
+		if code_for_leave_type(leave_type, status):
+			continue
+		frappe.throw(
+			frappe._(
+				"Loại nghỉ {0} chưa có mã công cho trạng thái {1}. Tạo một Mã Công với "
+				"Trạng thái = {1} và Loại nghỉ = {0}, rồi lưu lại đơn này."
+			).format(frappe.bold(leave_type), frappe.bold(status)),
+			title=frappe._("Thiếu mã công"),
+		)
+
+
 def validate_pool_code(doc, method=None):
 	"""Đơn rút quỹ phép năm: **bắt buộc** chọn Loại nghỉ hợp lệ; nghỉ nửa ngày bắt buộc chọn buổi
 	(Sáng/Chiều). Bỏ qua loại nghỉ khác (miễn trừ/không lương)."""
