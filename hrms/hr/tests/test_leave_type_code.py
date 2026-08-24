@@ -26,6 +26,22 @@ class TestLeaveTypeCode(PerTestRollback, FrappeTestCase):
 	def _code_link(self, code):
 		return frappe.db.get_value("Attendance Code", code, "leave_type")
 
+	def _unowned_code(self, code, status="On Leave", category="Phép", work_fraction=0):
+		"""Mã nghỉ CHƯA có chủ. Từ 2026-08-24 gán một mã đang thuộc loại nghỉ khác sẽ bị chặn
+		(`test_refuses_to_steal_a_code_owned_by_another_leave_type`), nên test nào chỉ muốn kiểm
+		đường ghi ngược phải tự dựng mã trống thay vì mượn `P`/`1/2P` của loại nghỉ thật."""
+		frappe.get_doc(
+			{
+				"doctype": "Attendance Code",
+				"code": code,
+				"code_name": f"Mã thử {code}",
+				"category": category,
+				"maps_to_status": status,
+				"work_fraction": work_fraction,
+			}
+		).insert(ignore_permissions=True)
+		return code
+
 	def test_full_day_code_for_reads_attendance_code_table(self):
 		"""Tra mã cả ngày của một loại nghỉ từ bảng Attendance Code."""
 		self.assertEqual(full_day_code_for("Nghỉ phép năm"), "P")
@@ -115,10 +131,11 @@ class TestLeaveTypeCode(PerTestRollback, FrappeTestCase):
 		self.assertEqual(self._code_link("KH"), "Nghỉ kết hôn")
 
 	def test_half_day_code_is_accepted(self):
-		"""1/2P là mã nghỉ hợp lệ (maps_to_status = Half Day)."""
+		"""Mã `Half Day` là mã nghỉ hợp lệ, ghi ngược được như mã cả ngày."""
 		lt = self._leave_type("Nghỉ thử nửa ngày")
-		sync_code_to_leave_type(frappe._dict(name=lt.name, custom_attendance_code="1/2P"))
-		self.assertEqual(self._code_link("1/2P"), lt.name)
+		code = self._unowned_code("ZN", status="Half Day", work_fraction=0.5)
+		sync_code_to_leave_type(frappe._dict(name=lt.name, custom_attendance_code=code))
+		self.assertEqual(self._code_link(code), lt.name)
 
 	def test_real_leave_type_save_is_safe_before_migrate(self):
 		"""TRẠNG THÁI HIỆN TẠI CỦA PROD: custom field chưa migrate.
@@ -141,9 +158,25 @@ class TestLeaveTypeCode(PerTestRollback, FrappeTestCase):
 			   FROM `tabAttendance` ORDER BY name"""
 		)
 		lt = self._leave_type("Nghỉ thử bất biến")
-		sync_code_to_leave_type(frappe._dict(name=lt.name, custom_attendance_code="1/2P"))
+		code = self._unowned_code("ZM", status="Half Day", work_fraction=0.5)
+		sync_code_to_leave_type(frappe._dict(name=lt.name, custom_attendance_code=code))
 		after = frappe.db.sql(
 			"""SELECT name, status, leave_type, half_day_status, custom_attendance_code
 			   FROM `tabAttendance` ORDER BY name"""
 		)
 		self.assertEqual(before, after)
+
+	def test_refuses_to_steal_a_code_owned_by_another_leave_type(self):
+		"""BẪY CÓ THẬT: HR tạo loại nghỉ mới để thay "Nghỉ phép năm" rồi chọn luôn mã `P`.
+
+		Trước đây `P` bị gỡ khỏi "Nghỉ phép năm" trong im lặng — mọi ngày phép cũ mất đường tra
+		ngược và bảng công hiện sai. Đổi chủ một mã phải là việc cố ý, làm ở Attendance Code."""
+		lt = self._leave_type("Nghỉ thử cướp mã")
+		with self.assertRaises(frappe.ValidationError):
+			sync_code_to_leave_type(frappe._dict(name=lt.name, custom_attendance_code="P"))
+		self.assertEqual(self._code_link("P"), "Nghỉ phép năm", "P phải còn nguyên chủ cũ")
+
+	def test_reassigning_a_code_to_its_own_leave_type_is_a_no_op(self):
+		"""Lưu lại chính loại nghỉ đang giữ mã thì không được coi là cướp."""
+		sync_code_to_leave_type(frappe._dict(name="Nghỉ phép năm", custom_attendance_code="P"))
+		self.assertEqual(self._code_link("P"), "Nghỉ phép năm")

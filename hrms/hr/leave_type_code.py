@@ -69,6 +69,20 @@ def sync_code_to_leave_type(doc, method=None):
 			title=_("Mã công không hợp lệ"),
 		)
 
+	# Mã đang thuộc một loại nghỉ KHÁC thì đây là ĐỔI CHỦ, không phải gắn mới. Trước 2026-08-24
+	# đoạn dưới ghi đè trong im lặng: HR tạo loại nghỉ mới để thay "Nghỉ phép năm", chọn `P`, và
+	# `P` rời khỏi "Nghỉ phép năm" — mọi ngày phép cũ mất đường tra ngược, bảng công hiện sai. Đổi
+	# chủ phải là việc cố ý, làm thẳng ở Attendance Code.
+	owner = frappe.db.get_value("Attendance Code", code, "leave_type")
+	if owner and owner != leave_type:
+		frappe.throw(
+			_(
+				"Mã công {0} đang ứng với loại nghỉ {1}. Chọn một mã khác, hoặc gỡ liên kết ở "
+				"Mã Công {0} trước nếu thật sự muốn chuyển mã sang {2}."
+			).format(frappe.bold(code), frappe.bold(owner), frappe.bold(leave_type)),
+			title=_("Mã công đã có chủ"),
+		)
+
 	# Gỡ các mã cùng maps_to_status đang trỏ tới loại nghỉ này nhưng không phải mã vừa chọn:
 	# giữ đúng một mã cả-ngày cho mỗi loại nghỉ, tránh reverse-derive phải đoán.
 	for stale in frappe.get_all(
@@ -89,11 +103,10 @@ def warn_if_unmapped(doc, method=None):
 	if doc.get("name") and not full_day_code_for(doc.get("name")):
 		frappe.msgprint(
 			_(
-				"Loại nghỉ {0} chưa có mã công nào. Ngày nghỉ theo loại này sẽ không hiện mã trên "
-				"bảng chấm công. Chọn "
-			).format(frappe.bold(doc.get("name")))
-			+ _("Mã công cả ngày")
-			+ _(" ở trên, hoặc tạo một Mã công trỏ tới loại nghỉ này."),
+				"Loại nghỉ {0} chưa có mã công nào. Ngày nghỉ theo loại này sẽ ra <b>0 công</b> và "
+				"để trống trên bảng chấm công, còn đơn nghỉ theo loại này sẽ bị chặn. Chọn "
+				'"Mã công cả ngày" ở trên, hoặc tạo một Mã Công có Loại nghỉ = {0}.'
+			).format(frappe.bold(doc.get("name"))),
 			title=_("Chưa gắn mã công"),
-			indicator="orange",
+			indicator="red",
 		)
