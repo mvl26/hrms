@@ -1,10 +1,10 @@
 # Xuất Excel bảng lương tháng — mẫu Miyano, ký được
 
-Ngày: 2026-08-24 · Báo cáo: **Bảng Lương MVL** (`hrms/payroll/report/bang_luong_mvl/`)
+Ngày: 2026-08-24 · Báo cáo: **MVL Salary Register** — nhãn *Bảng lương MVL* (`hrms/payroll/report/mvl_salary_register/`)
 
 ## Vấn đề
 
-Báo cáo `Bảng Lương MVL` đã có đủ 21 cột đúng thứ tự file Excel gốc (E…U), nhưng nút **Export**
+Báo cáo `MVL Salary Register` đã có đủ 21 cột đúng thứ tự file Excel gốc (E…U), nhưng nút **Export**
 vẫn là nút mặc định của query report: `frappe.desk.query_report.export_query` đổ thẳng
 `columns` + `result` qua `make_xlsx()`. Ra một **lưới trần** — không tên công ty, không MST, không
 địa chỉ, không tên biểu mẫu, không kỳ lương, dòng TỔNG CỘNG lẫn vào như một dòng dữ liệu, và
@@ -90,7 +90,7 @@ Thêm filter `include_drafts` (Check, **mặc định TẮT**). Bật lên để
 dòng kỳ lương. Không có dấu này thì bản nháp trông y hệt bản chính thức và người duyệt ký lên những
 con số còn có thể đổi.
 
-### 4. Nối vào nút Export — `bang_luong_mvl.js`
+### 4. Nối vào nút Export — `mvl_salary_register.js`
 
 `frappe.query_report` là **MỘT instance dùng chung cho MỌI query report** (`load_report()` chỉ đổi
 `report_name`, không dựng lại object). Ghi đè thẳng `export_report` sẽ rò sang báo cáo khác trong
@@ -158,8 +158,29 @@ cầu nối lương phải hỏi trước).
 Hai test của bộ payroll trước đây **đỏ hay xanh tuỳ site đang chạy** — chúng submit phiếu lương
 trong kỳ 2099 (không có Bảng Công Tháng nào) nên bị `sheet_gate` chặn trên miyano (cờ
 `hrms_enforce_sheet_gate` bật) nhưng lọt trên CI. Đã gắn cửa thoát `skip_sheet_gate` sẵn có, đúng
-lối `TestSalarySlipMVL.setUp` vẫn dùng: `test_bang_luong_mvl.py`, `test_packaging.py`.
+lối `TestSalarySlipMVL.setUp` vẫn dùng: `test_mvl_salary_register.py`, `test_packaging.py`.
 
 `TestGateAgainstLiveData` khẳng định `assertTrue(slips)` — site sạch phiếu submit (mọi phiếu còn
 nháp) bị báo đỏ y như khi lương thật lệch khỏi bảng đã chốt. Hai chuyện khác hẳn nhau: nay
 `skipTest` khi không có phiếu nào để đối soát, giữ nguyên khẳng định lõi `blocked == []`.
+
+## Đổi tên báo cáo (2026-08-25) — lỗi có sẵn phải sửa trước khi dùng được
+
+Báo cáo trước nay mang tên `Bảng Lương MVL`, **có dấu tiếng Việt**. Frappe suy đường dẫn module và
+file `.js` của Script Report bằng `scrub(report.name)`:
+
+```
+scrub("Bảng Lương MVL")  ->  hrms/payroll/report/bảng_lương_mvl/bảng_lương_mvl.py
+thư mục thật trên đĩa    ->  hrms/payroll/report/bang_luong_mvl/
+```
+
+Không khớp ⇒ `ModuleNotFoundError: No module named 'hrms.payroll.report.bảng_lương_mvl'`. Hệ quả:
+**báo cáo chưa từng mở được trên Desk** — mở ra là lỗi, `.js` cũng không nạp nên 4 bộ lọc
+(công ty / tháng / năm / phòng ban) chưa bao giờ hiện ra. Bộ test không bắt được vì test import
+thẳng theo đường dẫn Python, không đi qua `scrub()`.
+
+Sửa: đổi tên Report thành **`MVL Salary Register`** (ASCII), thư mục thành `mvl_salary_register/`,
+nhãn tiếng Việt *Bảng lương MVL* giữ qua `translations/vi.csv` — đúng lối đã dùng cho
+`Monthly Attendance Report`. Patch `rename_bang_luong_mvl_report.py` chạy ở `pre_model_sync` để đổi
+tên bản ghi TRƯỚC khi thư mục report sync ra bản ghi mới, đúng khuôn
+`rename_bang_cham_cong_thang_report.py`. Nhãn được `test_vn_translations.py` canh.

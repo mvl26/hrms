@@ -1,5 +1,5 @@
 // Copyright (c) 2026, Miyano Việt Nam.
-frappe.query_reports["Bảng Lương MVL"] = {
+frappe.query_reports["MVL Salary Register"] = {
 	filters: [
 		{
 			fieldname: "company",
@@ -55,7 +55,8 @@ frappe.query_reports["Bảng Lương MVL"] = {
 			report._mvl_export_patched = true;
 			const fallback = report.export_report.bind(report); // bản gốc trên prototype
 			report.export_report = function () {
-				if (this.report_name === "Bảng Lương MVL") return mvl_salary_export_dialog(this);
+				if (this.report_name === "MVL Salary Register")
+					return mvl_salary_export_dialog(this);
 				return fallback();
 			};
 		}

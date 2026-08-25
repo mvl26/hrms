@@ -16,6 +16,9 @@ VN_TIMEKEEPING_LABELS = {
 	"Monthly Attendance Report": "Bảng chấm công tháng",
 	"Business Trip": "Công Tác",
 	"Business Trip Traveler": "Người đi công tác",
+	# Đổi tên 2026-08-25: tên cũ "Bảng Lương MVL" có DẤU nên `scrub(name)` ra đường dẫn không
+	# khớp thư mục ASCII → báo cáo không import được, mở trên Desk là ModuleNotFoundError.
+	"MVL Salary Register": "Bảng lương MVL",
 }
 
 

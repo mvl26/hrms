@@ -4,7 +4,7 @@
 Nút Export mặc định của query report đi qua `frappe.desk.query_report.export_query`: nó đổ thẳng
 `columns` + `result` qua `make_xlsx()`, ra một lưới trần không tiêu đề công ty, không dòng tổng in
 đậm, không chỗ ký. Bảng lương thì phải KÝ được — đó là chứng từ trình giám đốc, không phải bản kết
-xuất dữ liệu. Module này là đường xuất riêng của báo cáo `Bảng Lương MVL`, dựng workbook bằng
+xuất dữ liệu. Module này là đường xuất riêng của báo cáo `MVL Salary Register`, dựng workbook bằng
 openpyxl nên kiểm soát được từng ô.
 
 Hai đường ra:
@@ -42,7 +42,7 @@ from hrms.miyano_xlsx import (
 	write_letterhead,
 	write_signatures,
 )
-from hrms.payroll.report.bang_luong_mvl.bang_luong_mvl import TOTAL_LABEL, execute
+from hrms.payroll.report.mvl_salary_register.mvl_salary_register import TOTAL_LABEL, execute
 
 SHEET_TITLE = "BẢNG THANH TOÁN TIỀN LƯƠNG"
 
@@ -226,7 +226,7 @@ def setup_print(ws, last_col: int) -> None:
 
 @frappe.whitelist()
 def download(filters=None, visible_idx=None, prepared_by=None, approved_by=None):
-	"""Endpoint của nút Export (Excel có tiêu đề + khối ký) trên `Bảng Lương MVL`."""
+	"""Endpoint của nút Export (Excel có tiêu đề + khối ký) trên `MVL Salary Register`."""
 	from frappe.desk.utils import provide_binary_file
 
 	# đúng thứ `export_query` kiểm — `ref_doctype` của báo cáo là Salary Slip

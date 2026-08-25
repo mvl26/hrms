@@ -12,11 +12,11 @@
  "modified": "2026-07-24 17:00:00.000000",
  "modified_by": "Administrator",
  "module": "Payroll",
- "name": "Bảng Lương MVL",
+ "name": "MVL Salary Register",
  "owner": "Administrator",
  "prepared_report": 0,
  "ref_doctype": "Salary Slip",
- "report_name": "Bảng Lương MVL",
+ "report_name": "MVL Salary Register",
  "report_type": "Script Report",
  "roles": [
   {"role": "System Manager"},

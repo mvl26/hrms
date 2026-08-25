@@ -1,12 +1,12 @@
 # Copyright (c) 2026, Miyano Việt Nam.
-"""Test báo cáo Bảng Lương MVL — gom Salary Slip đã submit thành bảng lương đủ cột + dòng tổng."""
+"""Test báo cáo MVL Salary Register (nhãn: Bảng lương MVL) — gom Salary Slip đã submit thành bảng lương đủ cột + dòng tổng."""
 
 import frappe
 from frappe.tests.utils import FrappeTestCase, change_settings
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
-from hrms.payroll.report.bang_luong_mvl.bang_luong_mvl import execute
+from hrms.payroll.report.mvl_salary_register.mvl_salary_register import execute
 from hrms.tests.isolation import PerTestRollback
 from hrms.tests.vn_test_utils import default_company
 from hrms.vn_payroll.setup_mvl import ensure_mvl_defaults

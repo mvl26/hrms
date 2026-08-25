@@ -3,7 +3,7 @@
 
 `build_workbook` là hàm thuần (nhận đúng `columns`/`data` mà `execute()` trả về) nên test không cần
 phiếu lương thật: dữ liệu giả đủ để kiểm bố cục, dòng tổng, định dạng số và khối trình ký. Phần số
-liệu đã có `test_bang_luong_mvl.py` (báo cáo) và `tests/test_mvl.py` (engine) canh.
+liệu đã có `test_mvl_salary_register.py` (báo cáo) và `tests/test_mvl.py` (engine) canh.
 """
 
 import frappe
@@ -16,7 +16,7 @@ from hrms.miyano_xlsx import (
 	SIGN_PREPARED_LABEL,
 	signature_date_line,
 )
-from hrms.payroll.report.bang_luong_mvl.bang_luong_mvl import get_columns
+from hrms.payroll.report.mvl_salary_register.mvl_salary_register import get_columns
 from hrms.tests.isolation import PerTestRollback
 from hrms.vn_payroll.salary_xlsx import (
 	FIRST_DATA_ROW,
