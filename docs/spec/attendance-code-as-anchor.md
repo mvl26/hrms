@@ -1,6 +1,8 @@
 # Spec — Mã công là neo: loại nghỉ tự do, mã công ép đúng
 
-Trạng thái: **Approved** — thiết kế duyệt 2026-08-24. Nhánh: `feat/skip-attendance-diag`.
+Trạng thái: **Implemented** — 2026-08-25. Thiết kế duyệt 2026-08-24. Nhánh: `feat/skip-attendance-diag`.
+Cổng bất biến lương ĐÃ QUA (xem §8). Bộ test toàn app: 1104→1143 test, fails 8→6, errors 418→412 —
+không module nào xấu đi.
 Liên quan: [[project-attendance-code-timekeeping]], [[project-leave-single-pool]],
 [[project-timekeeping-logic-2026-07]].
 Spec nền: `docs/spec/attendance-code-timekeeping.md`, `docs/spec/leave-single-pool-vn.md`,
@@ -229,3 +231,47 @@ run-tests`.
 HR tạo bao nhiêu Loại nghỉ tuỳ ý. Với mỗi loại, tạo mã công trỏ tới nó và chọn nhóm cột — hai
 bước, cả hai đều có chốt chặn nếu quên. Bộ loại nghỉ hệ thống sinh ra không còn là ràng buộc: thay
 được, bỏ được, thêm được, và không chỗ nào trong code còn gọi tên chúng.
+
+## 8. Kết quả (2026-08-25)
+
+**Cổng bất biến lương — qua.** Chụp Salary Slip trước lần sửa đầu tiên và sau khi xong, trùng khít:
+
+```
+SLIPS: 6
+SUM: {'payment_days': 128.5, 'absent_days': 3.5, 'leave_without_pay': 6.0, 'total_working_days': 138.0}
+```
+
+**Bộ test.** Chạy đủ 167 module qua harness rollback, ở commit gốc và sau khi xong:
+
+| | tests | fails | errors |
+|---|---|---|---|
+| trước (`425124e`) | 1104 | 8 | 418 |
+| sau | 1143 | 6 | 412 |
+
+`diff` theo từng module **chỉ có dòng biến mất, không có dòng mới**: không module nào xấu đi, 8
+module chuyển từ đỏ sang xanh. 412 lỗi còn lại là test upstream cần `_Test Company` — site chỉ có
+company `Miyano`, nên `set_salary_component_account` ghép `"Indirect Expenses - " + None`. Hai đỏ
+mang tên Miyano (`test_employee_working_hours` 1 fail, `test_working_hours` 9 err) có mặt y hệt ở
+cả hai lượt, và `test_flex_shift_payroll_gate` đỏ vì cả 6 phiếu lương trên site đều còn ở trạng
+thái nháp. Không cái nào dính tới thay đổi này.
+
+**Đã sửa so với thiết kế ban đầu — hai chỗ phát hiện lúc làm:**
+
+1. **Chốt chặn phải ở `before_validate`, không phải `validate`.** `Document.hook` chạy method của
+   controller TRƯỚC hook `doc_events`, nên ở `validate` thì lỗi số dư phép của upstream nổ trước và
+   người dùng thấy sai nguyên nhân. Đã ghi lại ở §3.4.
+2. **Bỏ luật "bắt buộc `leave_type` khi `maps_to_status = On Leave`".** Nó chặn đúng luồng đang chạy:
+   form Loại nghỉ chọn một mã ĐÃ tồn tại, nên mã phải tạo được lúc chưa gắn. Đã ghi lại ở §3.2.
+
+**Năm test cũ phải viết lại** vì chúng khoá hành vi nay đã đổi — mỗi cái được thay bằng test đo
+đúng tính chất còn phải đúng, không phải bị xoá cho xanh:
+
+| Test | Trước | Sau |
+|---|---|---|
+| `test_unmapped_leave_type_leaves_code_alone` | đơn nghỉ loại chưa map vẫn duyệt, mã kẹt `V` | đơn bị chặn; ngày công không bị đụng |
+| `test_unmapped_leave_type_keeps_existing_code` | dựng qua đơn nghỉ loại trắng | mã bị gỡ SAU khi đơn duyệt → resync giữ `V` |
+| `test_half_day_code_is_accepted` | mượn `1/2P` của Nghỉ phép năm | tự dựng mã nửa ngày chưa có chủ |
+| `test_sync_does_not_touch_attendance_records` | mượn `1/2P` | tự dựng mã chưa có chủ |
+| 3 test `validate_pool_code` | khoá luật hằng cứng | bỏ; thay bằng đối chứng `P`/`1/2P` suy từ bảng |
+
+**Còn treo:** chưa deploy — xem mục "Sau khi xong" của `docs/tasks/plan-attendance-code-as-anchor.md`.
