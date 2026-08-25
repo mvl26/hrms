@@ -152,7 +152,7 @@ class TestLeaveCodeOnExistingAttendance(PerTestRollback, FrappeTestCase):
 
 		Chốt chặn ở đơn nghỉ lo trường hợp thường gặp, nhưng hook ghi mã vẫn phải tự thủ: không tra
 		được thì để nguyên, tuyệt đối không tự chế mã mới."""
-		from hrms.hr.doctype.leave_application.leave_single_pool import set_leave_attendance_code
+		from hrms.hr.doctype.leave_application.leave_attendance_code import set_leave_attendance_code
 
 		date = f"{self.year}-03-15"
 		att = self._absent_attendance(date)

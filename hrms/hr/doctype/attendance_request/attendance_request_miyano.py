@@ -136,7 +136,7 @@ def set_attendance_request_code(doc, method=None):
 	# `db_set` nên cầu nối không chạy và `custom_work_credit` nằm nguyên ở 0.0 của mã `V` — form Ngày
 	# công hiện "Công = 0" cho một ngày đi công tác. Dùng chung `paid_credit` như cầu nối và bộ đồng
 	# bộ (`work_credit`), không chép luật sang đây.
-	from hrms.hr.doctype.leave_application.leave_single_pool import work_credit
+	from hrms.hr.doctype.leave_application.leave_attendance_code import work_credit
 
 	code = REASON_TO_CODE.get(doc.get("reason"), DEFAULT_CODE)
 	is_half = cint(doc.get("half_day")) and doc.get("half_day_date")

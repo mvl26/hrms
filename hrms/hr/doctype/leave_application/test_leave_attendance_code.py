@@ -1,7 +1,13 @@
 # Copyright (c) 2026, Miyano Việt Nam.
-"""Quỹ phép năm: đơn rút "Nghỉ phép năm" **bắt buộc chọn Loại nghỉ** — CHỈ còn "Nghỉ phép năm" → P.
-Nghỉ ốm / chăm con ốm KHÔNG rút quỹ phép năm (loại nghỉ riêng, có lương, đủ công). Nghỉ nửa ngày phải
-chọn buổi (Sáng/Chiều).
+"""Đơn nghỉ duyệt xong ghi MÃ CÔNG lên Attendance — mã suy thuần từ bảng `Attendance Code`.
+
+Từ 2026-08-24 không loại nghỉ nào là trường hợp đặc biệt trong code: hằng `POOL_LEAVE_TYPE` và bảng
+map cứng loại nghỉ → mã đã bị gỡ (spec `docs/spec/attendance-code-as-anchor.md`). Vì thế mấy test
+cũ chỉ kiểm trường "Loại nghỉ" bắt buộc (`validate_pool_code`) đã bỏ — chúng khoá một luật không
+còn tồn tại. Thứ còn phải đúng là KẾT QUẢ: `Nghỉ phép năm` vẫn ra `P` / `1/2P`, nghỉ ốm ra `Ô`,
+quỹ phép năm vẫn chỉ bị trừ bởi đúng loại nghỉ của nó.
+
+Nghỉ nửa ngày vẫn phải chọn buổi (Sáng/Chiều) — nay `validate_half_day_period`, áp cho mọi loại nghỉ.
 
 Chạy qua harness rollback (KHÔNG bench run-tests trên miyano)."""
 
@@ -12,7 +18,7 @@ from hrms.tests.isolation import PerTestRollback
 from hrms.tests.vn_test_utils import test_employee
 
 
-class TestLeaveSinglePool(PerTestRollback, FrappeTestCase):
+class TestLeaveAttendanceCode(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
@@ -76,21 +82,14 @@ class TestLeaveSinglePool(PerTestRollback, FrappeTestCase):
 
 	def test_annual_leave_reason_creates_P_attendance(self):
 		self._alloc("Nghỉ phép năm", 12)
-		la = self._leave_app(
-			"Nghỉ phép năm", f"{self.year}-03-05", f"{self.year}-03-05", reason="Nghỉ phép năm"
-		)
+		# KHÔNG truyền `reason`: mã `P` phải suy được thuần từ bảng Attendance Code, không cần
+		# trường "Loại nghỉ" nào cả — đây chính là điều việc gỡ hằng phải chứng minh.
+		la = self._leave_app("Nghỉ phép năm", f"{self.year}-03-05", f"{self.year}-03-05")
 		att = self._att(la)
 		self.assertIsNotNone(att, "đơn duyệt phải sinh Attendance")
 		self.assertEqual(att.status, "On Leave")
 		self.assertEqual(att.leave_type, "Nghỉ phép năm")
 		self.assertEqual(att.custom_attendance_code, "P")
-
-	def test_sick_and_child_sick_rejected_from_pool(self):
-		# Miyano: nghỉ ốm / chăm con ốm KHÔNG rút quỹ phép năm nữa → không còn là Loại nghỉ hợp lệ của quỹ.
-		self._alloc("Nghỉ phép năm", 12)
-		for reason in ("Nghỉ ốm", "Nghỉ chăm con ốm"):
-			with self.assertRaises(frappe.ValidationError):
-				self._leave_app("Nghỉ phép năm", f"{self.year}-03-06", f"{self.year}-03-06", reason=reason)
 
 	def test_sick_via_own_leave_type_does_not_touch_annual_pool(self):
 		# nghỉ ốm nộp bằng loại nghỉ riêng "Nghỉ ốm": KHÔNG giảm quỹ phép năm, bảng công vẫn hiện Ô
@@ -114,20 +113,6 @@ class TestLeaveSinglePool(PerTestRollback, FrappeTestCase):
 		self.assertEqual(row["days"][6], "Ô")
 		self.assertEqual(row["totals"].get("Tổng công", 0), 0.0, "ngày BHXH trả không phải công công ty")
 		self.assertEqual(row["totals"].get("Ốm", 0), 1.0, "nhưng phải hiện ở cột Ốm")
-
-	def test_pool_requires_reason(self):
-		# đơn rút quỹ phép năm KHÔNG chọn Loại nghỉ → chặn (field bắt buộc).
-		self._alloc("Nghỉ phép năm", 12)
-		with self.assertRaises(frappe.ValidationError):
-			self._leave_app("Nghỉ phép năm", f"{self.year}-03-07", f"{self.year}-03-07")  # thiếu loại nghỉ
-
-	def test_pool_rejects_invalid_reason(self):
-		# Loại nghỉ ngoài 3 loại trừ-quỹ (vd nhập thai sản) → chặn.
-		self._alloc("Nghỉ phép năm", 12)
-		with self.assertRaises(frappe.ValidationError):
-			self._leave_app(
-				"Nghỉ phép năm", f"{self.year}-03-08", f"{self.year}-03-08", reason="Nghỉ thai sản"
-			)
 
 	def test_blocks_when_pool_exhausted(self):
 		# hết quỹ → Frappe chặn nộp đơn (số dư âm, allow_negative=0). "không cho xin phép nghỉ".
@@ -167,7 +152,6 @@ class TestLeaveSinglePool(PerTestRollback, FrappeTestCase):
 			"Nghỉ phép năm",
 			f"{self.year}-07-01",
 			f"{self.year}-07-01",
-			reason="Nghỉ phép năm",
 			half_day=1,
 			period="Sáng",
 		)
@@ -184,7 +168,6 @@ class TestLeaveSinglePool(PerTestRollback, FrappeTestCase):
 			"Nghỉ phép năm",
 			f"{self.year}-07-02",
 			f"{self.year}-07-02",
-			reason="Nghỉ phép năm",
 			half_day=1,
 			period="Chiều",
 		)
@@ -202,7 +185,6 @@ class TestLeaveSinglePool(PerTestRollback, FrappeTestCase):
 				"Nghỉ phép năm",
 				f"{self.year}-07-05",
 				f"{self.year}-07-05",
-				reason="Nghỉ phép năm",
 				half_day=1,
 			)
 

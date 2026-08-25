@@ -6,7 +6,7 @@ ghi (thường là Vắng do auto-attendance sinh vì không có checkin). ``db_
 nối mã công không chạy và mã ``V`` kẹt lại dù ``status`` đã là ``On Leave``. Bảng công tháng gom
 theo *category* của mã nên ngày đó đếm vào cột Vắng thay vì cột Phép/Ốm/…
 
-``leave_single_pool.set_leave_attendance_code`` đã chặn nguồn phát sinh mới; module này để **dọn
+``leave_attendance_code.set_leave_attendance_code`` đã chặn nguồn phát sinh mới; module này để **dọn
 dữ liệu đã lệch từ trước**.
 
 **Xem trước rồi mới áp** — đây là dữ liệu lương thật, không tự ý sửa hàng loạt.

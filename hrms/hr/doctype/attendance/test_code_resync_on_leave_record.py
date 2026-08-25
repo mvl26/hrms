@@ -217,22 +217,42 @@ class TestCodeResyncOnLeaveRecord(PerTestRollback, FrappeTestCase):
 		self.assertEqual(row.custom_attendance_code, "V")
 
 	def test_unmapped_leave_type_keeps_existing_code(self):
-		"""Loại nghỉ chưa có Attendance Code nào trỏ tới: GIỮ NGUYÊN mã cũ, tuyệt đối không bịa."""
+		"""Loại nghỉ mất mã: bộ suy lại GIỮ NGUYÊN mã cũ, tuyệt đối không bịa.
+
+		Từ 2026-08-24 đơn nghỉ theo loại chưa có mã bị chặn ngay (`test_leave_type_code_gate.py`),
+		nên không dựng được kịch bản này bằng cách tạo đơn cho loại nghỉ trắng nữa. Đường còn lại —
+		và là đường thật sự xảy ra ngoài đời: đơn duyệt lúc mã còn, HR gỡ mã sau, rồi ngày công mới
+		được ghi. Bộ suy lại vẫn phải tự thủ."""
 		lt = frappe.get_doc(
-			{"doctype": "Leave Type", "leave_type_name": "Nghỉ thử chưa map resync", "is_lwp": 0}
+			{"doctype": "Leave Type", "leave_type_name": "Nghỉ thử mất mã resync", "is_lwp": 0}
 		)
 		lt.insert(ignore_permissions=True)
+		code = frappe.get_doc(
+			{
+				"doctype": "Attendance Code",
+				"code": "ZR",
+				"code_name": "Mã thử sẽ bị gỡ",
+				"category": "Phép",
+				"maps_to_status": "On Leave",
+				"work_fraction": 0,
+				"leave_type": lt.name,
+			}
+		)
+		code.insert(ignore_permissions=True)
 
 		date = f"{self.year}-05-13"
 		self.alloc(lt.name)
 		self.approve_leave(lt.name, date)
 		self.drop_attendance(date)
 
+		# HR gỡ mã SAU khi đơn đã duyệt → loại nghỉ không còn đường tra ngược
+		frappe.db.set_value("Attendance Code", code.name, "leave_type", None)
+
 		self.mark_absent(date)
 
 		row = self.row(date)
-		self.assertEqual(row.status, "On Leave")
-		self.assertEqual(row.custom_attendance_code, "V")
+		self.assertEqual(row.status, "On Leave", "tiền đề: check_leave_record vẫn lật sang nghỉ")
+		self.assertEqual(row.custom_attendance_code, "V", "không tra được mã thì giữ nguyên, không bịa")
 
 	def test_valid_code_is_not_rewritten(self):
 		"""Mã đã hợp lệ với status/loại nghỉ thì giữ nguyên — không bị đè bởi bộ suy lại."""

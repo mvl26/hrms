@@ -97,3 +97,16 @@ class TestLeaveTypeCodeGate(PerTestRollback, FrappeTestCase):
 		message = str(frappe.message_log[-1]) if frappe.message_log else ""
 		self.assertIn(lt, message)
 		self.assertIn("On Leave", message)
+
+	def test_leave_types_derive_their_codes_from_the_table_alone(self):
+		"""Đối chứng gỡ hằng: tra bảng phải cho ĐÚNG thứ mà `POOL_REASONS` từng hardcode.
+
+		Chốt TRƯỚC khi gỡ hằng, để nếu việc gỡ làm lệch kết quả thì lộ ra ngay."""
+		from hrms.hr.doctype.leave_application.leave_attendance_code import code_for_leave_type
+
+		self.assertEqual(code_for_leave_type("Nghỉ phép năm", "On Leave"), "P")
+		self.assertEqual(code_for_leave_type("Nghỉ phép năm", "Half Day"), "1/2P")
+		self.assertEqual(code_for_leave_type("Nghỉ không lương", "On Leave"), "K")
+		self.assertEqual(code_for_leave_type("Nghỉ không lương", "Half Day"), "1/2K")
+		self.assertEqual(code_for_leave_type("Nghỉ ốm", "On Leave"), "Ô")
+		self.assertIsNone(code_for_leave_type("Nghỉ ốm", "Half Day"), "Nghỉ ốm chưa có mã nửa ngày")

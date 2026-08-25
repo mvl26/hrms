@@ -428,7 +428,7 @@ class TestLeaveOverridesGeneratedDay(PerTestRollback, FrappeTestCase):
 				"half_day": 1 if half_day else 0,
 				"half_day_date": ANCHOR if half_day else None,
 				# quy ước Miyano "gộp một quỹ phép năm": đơn rút quỹ bắt buộc chọn Loại nghỉ, nghỉ
-				# nửa ngày bắt buộc chọn buổi (`leave_single_pool.validate_pool_code`)
+				# nửa ngày bắt buộc chọn buổi (`leave_attendance_code.validate_half_day_period`)
 				"custom_leave_reason": "Nghỉ phép năm",
 				"custom_half_day_period": "Sáng" if half_day else None,
 				"status": "Approved",

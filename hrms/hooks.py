@@ -156,12 +156,15 @@ doc_events = {
 			"hrms.hr.leave_type_code.warn_if_unmapped",
 		],
 	},
-	# Miyano: chốt chặn loại nghỉ phải có mã công (before_validate — phải nổ TRƯỚC chốt số dư phép
-	# của upstream); validate mã lý do; sau duyệt ghi mã lên Attendance (thuần hiển thị).
+	# Miyano: mã công là neo — chặn loại nghỉ chưa có mã, bắt chọn buổi khi nghỉ nửa ngày. Cả hai ở
+	# `before_validate` để nổ TRƯỚC chốt số dư phép của upstream (xem docstring của module). Sau
+	# duyệt thì ghi mã lên Attendance (thuần hiển thị).
 	"Leave Application": {
-		"before_validate": "hrms.hr.doctype.leave_application.leave_single_pool.validate_leave_type_has_code",
-		"validate": "hrms.hr.doctype.leave_application.leave_single_pool.validate_pool_code",
-		"on_submit": "hrms.hr.doctype.leave_application.leave_single_pool.set_leave_attendance_code",
+		"before_validate": [
+			"hrms.hr.doctype.leave_application.leave_attendance_code.validate_leave_type_has_code",
+			"hrms.hr.doctype.leave_application.leave_attendance_code.validate_half_day_period",
+		],
+		"on_submit": "hrms.hr.doctype.leave_application.leave_attendance_code.set_leave_attendance_code",
 	},
 	"Payment Entry": {
 		"on_submit": "hrms.hr.doctype.expense_claim.expense_claim.update_payment_for_expense_claim",
