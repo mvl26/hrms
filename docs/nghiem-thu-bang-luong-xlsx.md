@@ -10,14 +10,14 @@ quả mong đợi cụ thể; chỗ nào lệch thì ghi lại rồi báo.
 
 ## 1. Trạng thái triển khai
 
-| Hạng mục | Trạng thái |
-|---|---|
-| Code trên nhánh `feat/skip-attendance-diag` | ✅ đã commit (2 commit: `75fc7f3`, `81bd2c2`) |
-| `bench --site miyano migrate` | ✅ **đã chạy** — patch đổi tên báo cáo đã áp |
-| Báo cáo chạy đúng (kiểm bằng `query_report.run()`) | ✅ đã xác minh |
-| Tiến trình web (gunicorn) đã nạp module mới | ⚠️ **chưa xác minh được** — xem 2.1 |
-| Đẩy lên GitHub (`git push`) | ❌ **chưa** — chờ bạn duyệt (nhánh đang trước origin 34 commit) |
-| Số liệu lương thật để ký | ❌ **chưa** — xem mục 5 |
+| Hạng mục                                                 | Trạng thái                                                                  |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Code trên nhánh`feat/skip-attendance-diag`             | ✅ đã commit (2 commit:`75fc7f3`, `81bd2c2`)                            |
+| `bench --site miyano migrate`                            | ✅**đã chạy** — patch đổi tên báo cáo đã áp                 |
+| Báo cáo chạy đúng (kiểm bằng`query_report.run()`) | ✅ đã xác minh                                                             |
+| Tiến trình web (gunicorn) đã nạp module mới          | ⚠️**chưa xác minh được** — xem 2.1                              |
+| Đẩy lên GitHub (`git push`)                           | ❌**chưa** — chờ bạn duyệt (nhánh đang trước origin 34 commit) |
+| Số liệu lương thật để ký                           | ❌**chưa** — xem mục 5                                               |
 
 > **Đã sửa một lỗi có sẵn, nặng, phát hiện lúc kiểm tra:** báo cáo tên `Bảng Lương MVL` **có dấu**
 > tiếng Việt, mà Frappe suy đường dẫn file bằng `scrub(tên)` → tìm thư mục `bảng_lương_mvl/` trong
@@ -29,8 +29,23 @@ quả mong đợi cụ thể; chỗ nào lệch thì ghi lại rồi báo.
 
 ## 2. Vào báo cáo
 
-- URL: **http://miyano/app/query-report/MVL Salary Register**
-- Hoặc: ô tìm kiếm trên Desk (Ctrl+G) → gõ **Bảng lương MVL**
+**Cách chắc ăn nhất — dùng ô tìm kiếm, khỏi gõ URL:**
+bấm **Ctrl + G** trên Desk → gõ **Bảng lương MVL** → chọn kết quả.
+
+Nếu muốn dán URL thì phải dùng bản **đã mã hoá dấu cách** (`%20`), nếu không trình duyệt cắt tên
+báo cáo ở dấu cách đầu tiên:
+
+```
+http://miyano/app/query-report/MVL%20Salary%20Register
+```
+
+> ⚠️ Dán URL có dấu cách thật (`.../MVL Salary Register`) thì trình duyệt chỉ gửi `MVL`, không có
+> báo cáo nào tên vậy, và Frappe báo lỗi rất khó hiểu:
+> `TypeError: getdoctype() missing 1 required positional argument: 'doctype'`.
+> Đó là cách Frappe báo "không tìm thấy báo cáo" (`query_report.js:420` gọi
+> `with_doctype(this.report_doc?.ref_doctype)` với `report_doc` rỗng) — **không phải lỗi bảng lương**.
+
+Dùng `localhost` thay `miyano` cũng được: site này là site duy nhất nên Frappe vẫn giải đúng.
 
 **Trước khi bắt đầu:** bấm **Ctrl + Shift + R** một lần để trình duyệt bỏ bản `.js` cũ trong cache.
 Không làm bước này thì nút Export mới có thể chưa hiện.
@@ -59,10 +74,10 @@ Nếu mở phát ăn ngay thì bỏ qua mục này.
 - [ ] Mở URL trên, trang hiện ra **không có thông báo lỗi đỏ**.
 - [ ] Thanh lọc có đủ **5 ô**: `Công ty`, `Tháng`, `Năm`, `Phòng ban`, `Gồm cả phiếu nháp`.
 - [ ] Bảng có **21 cột**, thứ tự: STT/Mã NV · Họ tên · Loại · NET/GROSS · Hệ số (E) · Lương ngày
-      công (F) · Lương đóng BHXH (G) · Số công (H) · Lương thực tế (I) · Phụ cấp ăn trưa (J) ·
-      Tổng thu nhập (K) · Giảm trừ bản thân (L) · Số người phụ thuộc (M) · Tổng giảm trừ (N) ·
-      Thu nhập quy đổi (O) · Thu nhập tính thuế (P) · Thuế TNCN (Q) · BH công ty (R) · BH NLĐ (S) ·
-      Thực lĩnh (T) · TN chịu thuế kê khai (U).
+  công (F) · Lương đóng BHXH (G) · Số công (H) · Lương thực tế (I) · Phụ cấp ăn trưa (J) ·
+  Tổng thu nhập (K) · Giảm trừ bản thân (L) · Số người phụ thuộc (M) · Tổng giảm trừ (N) ·
+  Thu nhập quy đổi (O) · Thu nhập tính thuế (P) · Thuế TNCN (Q) · BH công ty (R) · BH NLĐ (S) ·
+  Thực lĩnh (T) · TN chịu thuế kê khai (U).
 
 > ❗ Nếu bước này hỏng thì **dừng lại** — mọi bước sau đều dựa vào đây.
 
@@ -76,9 +91,9 @@ Nếu mở phát ăn ngay thì bỏ qua mục này.
 ### 3.3 — Nút Export
 
 - [ ] Bấm **Menu (⋯) → Export**. Hiện hộp thoại **"Xuất bảng lương"**, không phải hộp thoại
-      Export mặc định của Frappe.
+  Export mặc định của Frappe.
 - [ ] Có ô `Định dạng` (mặc định **Excel — mẫu Miyano, có khối ký**) và khi chọn Excel thì hiện
-      thêm mục **Khối trình ký** với 2 ô `Người lập`, `Người duyệt`.
+  thêm mục **Khối trình ký** với 2 ô `Người lập`, `Người duyệt`.
 - [ ] Gõ `Người lập` = tên bạn, `Người duyệt` = tên giám đốc → bấm **Tải về**.
 - [ ] File tải về tên **`Bang luong 07-2026.xlsx`**.
 
@@ -89,12 +104,12 @@ Mở file vừa tải:
 - [ ] **Dòng 1–3** (căn trái): `CÔNG TY TNHH MIYANO VIỆT NAM` / `MST: 0109529507` / `Địa chỉ: …`
 - [ ] **Dòng 5–6** (căn giữa): `BẢNG THANH TOÁN TIỀN LƯƠNG` / `Tháng 07 Năm 2026`
 - [ ] Vì đang bật phiếu nháp, dòng 6 có thêm **`— GỒM CẢ PHIẾU NHÁP — CHƯA CHỐT`**
-      *(đây là chốt an toàn: bản chưa chốt không được trông giống bản chính thức)*
+  *(đây là chốt an toàn: bản chưa chốt không được trông giống bản chính thức)*
 - [ ] **Cột A là STT** chạy 1…6, **không** phải mã `HR-EMP-…`
 - [ ] Tiền hiện dạng **`25,994,783`** (có dấu phân cách nghìn), căn phải
 - [ ] Dòng **TỔNG CỘNG** in đậm, nền xám nhạt, **không** có số thứ tự
 - [ ] Cuối bảng có khối ký: dòng `Hà Nội, ngày … tháng … năm …`, hai chức danh
-      **Người lập** / **Người duyệt**, chừa 6 dòng trống để ký tay, rồi tới hai cái tên bạn vừa gõ
+  **Người lập** / **Người duyệt**, chừa 6 dòng trống để ký tay, rồi tới hai cái tên bạn vừa gõ
 - [ ] In thử (Ctrl+P): **khổ ngang**, cả 21 cột lọt **một trang ngang**
 
 ### 3.5 — Không làm hỏng bảng chấm công
@@ -103,7 +118,7 @@ Phần dùng chung (tiêu đề công ty + khối ký) đã được tách ra mo
 công vẫn nguyên vẹn:
 
 - [ ] Mở **Bảng chấm công tháng** → Export → Excel: file vẫn **có màu**, vẫn có khối chú thích và
-      khối ký như trước.
+  khối ký như trước.
 
 ---
 
@@ -114,15 +129,15 @@ Tôi đã đối chiếu **6/6 phiếu tháng 7/2026** (đủ 6 loại lương) 
 
 ### 4.1 — Bảng số liệu tham chiếu (7/2026, đã tick "Gồm cả phiếu nháp")
 
-| # | Họ tên | Loại | Công (H) | Lương thực tế (I) | Ăn trưa (J) | Thuế (Q) | Thực lĩnh (T) |
-|---|---|---|---|---|---|---|---|
-| 1 | hieu chu | Bán thời gian | 22.5 | 9.782.609 | 0 | 2.445.652 | 9.782.609 |
-| 2 | Nguyễn Văn An | Khoán | 19.5 | 20.000.000 | 0 | 0 | 20.000.000 |
-| 3 | Trần Thị Bình | Toàn thời gian | 19.5 | 25.434.783 | 560.000 | 0 | 25.994.783 |
-| 4 | Lê Văn Cường | Toàn thời gian | 22.0 | 14.634.783 | 595.000 | 0 | 15.229.783 |
-| 5 | Phạm Thị Dung | Chuyên gia | 22.5 | 25.000.000 | 0 | 2.777.778 | 25.000.000 |
-| 6 | Hoàng Văn Em | Bán thời gian | 22.5 | 13.206.522 | 0 | 1.467.391 | 13.206.522 |
-| | **TỔNG CỘNG** | | | **108.058.697** | **1.155.000** | **6.690.821** | **109.213.697** |
+| # | Họ tên              | Loại            | Công (H) | Lương thực tế (I) | Ăn trưa (J)       | Thuế (Q)           | Thực lĩnh (T)       |
+| - | --------------------- | ---------------- | --------- | --------------------- | ------------------- | ------------------- | --------------------- |
+| 1 | hieu chu              | Bán thời gian  | 22.5      | 9.782.609             | 0                   | 2.445.652           | 9.782.609             |
+| 2 | Nguyễn Văn An       | Khoán           | 19.5      | 20.000.000            | 0                   | 0                   | 20.000.000            |
+| 3 | Trần Thị Bình      | Toàn thời gian | 19.5      | 25.434.783            | 560.000             | 0                   | 25.994.783            |
+| 4 | Lê Văn Cường      | Toàn thời gian | 22.0      | 14.634.783            | 595.000             | 0                   | 15.229.783            |
+| 5 | Phạm Thị Dung       | Chuyên gia      | 22.5      | 25.000.000            | 0                   | 2.777.778           | 25.000.000            |
+| 6 | Hoàng Văn Em        | Bán thời gian  | 22.5      | 13.206.522            | 0                   | 1.467.391           | 13.206.522            |
+|   | **TỔNG CỘNG** |                  |           | **108.058.697** | **1.155.000** | **6.690.821** | **109.213.697** |
 
 - [ ] Số trên màn hình khớp bảng này.
 - [ ] Cột **Thực lĩnh (T)** của dòng TỔNG CỘNG = **109.213.697** (bằng tổng 6 dòng trên).
@@ -134,32 +149,32 @@ Tôi đã đối chiếu **6/6 phiếu tháng 7/2026** (đủ 6 loại lương) 
 Dữ kiện: lương ngày công F = 30.000.000 · công 19,5/23 · ăn 16 buổi · 2 người phụ thuộc ·
 lương đóng BHXH G = 30.000.000
 
-| Bước | Công thức | Kết quả |
-|---|---|---|
-| I | `ROUND(30.000.000 ÷ 23 × 19,5)` | **25.434.783** |
-| J | `16 × 35.000` | **560.000** |
-| K | `I + J` | **25.994.783** |
-| N | `15.500.000 + 2 × 6.200.000` | **27.900.000** |
-| O | `MAX(K − N − J, 0)` = `MAX(25.994.783 − 27.900.000 − 560.000, 0)` | **0** |
-| Q | O = 0 nên không phải nộp thuế | **0** |
-| R | `30.000.000 × 21,5%` | **6.450.000** |
-| S | `30.000.000 × 10,5%` | **3.150.000** |
-| T | `= K` (trả NET, công ty nộp thay thuế + BH) | **25.994.783** |
-| U | `K + Q + S − J` = `25.994.783 + 0 + 3.150.000 − 560.000` | **28.584.783** |
+| Bước | Công thức                                                               | Kết quả            |
+| ------ | ------------------------------------------------------------------------- | -------------------- |
+| I      | `ROUND(30.000.000 ÷ 23 × 19,5)`                                       | **25.434.783** |
+| J      | `16 × 35.000`                                                          | **560.000**    |
+| K      | `I + J`                                                                 | **25.994.783** |
+| N      | `15.500.000 + 2 × 6.200.000`                                           | **27.900.000** |
+| O      | `MAX(K − N − J, 0)` = `MAX(25.994.783 − 27.900.000 − 560.000, 0)` | **0**          |
+| Q      | O = 0 nên không phải nộp thuế                                        | **0**          |
+| R      | `30.000.000 × 21,5%`                                                   | **6.450.000**  |
+| S      | `30.000.000 × 10,5%`                                                   | **3.150.000**  |
+| T      | `= K` (trả NET, công ty nộp thay thuế + BH)                         | **25.994.783** |
+| U      | `K + Q + S − J` = `25.994.783 + 0 + 3.150.000 − 560.000`            | **28.584.783** |
 
 **Ca B — Phạm Thị Dung (Chuyên gia, khấu trừ 10%)**
 
 Dữ kiện: thù lao trọn gói F = 25.000.000 (không nhân theo công) · không đăng ký giảm trừ · không BHXH
 
-| Bước | Công thức | Kết quả |
-|---|---|---|
-| I | trọn gói, không nhân công | **25.000.000** |
-| K | `I + J` (J = 0) | **25.000.000** |
-| O | `MAX(K − N − J, 0)`, N = 0 | **25.000.000** |
-| P | `ROUND(O ÷ 0,9)` — quy đổi NET → gross | **27.777.778** |
-| Q | `ROUND(P × 10%)` | **2.777.778** |
-| T | `= K` | **25.000.000** |
-| U | `K + Q + S − J` | **27.777.778** |
+| Bước | Công thức                                   | Kết quả            |
+| ------ | --------------------------------------------- | -------------------- |
+| I      | trọn gói, không nhân công                | **25.000.000** |
+| K      | `I + J` (J = 0)                             | **25.000.000** |
+| O      | `MAX(K − N − J, 0)`, N = 0                | **25.000.000** |
+| P      | `ROUND(O ÷ 0,9)` — quy đổi NET → gross | **27.777.778** |
+| Q      | `ROUND(P × 10%)`                           | **2.777.778**  |
+| T      | `= K`                                       | **25.000.000** |
+| U      | `K + Q + S − J`                            | **27.777.778** |
 
 - [ ] Hai ca trên khớp đúng con số trên báo cáo và trong file Excel.
 
@@ -231,12 +246,12 @@ nguyên từ `Salary Detail` đã chốt trên phiếu. Lương không thể b�
 
 ## 8. Bằng chứng kiểm thử
 
-| Hạng mục | Kết quả |
-|---|---|
-| Engine tính lương ↔ tài liệu `Cong_thuc_tinh_luong_MVL.md` | 14/14 test xanh |
-| 6 phiếu 7/2026 thật ↔ engine (11 cột × 6 người) | **65/66 khớp tuyệt đối** (1 điểm ở mục 6.1) |
-| Test xuất Excel bảng lương (mới) | 14/14 xanh |
-| Test báo cáo bảng lương | 2/2 xanh |
-| Test xuất Excel bảng chấm công (không hồi quy) | 23/23 xanh |
-| Toàn bộ bộ test lương + chấm công liên quan | **112 xanh**, harness không rò dữ liệu |
-| Lint (`pre-commit`, ruff + prettier) | sạch |
+| Hạng mục                                                        | Kết quả                                                 |
+| ----------------------------------------------------------------- | --------------------------------------------------------- |
+| Engine tính lương ↔ tài liệu`Cong_thuc_tinh_luong_MVL.md` | 14/14 test xanh                                           |
+| 6 phiếu 7/2026 thật ↔ engine (11 cột × 6 người)            | **65/66 khớp tuyệt đối** (1 điểm ở mục 6.1) |
+| Test xuất Excel bảng lương (mới)                             | 14/14 xanh                                                |
+| Test báo cáo bảng lương                                      | 2/2 xanh                                                  |
+| Test xuất Excel bảng chấm công (không hồi quy)              | 23/23 xanh                                                |
+| Toàn bộ bộ test lương + chấm công liên quan               | **112 xanh**, harness không rò dữ liệu          |
+| Lint (`pre-commit`, ruff + prettier)                            | sạch                                                     |
