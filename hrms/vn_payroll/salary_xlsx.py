@@ -225,7 +225,12 @@ def setup_print(ws, last_col: int) -> None:
 
 
 @frappe.whitelist()
-def download(filters=None, visible_idx=None, prepared_by=None, approved_by=None):
+def download(
+	filters: str | dict | None = None,
+	visible_idx: str | list | None = None,
+	prepared_by: str | None = None,
+	approved_by: str | None = None,
+):
 	"""Endpoint của nút Export (Excel có tiêu đề + khối ký) trên `MVL Salary Register`."""
 	from frappe.desk.utils import provide_binary_file
 

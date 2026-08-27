@@ -376,14 +376,14 @@ def as_result(plans: list) -> dict:
 
 
 @frappe.whitelist()
-def preview_month(month, year, employee: str | None = None) -> dict:
+def preview_month(month: int, year: int, employee: str | None = None) -> dict:
 	"""Xem trước việc sẽ làm — KHÔNG ghi một dòng nào."""
 	frappe.only_for(("HR Manager", "System Manager"))
 	return as_result(plan_month(month, year, employee))
 
 
 @frappe.whitelist()
-def generate_for_month(month, year, employee: str | None = None) -> dict:
+def generate_for_month(month: int, year: int, employee: str | None = None) -> dict:
 	"""Chạy bù cả tháng. Trả CÙNG cấu trúc với `preview_month` để đối chiếu được với bản xem trước.
 
 	Dùng khi bật cờ giữa chừng, sau khi huỷ chốt kỳ, hoặc muốn chạy ngay lúc soát công thay vì đợi
