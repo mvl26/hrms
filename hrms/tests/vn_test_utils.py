@@ -2,6 +2,36 @@
 """Tiện ích dùng chung cho test của lớp bản địa hoá VN (Miyano)."""
 
 import frappe
+from frappe.utils import flt, getdate
+
+
+def working_days_details(employee, start, end):
+	"""Ba con số lương mà lớp chấm công được phép ảnh hưởng: `payment_days` / `absent_days` / LWP.
+
+	Đo THẲNG qua `SalarySlip.get_working_days_details` chứ không dựng cấu trúc lương:
+	`make_employee_salary_slip` của upstream hardcode `company_list=["_Test Company"]` và dựng tài
+	khoản theo tên tiếng Anh ("Indirect Expenses - <abbr>"), nên trên site thật của Miyano — chỉ có
+	công ty `Miyano` với hệ thống tài khoản TIẾNG VIỆT — nó vỡ ở `"Indirect Expenses - " + None`.
+	Cổng bất biến lương vì thế không chạy được ở đúng nơi cần nó nhất.
+
+	`get_working_days_details` là chính hàm payroll dùng để ra ba con số đó, nên đo ở đây vừa đúng
+	cái cần chứng minh vừa chạy được trên mọi site.
+	"""
+	slip = frappe.new_doc("Salary Slip")
+	slip.employee = employee
+	# công ty của CHÍNH nhân viên, không phải mặc định của site: trên `test_site` của CI có nhiều
+	# công ty (`_Test Company`, `_Test Company 1`, …) nên lấy mặc định dễ lệch khỏi công ty đang
+	# giữ ngày nghỉ / lịch làm việc của người này.
+	slip.company = frappe.db.get_value("Employee", employee, "company") or default_company()
+	slip.start_date = getdate(start)
+	slip.end_date = getdate(end)
+	slip.get_working_days_details()
+	return frappe._dict(
+		total=flt(slip.total_working_days),
+		payment_days=flt(slip.payment_days),
+		absent_days=flt(slip.absent_days),
+		lwp=flt(slip.leave_without_pay),
+	)
 
 
 def default_company() -> str:

@@ -11,29 +11,14 @@ Cùng cách `hrms/tests/test_timekeeping_e2e.py` đang dùng.
 
 import frappe
 from frappe.tests.utils import FrappeTestCase, change_settings
-from frappe.utils import add_days, flt, getdate
+from frappe.utils import add_days, getdate
 
 from hrms.hr.attendance_exempt import ensure_full_day, process_exempt_employees
 from hrms.tests.isolation import PerTestRollback
-from hrms.tests.vn_test_utils import default_company, test_employee
+from hrms.tests.vn_test_utils import test_employee, working_days_details
 
 MONTH_START = getdate("2099-06-01")
 MONTH_END = getdate("2099-06-30")
-
-
-def working_days_details(employee, start, end):
-	slip = frappe.new_doc("Salary Slip")
-	slip.employee = employee
-	slip.company = default_company()
-	slip.start_date = getdate(start)
-	slip.end_date = getdate(end)
-	slip.get_working_days_details()
-	return frappe._dict(
-		total=flt(slip.total_working_days),
-		payment_days=flt(slip.payment_days),
-		absent_days=flt(slip.absent_days),
-		lwp=flt(slip.leave_without_pay),
-	)
 
 
 class TestExemptPayroll(PerTestRollback, FrappeTestCase):

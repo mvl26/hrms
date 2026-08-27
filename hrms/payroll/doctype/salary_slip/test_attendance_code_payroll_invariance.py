@@ -1,22 +1,25 @@
 # Copyright (c) 2026, Miyano Việt Nam.
 """Phase 2 GATE: prove that entering attendance via VN mã công (bridge) yields the SAME
 payroll figures (payment_days / absent_days / leave_without_pay) as entering the equivalent
-native status directly. If this holds, the attendance-code layer is payroll-neutral."""
+native status directly. If this holds, the attendance-code layer is payroll-neutral.
+
+Đo qua `SalarySlip.get_working_days_details` (`vn_test_utils.working_days_details`) — KHÔNG dựng
+cấu trúc lương, vì `make_employee_salary_slip` của upstream hardcode `_Test Company` và hệ thống
+tài khoản tên tiếng Anh, nên vỡ trên site thật của Miyano (hệ thống tài khoản tiếng Việt). Cùng
+cách `test_exempt_payroll.py` và `hrms/tests/test_timekeeping_e2e.py` đang dùng. Ba con số đo được
+chính là ba con số duy nhất mà cổng này cần chứng minh là bất biến."""
 
 import frappe
 from frappe.tests.utils import FrappeTestCase, change_settings
-from frappe.utils import add_days, flt
+from frappe.utils import add_days, flt, get_first_day, get_last_day
 
 import erpnext
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms.hr.doctype.leave_application.test_leave_application import get_first_sunday
-from hrms.payroll.doctype.salary_slip.test_salary_slip import (
-	make_employee_salary_slip,
-	make_holiday_list,
-	mark_attendance,
-)
+from hrms.payroll.doctype.salary_slip.test_salary_slip import make_holiday_list, mark_attendance
 from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import working_days_details
 
 # (day offset from first sunday, native status, native leave_type, equivalent single-day code)
 # full-day scenarios only: for a full On-Leave day half_day_status is irrelevant to payroll,
@@ -39,6 +42,12 @@ class TestAttendanceCodePayrollInvariance(PerTestRollback, FrappeTestCase):
 			erpnext.get_default_company(),
 			"default_holiday_list",
 			"Salary Slip Test Holiday List",
+		)
+
+	def payroll_figures(self, employee, any_date_in_month):
+		"""Ba con số lương của KỲ chứa `any_date_in_month` — kỳ mà `make_employee_salary_slip` cũ dựng."""
+		return working_days_details(
+			employee, get_first_day(any_date_in_month), get_last_day(any_date_in_month)
 		)
 
 	def _mark_by_code(self, employee, date, code):
@@ -68,16 +77,16 @@ class TestAttendanceCodePayrollInvariance(PerTestRollback, FrappeTestCase):
 			mark_attendance(emp_native, date, status, leave_type=leave_type, ignore_validate=True)
 			self._mark_by_code(emp_codes, date, code)
 
-		ss_native = make_employee_salary_slip(emp_native, "Monthly", "Invariance SS Native")
-		ss_codes = make_employee_salary_slip(emp_codes, "Monthly", "Invariance SS Codes")
+		ss_native = self.payroll_figures(emp_native, first_sunday)
+		ss_codes = self.payroll_figures(emp_codes, first_sunday)
 
 		# the whole point: code-entered attendance must not change any payroll figure
-		self.assertEqual(ss_codes.leave_without_pay, ss_native.leave_without_pay)
+		self.assertEqual(ss_codes.lwp, ss_native.lwp)
 		self.assertEqual(ss_codes.absent_days, ss_native.absent_days)
 		self.assertEqual(ss_codes.payment_days, ss_native.payment_days)
 
 		# sanity: the scenarios actually exercised LWP (K), paid leave (P), and an Absent day (V)
-		self.assertEqual(ss_native.leave_without_pay, 1)
+		self.assertEqual(ss_native.lwp, 1)
 		self.assertEqual(ss_native.absent_days, 1)
 
 	@change_settings(
@@ -99,12 +108,12 @@ class TestAttendanceCodePayrollInvariance(PerTestRollback, FrappeTestCase):
 		mark_attendance(emp_native, date, "Half Day", half_day_status="Present")  # full validate
 		self._mark_by_code(emp_codes, date, "1/2X")
 
-		ss_native = make_employee_salary_slip(emp_native, "Monthly", "Invariance HD Native")
-		ss_codes = make_employee_salary_slip(emp_codes, "Monthly", "Invariance HD Codes")
+		ss_native = self.payroll_figures(emp_native, first_sunday)
+		ss_codes = self.payroll_figures(emp_codes, first_sunday)
 
 		self.assertEqual(ss_codes.payment_days, ss_native.payment_days)
 		self.assertEqual(ss_codes.absent_days, ss_native.absent_days)
-		self.assertEqual(ss_codes.leave_without_pay, ss_native.leave_without_pay)
+		self.assertEqual(ss_codes.lwp, ss_native.lwp)
 
 	@change_settings(
 		"Payroll Settings", {"payroll_based_on": "Attendance", "daily_wages_fraction_for_half_day": 0.5}
@@ -150,12 +159,12 @@ class TestAttendanceCodePayrollInvariance(PerTestRollback, FrappeTestCase):
 		self.assertEqual(att.status, "Half Day")
 		self.assertEqual(att.custom_attendance_code, "1/2X")
 
-		ss_native = make_employee_salary_slip(emp_native, "Monthly", "Inv HD Native")
-		ss_class = make_employee_salary_slip(emp_class, "Monthly", "Inv HD Class")
+		ss_native = self.payroll_figures(emp_native, first_sunday)
+		ss_class = self.payroll_figures(emp_class, first_sunday)
 		# Từ 2026-07-29 mã do máy chấm là 1/2X (không bịa ra đơn nghỉ không lương), nên ngày này
 		# GIỐNG HỆT một Half Day nhập tay: cùng payment_days, cùng absent_days, LWP bằng 0.
 		self.assertEqual(ss_class.payment_days, ss_native.payment_days)
-		self.assertEqual(flt(ss_class.leave_without_pay), flt(ss_native.leave_without_pay))
+		self.assertEqual(flt(ss_class.lwp), flt(ss_native.lwp))
 		self.assertEqual(flt(ss_class.absent_days), flt(ss_native.absent_days))
-		self.assertEqual(flt(ss_class.leave_without_pay), 0.0)
+		self.assertEqual(flt(ss_class.lwp), 0.0)
 		self.assertEqual(flt(ss_class.absent_days), 0.5)
