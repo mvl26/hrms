@@ -26,6 +26,25 @@ lương bất biến.
 import frappe
 from frappe.utils import cint, flt, getdate
 
+#: Bật chốt "loại nghỉ phải có mã công" TRONG lúc chạy test. Xem `validate_leave_type_has_code`.
+ENFORCE_LEAVE_CODE_FLAG = "miyano_enforce_leave_code"
+
+
+def leave_code_gate_is_active() -> bool:
+	"""Chốt mã công có hiệu lực không.
+
+	Ở SITE THẬT: luôn có. Ở CHẾ ĐỘ TEST: chỉ khi test tự bật cờ ``ENFORCE_LEAVE_CODE_FLAG``.
+
+	Lý do: hàng trăm test của upstream tạo Loại nghỉ tạm (``_Test Leave Type``,
+	``Test Earned Leave``, …) rồi nộp đơn nghỉ theo chúng. Những loại đó sẽ không bao giờ có mã
+	công — chúng chỉ sống trong một test — nên chốt này chặn hết và CI đỏ ~46 lỗi không liên quan
+	gì tới thứ các test đó đang đo. Bắt mỗi test upstream tự tạo thêm một Mã Công là sửa sai chỗ.
+
+	Cờ, chứ không phải bỏ hẳn chốt trong test: ``test_leave_type_code_gate.py`` bật cờ lên để vẫn
+	kiểm được chính chốt này. Hành vi trên site thật KHÔNG đổi một ly.
+	"""
+	return not frappe.flags.in_test or bool(frappe.flags.get(ENFORCE_LEAVE_CODE_FLAG))
+
 
 def code_for_leave_type(leave_type, status="On Leave"):
 	"""Mã công của một Loại nghỉ, tra từ bảng `Attendance Code` (nguồn sự thật duy nhất).
@@ -74,7 +93,12 @@ def validate_leave_type_has_code(doc, method=None):
 
 	Đơn nghỉ nửa ngày cần THÊM một mã ``Half Day`` (token đơn kiểu ``1/2P``) — mã cả ngày không mô
 	tả được nửa ngày đi làm. Cách chữa cho cả hai là tạo một Mã Công, một dòng master data.
+
+	Trong lúc chạy test thì chốt chỉ bật khi test tự yêu cầu — xem ``leave_code_gate_is_active``.
 	"""
+	if not leave_code_gate_is_active():
+		return
+
 	leave_type = doc.get("leave_type")
 	if not leave_type:
 		return

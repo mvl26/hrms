@@ -12,6 +12,7 @@ Chạy qua harness rollback (KHÔNG bench run-tests trên miyano).
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from hrms.hr.doctype.leave_application.leave_attendance_code import ENFORCE_LEAVE_CODE_FLAG
 from hrms.tests.isolation import PerTestRollback
 from hrms.tests.vn_test_utils import test_employee
 
@@ -133,6 +134,10 @@ class TestLeaveCodeOnExistingAttendance(PerTestRollback, FrappeTestCase):
 		Trước đó đơn vẫn duyệt được và ngày công kẹt mã `V` — lương (đọc `status`) tính là nghỉ
 		trong khi bảng công (đọc mã) hiện Vắng. Chặn ở nguồn tốt hơn dọn ở đích: xem
 		`test_leave_type_code_gate.py` và spec `docs/spec/attendance-code-as-anchor.md`."""
+		# Chốt tự tắt khi chạy test (xem `leave_code_gate_is_active`); test này đo chính nó nên bật.
+		frappe.flags[ENFORCE_LEAVE_CODE_FLAG] = True
+		self.addCleanup(frappe.flags.pop, ENFORCE_LEAVE_CODE_FLAG, None)
+
 		lt = frappe.get_doc({"doctype": "Leave Type", "leave_type_name": "Nghỉ thử chưa map", "is_lwp": 0})
 		lt.insert(ignore_permissions=True)
 

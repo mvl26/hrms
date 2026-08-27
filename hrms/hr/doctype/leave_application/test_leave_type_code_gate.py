@@ -15,6 +15,7 @@ Chạy qua harness rollback (KHÔNG bench run-tests trên miyano).
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from hrms.hr.doctype.leave_application.leave_attendance_code import ENFORCE_LEAVE_CODE_FLAG
 from hrms.tests.isolation import PerTestRollback
 from hrms.tests.vn_test_utils import default_company, test_employee
 
@@ -23,6 +24,11 @@ UNMAPPED = "Nghỉ thử chưa có mã"
 
 class TestLeaveTypeCodeGate(PerTestRollback, FrappeTestCase):
 	def setUp(self):
+		# Chốt tự tắt trong lúc chạy test (hàng trăm test upstream tạo Loại nghỉ tạm không bao giờ
+		# có mã công — xem `leave_code_gate_is_active`). Đây là chỗ DUY NHẤT bật nó lên, vì đây là
+		# chỗ duy nhất đang đo chính cái chốt đó.
+		frappe.flags[ENFORCE_LEAVE_CODE_FLAG] = True
+		self.addCleanup(frappe.flags.pop, ENFORCE_LEAVE_CODE_FLAG, None)
 		self.employee = test_employee("gate_ma_cong@codes.com")
 		self.company = default_company()
 

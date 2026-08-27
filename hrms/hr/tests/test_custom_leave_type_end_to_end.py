@@ -12,6 +12,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import getdate
 
+from hrms.hr.doctype.leave_application.leave_attendance_code import ENFORCE_LEAVE_CODE_FLAG
 from hrms.tests.isolation import PerTestRollback
 from hrms.tests.vn_test_utils import default_company, test_employee
 
@@ -97,6 +98,10 @@ class TestCustomLeaveTypeEndToEnd(PerTestRollback, FrappeTestCase):
 
 	def test_unmapped_leave_type_is_blocked_not_silently_zero(self):
 		"""TRƯỚC: 0 công trong im lặng. SAU: chặn thẳng, kèm hướng dẫn."""
+		# Chốt tự tắt khi chạy test (xem `leave_code_gate_is_active`); test này đo chính nó nên bật.
+		frappe.flags[ENFORCE_LEAVE_CODE_FLAG] = True
+		self.addCleanup(frappe.flags.pop, ENFORCE_LEAVE_CODE_FLAG, None)
+
 		self.allocate()
 		with self.assertRaisesRegex(frappe.ValidationError, "mã công"):
 			self.apply_leave(DAY_FRESH)
