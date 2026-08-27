@@ -17,6 +17,8 @@ Hai tầng:
 Chạy qua harness rollback; không ghi gì vào dữ liệu thật.
 """
 
+import unittest
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
@@ -118,7 +120,18 @@ class TestLiveSalarySlipsAreUnmoved(PerTestRollback, FrappeTestCase):
 			fields=["name", "employee", "start_date", "end_date", "company"],
 			order_by="start_date",
 		)
-		self.assertTrue(slips, "site không có phiếu lương đã submit nào để đối chiếu")
+		if not slips:
+			# Không có phiếu ĐÃ SUBMIT thì cổng này không chứng minh được gì — nhưng đó là TRẠNG THÁI
+			# DỮ LIỆU của site, không phải lỗi code. Để `fail` thì suite đỏ vĩnh viễn trên site chưa
+			# chốt kỳ lương nào, và đỏ thường trực thì người ta thôi đọc. `skip` hiện riêng một dòng
+			# trong kết quả nên vẫn nhìn thấy là cổng CHƯA chạy, mà không báo động giả.
+			# Cố tình KHÔNG lùi về phiếu nháp: số trên phiếu nháp có thể đã cũ so với chấm công hiện
+			# tại một cách hợp lệ, đem so sẽ ra lệch giả.
+			raise unittest.SkipTest(
+				"site chưa có phiếu lương nào ở trạng thái submit để đối chiếu "
+				f"(đang có {frappe.db.count('Salary Slip', {'docstatus': 0})} phiếu nháp). "
+				"Chốt một kỳ lương rồi chạy lại cổng này."
+			)
 
 		stored = {
 			s.name: frappe.db.get_value(
