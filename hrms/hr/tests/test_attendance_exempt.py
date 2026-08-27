@@ -174,9 +174,7 @@ class TestEnsureFullDay(PerTestRollback, FrappeTestCase):
 
 		ensure_full_day(self.emp, ANCHOR)
 		self.assertIsNone(ensure_full_day(self.emp, ANCHOR))
-		self.assertEqual(
-			frappe.db.count("Attendance", {"employee": self.emp, "attendance_date": ANCHOR}), 1
-		)
+		self.assertEqual(frappe.db.count("Attendance", {"employee": self.emp, "attendance_date": ANCHOR}), 1)
 
 	def test_skips_holiday(self):
 		from hrms.hr.attendance_exempt import ensure_full_day
@@ -691,7 +689,9 @@ class TestLateCheckinAfterGeneratedDay(PerTestRollback, FrappeTestCase):
 		shift.process_auto_attendance()  # không được ném lỗi
 
 		self.assertEqual(
-			frappe.db.count("Attendance", {"employee": emp, "attendance_date": ANCHOR, "docstatus": ["<", 2]}),
+			frappe.db.count(
+				"Attendance", {"employee": emp, "attendance_date": ANCHOR, "docstatus": ["<", 2]}
+			),
 			1,
 			"lượt chấm về sau đẻ ra bản ghi ngày công thứ hai",
 		)
@@ -850,7 +850,12 @@ class TestRepairsWrongDays(PerTestRollback, FrappeTestCase):
 
 		plain = make_plain_employee("repair_plain@miyano.test")
 		att = frappe.get_doc(
-			{"doctype": "Attendance", "employee": plain, "attendance_date": ANCHOR, "custom_attendance_code": "V"}
+			{
+				"doctype": "Attendance",
+				"employee": plain,
+				"attendance_date": ANCHOR,
+				"custom_attendance_code": "V",
+			}
 		)
 		att.insert()
 		att.submit()
@@ -866,7 +871,12 @@ class TestRepairsWrongDays(PerTestRollback, FrappeTestCase):
 		start = get_first_day(add_days(get_first_day(getdate()), -1))
 		emp = make_exempt_employee(email="repair2@miyano.test", from_date=start)
 		att = frappe.get_doc(
-			{"doctype": "Attendance", "employee": emp, "attendance_date": start, "custom_attendance_code": "V"}
+			{
+				"doctype": "Attendance",
+				"employee": emp,
+				"attendance_date": start,
+				"custom_attendance_code": "V",
+			}
 		)
 		att.insert()
 		att.submit()
@@ -932,7 +942,10 @@ class TestLateCheckinsGetAttached(PerTestRollback, FrappeTestCase):
 		ensure_full_day(emp, ANCHOR)
 
 		att = frappe.db.get_value(
-			"Attendance", name, ["custom_attendance_code", "in_time", "out_time", "working_hours"], as_dict=True
+			"Attendance",
+			name,
+			["custom_attendance_code", "in_time", "out_time", "working_hours"],
+			as_dict=True,
 		)
 		self.assertEqual(att.custom_attendance_code, "X", "vẫn đủ công")
 		self.assertIsNotNone(att.in_time, "giờ vào phải được ghi")

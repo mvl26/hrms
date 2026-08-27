@@ -270,7 +270,9 @@ def attach_late_checkins(row, employee: str, date) -> bool:
 
 	doc = frappe.get_doc("Attendance", row.name)
 	in_time, out_time = logs[0].time, logs[-1].time
-	doc.db_set({"in_time": in_time, "out_time": out_time, "working_hours": worked_hours(doc, in_time, out_time)})
+	doc.db_set(
+		{"in_time": in_time, "out_time": out_time, "working_hours": worked_hours(doc, in_time, out_time)}
+	)
 	for log in logs:
 		frappe.db.set_value("Employee Checkin", log.name, "attendance", row.name)
 	return True
