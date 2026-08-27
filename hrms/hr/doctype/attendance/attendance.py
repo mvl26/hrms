@@ -21,6 +21,7 @@ from erpnext.setup.doctype.holiday_list.holiday_list import is_holiday
 
 import hrms
 from hrms.hr.doctype.attendance.vn_day_classifier import (
+	DEFAULT_FLEX_BAND_MINUTES,
 	DEFAULT_LUNCH_END,
 	DEFAULT_LUNCH_START,
 	classify_day,
@@ -123,7 +124,7 @@ class Attendance(Document):
 	# (giờ nghỉ trưa: một nguồn duy nhất trong `vn_day_classifier`, xem `resolve_lunch_window`)
 	VN_DEFAULT_LUNCH_START = DEFAULT_LUNCH_START
 	VN_DEFAULT_LUNCH_END = DEFAULT_LUNCH_END
-	VN_DEFAULT_FLEX_BAND_MINUTES = 180
+	VN_DEFAULT_FLEX_BAND_MINUTES = DEFAULT_FLEX_BAND_MINUTES
 	VN_DEFAULT_MIN_WORK_HOURS = 8.0
 
 	def get_split_shift_config(self):

@@ -42,15 +42,19 @@ viên** (quy ước đặt tên: tên/fieldname tiếng Anh, label tiếng Việ
 Đọc **Attendance** `docstatus = 1` trong khoảng ngày (không đọc Employee Checkin thô — `in_time` /
 `out_time` của Attendance đã là punch đầu/cuối trong ngày, đã qua xử lý ca).
 
-**Giờ ở báo cáo này là giờ CÓ MẶT, không phải giờ quy công.** `Attendance.working_hours` do
-`vn_day_classifier.classify_day` tính chỉ cộng phần giờ **nằm trong khung ca**
-(`overlap_hours(in, out, w_start, w_end)`), nên người ở lại tới 19:30 vẫn chỉ được ghi 8h. Lấy con
-số đó làm mẫu số thì "TB giờ/ngày" hoá ra là **công tháng**, không phải thời gian thật ở văn phòng
-— đúng lỗi HR báo 2026-07-31.
+**Giờ ở báo cáo này là giờ CÓ MẶT, không phải giờ quy công.** Lấy giờ quy công làm mẫu số thì
+"TB giờ/ngày" hoá ra là **công tháng**, không phải thời gian thật ở văn phòng — đúng lỗi HR báo
+2026-07-31. Vì vậy giờ có mặt được tính lại từ giờ vào/ra, không cắt theo khung ca.
+
+> **Lưu ý (cập nhật 2026-08-27).** `Attendance.working_hours` **không còn** là giờ quy công. Từ
+> `19617d7` field đó giữ **giờ có mặt thật** (xem `DayResult`), nên cột "Giờ tính công" của ca tách
+> buổi phải **tính lại** phần nằm trong khung ca bằng `vn_day_classifier.counted_hours` — chính con
+> số `classify_day` dùng để chấm mã công. Đọc thẳng `working_hours` thì hai cột bằng nhau và cột đối
+> chiếu mất sạch ý nghĩa (lỗi này đã tồn tại từ 2026-08-03 tới 2026-08-27).
 
 | Trường hợp | Giờ có mặt | Giờ tính công (cột đối chiếu) |
 |---|---|---|
-| Có cả giờ vào và giờ ra | `(ra − vào) −` phần giao với khung nghỉ trưa, **không cắt theo khung ca** | `compute_net_hours` |
+| Có cả giờ vào và giờ ra | `(ra − vào) −` phần giao với khung nghỉ trưa, **không cắt theo khung ca** | ca tách buổi: `counted_hours` (phần trong khung ca, trừ trưa) · ca thường: `compute_net_hours` |
 | Thiếu giờ vào hoặc giờ ra (WFH, yêu cầu chấm công, nhập tay) | 0 — không xác định được thời gian ở văn phòng | `compute_net_hours` |
 | Trạng thái Absent / On Leave | 0 kể cả khi có punch lẻ | 0 |
 

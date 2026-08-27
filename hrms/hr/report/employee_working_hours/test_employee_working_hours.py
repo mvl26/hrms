@@ -157,11 +157,12 @@ class TestEmployeeWorkingHoursDaily(PerTestRollback, FrappeTestCase):
 		self.assertEqual([str(r["attendance_date"]) for r in rows], [MONDAY])
 
 	def test_hours_are_actual_presence_not_capped_by_shift(self):
-		"""Giờ của report là giờ CÓ MẶT thật, không phải giờ quy công đã cap ở khung ca.
+		"""Giờ của report là giờ CÓ MẶT thật; cột quy công vẫn phải là con số bị cap ở khung ca.
 
-		`Attendance.working_hours` của ca tách buổi chỉ cộng phần nằm trong khung ca (xem
-		`vn_day_classifier.classify_day`), nên người ở lại tới 19:30 vẫn chỉ được ghi 8h. Lấy con
-		số đó làm giờ trung bình thì TB thành "giờ quy công", không phải giờ ở văn phòng.
+		Hai con số này KHÁC nhau và cột "Giờ tính công" tồn tại chính để soi chênh lệch với bảng
+		chấm công (spec §3.4). `Attendance.working_hours` không còn dùng được làm giờ quy công —
+		từ `19617d7` nó giữ giờ có mặt thật — nên report tính lại phần trong khung ca bằng
+		`vn_day_classifier.counted_hours`, đúng con số quyết định mã công.
 		"""
 		shift = make_split_shift("EWH Split Shift")
 		employee = make_employee("ewh_split@miyano.test", company=default_company())
@@ -171,9 +172,48 @@ class TestEmployeeWorkingHoursDaily(PerTestRollback, FrappeTestCase):
 
 		# có mặt 08:00->19:30 = 11,5h, trừ 1,5h nghỉ trưa = 10,0h
 		self.assertEqual(row["hours"], 10.0)
-		# giờ quy công vẫn giữ nguyên con số của bảng chấm công (bị cap ở khung ca 08:00-17:30)
-		self.assertEqual(attendance.working_hours, 8.0)
+		# working_hours nay là GIỜ CÓ MẶT, không còn bị khung ca cắt
+		self.assertEqual(attendance.working_hours, 10.0)
+		# còn giờ quy công thì vẫn cap ở khung ca 08:00-17:30 -> 8h, khác hẳn 10h có mặt
 		self.assertEqual(row["credited_hours"], 8.0)
+		self.assertNotEqual(row["credited_hours"], row["hours"])
+
+	def test_credited_hours_drop_time_before_the_shift_starts(self):
+		"""Đến sớm cũng không được quy công thêm: phần trước giờ vào ca nằm ngoài khung."""
+		shift = make_split_shift("EWH Early Shift")
+		employee = make_employee("ewh_early@miyano.test", company=default_company())
+		make_attendance(employee, MONDAY, in_time="06:00:00", out_time="17:30:00", shift=shift)
+
+		row = get_daily_rows(base_filters(employee=employee))[0]
+
+		self.assertEqual(row["hours"], 10.0)  # có mặt 11,5h - 1,5h trưa
+		self.assertEqual(row["credited_hours"], 8.0)  # chỉ 08:00-17:30 được quy công
+
+	def test_credited_hours_below_full_day_when_leaving_early(self):
+		"""Về sớm thì cả hai cột cùng thấp — cột quy công không tự làm tròn lên đủ công."""
+		shift = make_split_shift("EWH Short Shift")
+		employee = make_employee("ewh_short@miyano.test", company=default_company())
+		make_attendance(employee, MONDAY, in_time="08:00:00", out_time="15:00:00", shift=shift)
+
+		row = get_daily_rows(base_filters(employee=employee))[0]
+
+		self.assertEqual(row["hours"], 5.5)  # 7h có mặt - 1,5h trưa
+		self.assertEqual(row["credited_hours"], 5.5)
+
+	def test_absent_day_on_split_shift_credits_no_hours(self):
+		"""Ngày đã chấm vắng thì quy công 0 — kể cả ca tách buổi còn giữ `working_hours` cũ.
+
+		Trước đây nhánh `is_split` của `compute_net_hours` trả thẳng `working_hours` trước khi nhìn
+		tới status, nên ngày vắng của ca tách buổi vẫn hiện đủ giờ quy công (trái spec §3.2).
+		"""
+		shift = make_split_shift("EWH Absent Shift")
+		employee = make_employee("ewh_absent_split@miyano.test", company=default_company())
+		make_attendance(employee, MONDAY, status="Absent", shift=shift, working_hours=8.0, submit=True)
+
+		row = get_daily_rows(base_filters(employee=employee))[0]
+
+		self.assertEqual(row["hours"], 0.0)
+		self.assertEqual(row["credited_hours"], 0.0)
 
 	def test_day_without_punch_has_no_presence_hours(self):
 		"""Ngày được trả công nhưng không có giờ vào/ra (WFH, yêu cầu chấm công, nhập tay) không
