@@ -22,7 +22,7 @@ from io import BytesIO
 from math import ceil
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 import frappe
@@ -36,6 +36,19 @@ from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
 	execute,
 	get_code_map,
 	weekday_label,
+)
+from hrms.miyano_xlsx import (
+	BORDER,
+	CENTER,
+	HEADER_ALIGN,
+	HEADER_BG,
+	HEADER_FG,
+	HEADER_HEIGHT,
+	LEFT,
+	excel_width,
+	period_line,
+	write_letterhead,
+	write_signatures,
 )
 
 # Chú thích tối đa 10 dòng; quá thì tràn sang cụm cột kế bên, không kéo dài xuống dưới.
@@ -67,19 +80,6 @@ FIRST_DATA_ROW = WEEKDAY_ROW + 1
 # chỗ. Không đổi `columns` của report vì trên màn hình cột Mã NV là liên kết bấm sang hồ sơ.
 STT_COLUMN = {"fieldname": "stt", "label": "STT", "fieldtype": "Int", "width": 44}
 
-HEADER_BG = "E9EDF2"
-HEADER_FG = "1F272E"
-GRID_LINE = "D1D8DD"
-
-THIN = Side(style="thin", color=GRID_LINE)
-BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
-CENTER = Alignment(horizontal="center", vertical="center")
-LEFT = Alignment(horizontal="left", vertical="center")
-# Nhãn cột tổng hợp dài hơn ô chứa nó ("Tai nạn lao động", "Số buổi ăn trưa"). Xuống dòng trong ô
-# thay vì nới cột: nới ra thì cả bảng bị co nhỏ khi in vừa một trang ngang.
-HEADER_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
-HEADER_HEIGHT = 34  # đủ hai dòng chữ ở cỡ mặc định
-
 PLAIN_FONT = Font()
 # Cột số nào cần khác thường: Tổng công là cột chủ đạo nên in đậm; STT chỉ để đánh dòng nên làm mờ
 # đi, không tranh mắt với số liệu.
@@ -90,17 +90,6 @@ MIN_TEXT_WIDTH = 11.0
 
 # Bề rộng cột ngày: vừa đủ mã dài nhất (`1/2P`), giữ cả tháng lọt một trang ngang khi in.
 DAY_WIDTH = 5.0
-
-# Tiêu đề thư của Miyano. Deployment này chỉ có MỘT pháp nhân (xem CLAUDE.md), và không dòng nào
-# trong ba dòng dưới đây có sẵn trong master data: `Company.company_name` là tên gọi tắt "Miyano",
-# `tax_id` để trống, site chưa có Address nào. Để đây thay vì sửa `company_name` vì đổi tên đó là
-# đổi tên công ty trên MỌI chứng từ ERPNext, không chỉ bảng chấm công. `company_lines()` vẫn ưu
-# tiên master data khi có, nên điền `tax_id` / tạo Address là hết dùng tới mặc định này.
-MIYANO_LETTERHEAD = {
-	"name": "CÔNG TY TNHH MIYANO VIỆT NAM",
-	"tax_id": "0109529507",
-	"address": ("số 20, Khu C17, ngõ 264/63, đường Ngọc Thụy, Phường Bồ Đề, Thành phố Hà Nội, Việt Nam"),
-}
 
 
 def legend_layout(count: int, max_rows: int = MAX_LEGEND_ROWS) -> tuple[int, int]:
@@ -114,11 +103,6 @@ def legend_layout(count: int, max_rows: int = MAX_LEGEND_ROWS) -> tuple[int, int
 	return groups, ceil(count / groups)
 
 
-def excel_width(px, minimum: float = 4.0) -> float:
-	"""Đổi bề rộng cột của datatable (px) sang đơn vị ký tự của Excel."""
-	return max(minimum, round(cint(px or 100) / 8.0, 1))
-
-
 def fill_for(state: str) -> tuple[PatternFill, Font] | tuple[None, None]:
 	"""(nền, chữ) của một state màu — dùng chung cặp màu nền sáng với report và bản in."""
 	style = STATE_STYLE.get(state or "")
@@ -130,55 +114,16 @@ def fill_for(state: str) -> tuple[PatternFill, Font] | tuple[None, None]:
 	)
 
 
-def report_period(filters: dict) -> str:
-	"""Dòng kỳ công dưới tên bảng: `Tháng 06 Năm 2026`."""
-	return _("Tháng {0} Năm {1}").format(f"{cint(filters.get('month')):02d}", cint(filters.get("year")))
+def build_workbook(
+	columns: list[dict],
+	data: list[dict],
+	filters: dict | None = None,
+	signatures: dict | None = None,
+) -> Workbook:
+	"""Dựng workbook đã tô màu từ đúng `columns`/`data` mà `execute()` của report trả về.
 
-
-def company_lines(company: str | None) -> list[str]:
-	"""Ba dòng tiêu đề thư: tên pháp nhân, MST, địa chỉ. Bỏ qua dòng nào không có dữ liệu.
-
-	Master data thắng ở đâu có: `Company.tax_id` cho MST, Address chính liên kết với Company cho
-	địa chỉ. Site hiện chưa có cả hai (2026-08-03: `tax_id` trống, không Address nào) và
-	`Company.company_name` là tên gọi tắt "Miyano" chứ không phải tên pháp nhân trên giấy tờ, nên
-	`MIYANO_LETTERHEAD` đứng làm mặc định — điền vào Company/Address là dữ liệu thắng ngay, không
-	phải sửa code."""
-	tax_id = frappe.db.get_value("Company", company, "tax_id") if company else None
-	lines = [MIYANO_LETTERHEAD["name"]]
-	if tax_id or MIYANO_LETTERHEAD["tax_id"]:
-		lines.append(_("MST: {0}").format(tax_id or MIYANO_LETTERHEAD["tax_id"]))
-	address = company_address(company) or MIYANO_LETTERHEAD["address"]
-	if address:
-		lines.append(_("Địa chỉ: {0}").format(address))
-	return lines
-
-
-def company_address(company: str | None) -> str | None:
-	"""Địa chỉ chính của Company gộp thành một dòng; None nếu chưa có Address nào liên kết."""
-	if not company:
-		return None
-	names = frappe.get_all(
-		"Dynamic Link",
-		filters={"link_doctype": "Company", "link_name": company, "parenttype": "Address"},
-		pluck="parent",
-	)
-	if not names:
-		return None
-	addresses = frappe.get_all(
-		"Address",
-		filters={"name": ["in", names]},
-		fields=["address_line1", "address_line2", "city", "state", "country", "is_primary_address"],
-		order_by="is_primary_address desc",
-		limit=1,
-	)
-	if not addresses:
-		return None
-	a = addresses[0]
-	return ", ".join(p for p in (a.address_line1, a.address_line2, a.city, a.state, a.country) if p)
-
-
-def build_workbook(columns: list[dict], data: list[dict], filters: dict | None = None) -> Workbook:
-	"""Dựng workbook đã tô màu từ đúng `columns`/`data` mà `execute()` của report trả về."""
+	`signatures` là hai cái tên trên khối trình ký (`prepared_by` / `approved_by`) — người xuất
+	file điền ở hộp thoại Export; để trống thì chỉ in chức danh, ký tên bằng tay."""
 	filters = frappe._dict(filters or {})
 	rows = [r for r in data if r and r.get("employee")]
 	columns = excel_columns(columns)
@@ -196,7 +141,8 @@ def build_workbook(columns: list[dict], data: list[dict], filters: dict | None =
 	# đóng băng dưới tiêu đề, bên phải cột tên: cuộn kiểu gì cũng còn biết đang xem ai, ngày nào
 	ws.freeze_panes = f"{get_column_letter(FIRST_DAY_COLUMN)}{FIRST_DATA_ROW}"
 
-	write_legend(ws, columns, end_row + 2)
+	legend_end = write_legend(ws, columns, end_row + 2)
+	write_signatures(ws, last_col, legend_end + 2, signatures, filters.get("company"), FIRST_DAY_COLUMN)
 	setup_print(ws, last_col)
 	return wb
 
@@ -207,27 +153,17 @@ def excel_columns(columns: list[dict]) -> list[dict]:
 
 
 def write_titles(ws, filters: dict, last_col: int) -> None:
-	"""Tiêu đề thư: khối pháp nhân căn TRÁI, rồi tên bảng + kỳ công căn GIỮA.
-
-	Mỗi dòng gộp hết bề ngang bảng để khi in không bị cắt ở mép cột."""
-	for row, text in enumerate(company_lines(filters.get("company")), start=1):
-		cell = ws.cell(row, 1, text)
-		cell.font = Font(bold=(row == 1), size=11)
-		cell.alignment = LEFT
-		ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_col)
-
+	"""Tiêu đề thư dùng chung với các biểu mẫu khác (`hrms/miyano_xlsx.py`)."""
 	# neo theo `HEADER_ROW` chứ không theo số dòng pháp nhân vừa ghi: thiếu MST hay địa chỉ thì
 	# khối trên ngắn lại, nhưng bảng vẫn phải bắt đầu đúng chỗ mọi nơi khác trong module trông đợi.
-	title_row = HEADER_ROW - 3  # tên bảng, kỳ công, rồi một dòng trống trước tiêu đề bảng
-	for offset, (text, font) in enumerate(
-		((_("BẢNG CHẤM CÔNG"), Font(bold=True, size=16)), (report_period(filters), Font(size=12)))
-	):
-		cell = ws.cell(title_row + offset, 1, text)
-		cell.font, cell.alignment = font, CENTER
-		ws.merge_cells(
-			start_row=title_row + offset, start_column=1, end_row=title_row + offset, end_column=last_col
-		)
-	ws.row_dimensions[title_row].height = 26
+	write_letterhead(
+		ws,
+		filters.get("company"),
+		last_col,
+		_("BẢNG CHẤM CÔNG"),
+		period_line(filters),
+		title_row=HEADER_ROW - 3,  # tên bảng, kỳ công, rồi một dòng trống trước tiêu đề bảng
+	)
 
 
 def write_header(ws, columns: list[dict], filters: dict) -> None:
@@ -279,7 +215,8 @@ def write_row(ws, columns: list[dict], data_row: dict, row: int, stt: int) -> No
 			fill, font = fill_for(data_row.get(f"_state_{fieldname[4:]}"))
 			if fill:
 				cell.fill, cell.font = fill, font
-		elif col.get("fieldtype") in ("Float", "Int"):
+		elif col.get("fieldtype") in ("Float", "Int") or col.get("align") == "center":
+			# `align` để cột chữ nhưng đọc như số (TB giờ/ngày dạng hh:mm) không bị dạt trái
 			cell.alignment = CENTER
 			cell.font = NUMBER_FONTS.get(fieldname, PLAIN_FONT)
 		else:
@@ -319,12 +256,15 @@ def legend_span(ws, total_cols: int, groups: int) -> int:
 	return max(3, min(desired, room))
 
 
-def write_legend(ws, columns: list[dict], top: int) -> None:
+def write_legend(ws, columns: list[dict], top: int) -> int:
 	"""Khối chú thích dạng lưới: `Chú thích` một ô, mỗi ký hiệu một ô (tô đúng màu của nó), nghĩa
-	ở ô ngang hàng ngay bên phải. Tối đa `MAX_LEGEND_ROWS` dòng — quá thì sang cụm cột kế tiếp."""
+	ở ô ngang hàng ngay bên phải. Tối đa `MAX_LEGEND_ROWS` dòng — quá thì sang cụm cột kế tiếp.
+
+	Trả về dòng cuối đã dùng (hoặc `top - 1` nếu không có ký hiệu nào) để khối trình ký biết
+	đặt xuống đâu."""
 	pairs = legend_pairs()
 	if not pairs:
-		return
+		return top - 1
 
 	groups, rows = legend_layout(len(pairs))
 	span = legend_span(ws, len(columns), groups)
@@ -350,6 +290,8 @@ def write_legend(ws, columns: list[dict], top: int) -> None:
 		meaning.alignment = LEFT
 		ws.merge_cells(start_row=row, start_column=col + 1, end_row=row, end_column=col + span)
 
+	return top + rows - 1
+
 
 def setup_print(ws, last_col: int) -> None:
 	"""In ngang, co vừa một trang ngang, lặp cả hai dòng tiêu đề bảng ở mọi trang."""
@@ -362,7 +304,12 @@ def setup_print(ws, last_col: int) -> None:
 
 
 @frappe.whitelist()
-def download(filters=None, visible_idx=None):
+def download(
+	filters: str | dict | None = None,
+	visible_idx: str | list | None = None,
+	prepared_by: str | None = None,
+	approved_by: str | None = None,
+):
 	"""Endpoint của nút Export (Excel có màu) trên `Monthly Attendance Report`."""
 	from frappe.desk.utils import provide_binary_file
 
@@ -370,6 +317,11 @@ def download(filters=None, visible_idx=None):
 	frappe.permissions.can_export("Attendance", raise_exception=True)
 
 	filters = frappe.parse_json(filters) or {}
+	# Endpoint này chỉ phục vụ Bảng chấm công tháng. Nói thẳng ra khi bị gọi nhầm: `execute()` sẽ
+	# ném "Please select month and year", đọc một mình không lần ra được là nút Export của báo cáo
+	# NÀO gọi sai (đã mất công lần một lần, 2026-08-03).
+	if not (cint(filters.get("month")) and cint(filters.get("year"))):
+		frappe.throw(_("Thiếu tháng/năm: đường xuất Excel này chỉ dùng cho báo cáo Bảng chấm công tháng."))
 	columns, data, _message = execute(filters)
 
 	# lọc theo dòng đang hiện trên màn hình TRƯỚC khi bỏ dòng chú thích cũ: chỉ số client gửi lên
@@ -380,7 +332,8 @@ def download(filters=None, visible_idx=None):
 		data = [row for i, row in enumerate(data) if i in keep]
 
 	stream = BytesIO()
-	build_workbook(columns, data, filters).save(stream)
+	signatures = {"prepared_by": prepared_by, "approved_by": approved_by}
+	build_workbook(columns, data, filters, signatures).save(stream)
 
 	filters = frappe._dict(filters)
 	name = f"Bang cham cong {cint(filters.month):02d}-{cint(filters.year)}"

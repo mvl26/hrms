@@ -17,12 +17,24 @@ import frappe
 from frappe import _
 from frappe.utils import cint, getdate
 
-# reason (giá trị native + 2 giá trị Miyano thêm) → mã công hiển thị trên bảng chấm công.
+# reason (giá trị native + các giá trị Miyano thêm) → mã công hiển thị trên bảng chấm công.
+#
+# QUY ƯỚC NGÔN NGỮ (chốt 2026-08-05): **giá trị LƯU và định danh trong code luôn là tiếng Anh; người
+# dùng chỉ thấy tiếng Việt**, dịch ở lớp hiển thị qua `translations/vi.csv`. Ba giá trị Miyano thêm
+# từng lưu thẳng tiếng Việt ("Làm việc từ xa"…) — đã đổi sang tiếng Anh 2026-08-05, lúc đó chưa bản
+# ghi nào dùng chúng nên không phải di trú dữ liệu. Thêm lựa chọn mới sau này phải theo quy ước này:
+# giá trị tiếng Anh ở đây + fixtures, bản dịch tiếng Việt trong vi.csv.
+# Kênh này chỉ sinh ra ĐÚNG BA mã (HR chốt 2026-08-05): W, CT, X — đều là ngày ĐI LÀM, đủ công.
+# Nghỉ (phép/ốm/không lương) đi đường Đơn xin nghỉ, không phải đường này.
 REASON_TO_CODE = {
-	"Work From Home": "W",  # làm tại nhà (W = Work from home)
-	"On Duty": "CT",  # ra ngoài công việc = công tác → tái dùng mã CT có sẵn
-	"Quên chấm công": "X",
-	"Đi muộn/về sớm": "X",
+	"Work From Home": "W",  # làm tại nhà
+	"On Duty": "CT",  # đi công tác → tái dùng mã CT có sẵn
+	# "Làm việc từ xa": vẫn làm đủ ngày nhưng không ngồi văn phòng cả ngày (ví dụ chiều đi gặp khách
+	# hàng). Khác "làm tại nhà" ở chỗ không cố định một nơi, nên mang mã X (đi làm đủ công) chứ
+	# không phải W — bảng chấm công đọc là một ngày công bình thường.
+	"Remote Work": "X",
+	"Missed Punch": "X",  # quên chấm công
+	"Late Or Early Leave": "X",  # đi muộn / về sớm
 }
 DEFAULT_CODE = "X"  # reason lạ / trống → coi như đi làm đủ công
 WORK_CODE = "X"  # buổi còn lại của ngày nửa buổi
@@ -105,6 +117,9 @@ def guard_submit(doc, method=None):
 # --- mã công (thuần hiển thị, payroll-neutral) --------------------------------------------------
 UNPAID_CODE = "K"  # nửa còn lại KHÔNG làm → nghỉ không lương (native half_day_status="Absent" trừ 0.5)
 
+# Giá trị của `custom_half_day_session` (custom field, fixtures). Chỉ hai buổi; mặc định "Sáng".
+MORNING, AFTERNOON = "Sáng", "Chiều"
+
 
 def set_attendance_request_code(doc, method=None):
 	"""``on_submit``: sau khi upstream ``create_attendance_records`` sinh/cập nhật Attendance, ghi mã
@@ -117,6 +132,12 @@ def set_attendance_request_code(doc, method=None):
 	Ngày nửa buổi: buổi yêu cầu = mã reason; buổi còn lại suy TỪ half_day_status native (đúng payroll) —
 	đã hiện diện (Present) → X ⇒ **W/X (đi làm đủ, cả ngày trả lương)**; chưa (Absent, native trừ 0.5) →
 	K ⇒ **W/K (chỉ làm nửa ngày, nửa kia không lương)**."""
+	# Số công phải ghi kèm mã: khi ngày đó ĐÃ có bản ghi (Vắng do auto-attendance), upstream đi nhánh
+	# `db_set` nên cầu nối không chạy và `custom_work_credit` nằm nguyên ở 0.0 của mã `V` — form Ngày
+	# công hiện "Công = 0" cho một ngày đi công tác. Dùng chung `paid_credit` như cầu nối và bộ đồng
+	# bộ (`work_credit`), không chép luật sang đây.
+	from hrms.hr.doctype.leave_application.leave_attendance_code import work_credit
+
 	code = REASON_TO_CODE.get(doc.get("reason"), DEFAULT_CODE)
 	is_half = cint(doc.get("half_day")) and doc.get("half_day_date")
 	half_date = getdate(doc.get("half_day_date")) if is_half else None
@@ -127,19 +148,26 @@ def set_attendance_request_code(doc, method=None):
 		fields=["name", "attendance_date", "half_day_status"],
 	):
 		if is_half and getdate(att.attendance_date) == half_date:
-			# buổi còn lại: hiện diện đủ → X (W/X đủ công); không → K không lương (W/K nửa ngày). Khớp
+			# buổi còn lại: hiện diện đủ → X (đủ công); không → K không lương (chỉ làm nửa ngày). Khớp
 			# đúng cách payroll xử lý half_day_status (chỉ Absent mới trừ 0.5) nên bảng công ↔ lương nhất quán.
 			other = WORK_CODE if att.half_day_status == "Present" else UNPAID_CODE
+			# Buổi nào được yêu cầu là do NGƯỜI NỘP chọn (`custom_half_day_session`). Trước 2026-08-05
+			# luôn gán mã vào buổi SÁNG, nên đơn xin nửa ngày chiều bị ghi ngược buổi trên bảng công.
 			vals = {
-				"custom_morning_code": code,
-				"custom_afternoon_code": other,
 				"custom_attendance_code": None,
+				**(
+					{"custom_morning_code": other, "custom_afternoon_code": code}
+					if doc.get("custom_half_day_session") == AFTERNOON
+					else {"custom_morning_code": code, "custom_afternoon_code": other}
+				),
+				"custom_work_credit": (work_credit(code) + work_credit(other)) * 0.5,
 			}
 		else:
 			vals = {
 				"custom_attendance_code": code,
 				"custom_morning_code": None,
 				"custom_afternoon_code": None,
+				"custom_work_credit": work_credit(code),
 			}
 		for field, value in vals.items():
 			frappe.db.set_value("Attendance", att.name, field, value, update_modified=False)

@@ -691,7 +691,7 @@ Da doi chieu doc_events truoc/sau: khong doi."
 - Modify: `CLAUDE.md` (phần "What this project is" + mọi chỗ nói Frappe HR như thượng nguồn)
 - Modify: `docs/superpowers/plans/2026-06-30-attendance-working-hours-dashboard.md`,
   `docs/superpowers/specs/2026-06-30-attendance-working-hours-dashboard-design.md`,
-  `tasks/plan-auto-morning-afternoon.md`, `tasks/plan-vn-holiday-and-symbol.md`,
+  `docs/tasks/plan-auto-morning-afternoon.md`, `docs/tasks/plan-vn-holiday-and-symbol.md`,
   `docs/SPEC.md`, `docs/audit-roadmap-2026-07-16.md`, `CODE_OF_CONDUCT.md`
 
 **Interfaces:**
@@ -723,7 +723,7 @@ cd /home/miyano/frappe-bench/apps/hrms
 git grep -n "Frappe Technologies" -- '*.md'
 ```
 
-Hai file trong `tasks/` chứa quy ước cũ: *"Mọi file Python/JS mới mở đầu bằng header bản quyền giống file lân cận: `# Copyright (c) YYYY, Frappe Technologies Pvt. Ltd. and Contributors` + `# License: GNU General Public License v3...`"*. Quy ước này **đã bị thay** — sửa thành:
+Hai file trong `docs/tasks/` chứa quy ước cũ: *"Mọi file Python/JS mới mở đầu bằng header bản quyền giống file lân cận: `# Copyright (c) YYYY, Frappe Technologies Pvt. Ltd. and Contributors` + `# License: GNU General Public License v3...`"*. Quy ước này **đã bị thay** — sửa thành:
 
 > Mọi file Python/JS mới mở đầu bằng `# Copyright (c) 2026, Miyano Việt Nam.` (JS dùng `//`).
 

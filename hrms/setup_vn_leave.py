@@ -1,5 +1,5 @@
 # Copyright (c) 2026, Miyano Việt Nam.
-"""On-demand VN annual-leave entitlement helpers (spec/leave-entitlement-vn.md).
+"""On-demand VN annual-leave entitlement helpers (docs/spec/leave-entitlement-vn.md).
 
 Grants every active employee an annual-leave balance per Điều 113/114 BLLĐ 2019:
 12 days/year accrued monthly (stock earned-leave scheduler) plus 1 extra day per

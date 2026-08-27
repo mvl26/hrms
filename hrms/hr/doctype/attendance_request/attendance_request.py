@@ -192,6 +192,13 @@ class AttendanceRequest(Document):
 		new_status = self.get_attendance_status(attendance_date)
 		attendance_doc = self.get_attendance_doc(attendance_date)
 		if attendance_doc and attendance_doc.status == new_status:
+			# Miyano: ngày TỰ SINH của nhân viên miễn chấm công luôn là Present, mà đơn on-duty /
+			# quên chấm / đi muộn cũng quy ra Present → upstream kết luận "không có gì để tạo" và
+			# chặn nộp đơn. Với họ thì mọi ngày đều Present, nghĩa là không bao giờ nộp được đơn.
+			# Đơn VẪN đổi thứ khác: mã công hiển thị (CT / X) và liên kết `attendance_request`.
+			# Coi ngày tự sinh là ghi đè được; status không đổi nên lương bất biến.
+			if attendance_doc.get("custom_auto_filled"):
+				return False
 			return True
 		return False
 

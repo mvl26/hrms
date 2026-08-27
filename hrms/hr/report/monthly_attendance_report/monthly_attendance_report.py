@@ -23,7 +23,7 @@ from frappe.utils.nestedset import get_descendants_of
 from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
 
 from hrms.hr.attendance_legend import legend_html
-from hrms.hr.working_hours import avg_office_hours, office_hours_map
+from hrms.hr.working_hours import avg_office_hours, format_hours_hm, office_hours_map
 
 Filters = frappe._dict
 
@@ -35,6 +35,12 @@ MARKER_HOLIDAY = "NL"  # ngày nghỉ lễ có lương — kept distinct so paid
 
 # Loại nhận phần không đi làm của một mã thuộc loại "Công" (mã V cũng thuộc loại này)
 CATEGORY_UNEXCUSED = "Vắng"
+
+# Nghỉ kết hôn có cột RIÊNG (HR chốt 2026-08-04) dù cùng loại "Việc riêng" với nghỉ con kết hôn (R1)
+# và nghỉ tang (R2). Tách theo MÃ chứ không theo loại: đổi `category` của KH sẽ kéo theo màu ô và
+# mọi nơi khác đang gom theo loại. Đây là ngoại lệ có chủ đích, khai báo một chỗ.
+BUCKET_MARRIAGE = "Nghỉ kết hôn"
+CODE_OWN_BUCKET = {"KH": BUCKET_MARRIAGE}
 
 # Thứ trong tuần theo lối viết của bảng chấm công VN. `date.weekday()`: 0 = thứ Hai … 6 = Chủ nhật.
 WEEKDAY_LABELS = ("T2", "T3", "T4", "T5", "T6", "T7", "CN")
@@ -54,6 +60,7 @@ REPORT_CATEGORIES = [
 	("Ốm", "Ốm / chăm con ốm"),
 	("Thai sản", "Thai sản"),
 	("Tai nạn LĐ", "Tai nạn lao động"),
+	(BUCKET_MARRIAGE, "Nghỉ kết hôn"),
 	("Việc riêng", "Nghỉ riêng"),
 	("Không lương", "Không lương"),
 ]
@@ -403,14 +410,15 @@ def get_columns(days: int, year: int, month: int) -> list:
 	columns.append(
 		{"fieldname": "lunch_days", "label": _("Số buổi ăn trưa"), "fieldtype": "Int", "width": 90}
 	)
-	# Giờ CÓ MẶT trung bình, không phải giờ quy công — xem `office_hours_map`
+	# Giờ CÓ MẶT trung bình, không phải giờ quy công — xem `office_hours_map`.
+	# Hiển thị dạng thời lượng ("7h45") nên là Data, không phải Float: 7,75 giờ không ai đọc ra 7 giờ 45.
 	columns.append(
 		{
 			"fieldname": "avg_office_hours",
 			"label": _("TB giờ/ngày"),
-			"fieldtype": "Float",
+			"fieldtype": "Data",
 			"width": 90,
-			"precision": 2,
+			"align": "center",
 		}
 	)
 	return columns
@@ -499,7 +507,9 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 						# không làm đủ buổi (1/2X = đi làm thiếu giờ) không nói nửa kia nghỉ vì gì, nên
 						# nửa đó là nghỉ không lý do -> Vắng. Thiếu nhánh này thì ngày 1/2X chỉ quy ra
 						# 0.5 công và dòng bảng công không cân về số ngày công của tháng.
-						bucket = c.category if c.category != "Công" else CATEGORY_UNEXCUSED
+						bucket = CODE_OWN_BUCKET.get(
+							c.name, c.category if c.category != "Công" else CATEGORY_UNEXCUSED
+						)
 						totals[bucket] = totals.get(bucket, 0.0) + rest
 						# Nghỉ CÓ LƯƠNG (P/Ô/Cô/TS/T/NB/N) tính vào Tổng công = số ngày được trả lương.
 						if is_paid_leave(c):
@@ -513,9 +523,13 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 				if emp_hol[day]:
 					day_syms[day] = MARKER_WEEKLY_OFF  # nghỉ hàng tuần (CN) — không tính công
 				else:
-					# nghỉ lễ hưởng lương → đếm vào cột "Nghỉ lễ" (nghỉ nhưng vẫn hưởng lương)
+					# Nghỉ lễ HƯỞNG NGUYÊN LƯƠNG (Đ.112 BLLĐ) → vừa đếm riêng, vừa vào Tổng công.
+					# Quyết định 2026-08-04 (HR chốt): ngày công chuẩn = ngày đi làm + nghỉ lễ + nghỉ
+					# có lương. Trước đó ngày lễ bị loại khỏi CẢ tử số lẫn mẫu số nên đi làm đủ vẫn đủ
+					# lương, nhưng người có ngày vắng bị chia theo mẫu số nhỏ hơn → thiệt.
 					day_syms[day] = MARKER_HOLIDAY
 					totals[CATEGORY_HOLIDAY] = totals.get(CATEGORY_HOLIDAY, 0.0) + 1.0
+					totals[TOTAL_PAID] = totals.get(TOTAL_PAID, 0.0) + 1.0
 
 		rows.append(
 			{
@@ -542,7 +556,7 @@ def _rows_to_report_data(rows: list[dict], days: int, code_map: dict) -> list:
 			"employee": r["employee"],
 			"employee_name": r["employee_name"],
 			"lunch_days": cint(r.get("lunch_days")),
-			"avg_office_hours": flt(r.get("avg_office_hours")),
+			"avg_office_hours": format_hours_hm(r.get("avg_office_hours")),
 			"tong_cong": flt(totals.get(TOTAL_PAID)),
 			**{f"cat_{i}": flt(totals.get(cat)) for i, (cat, _label) in enumerate(REPORT_CATEGORIES)},
 		}

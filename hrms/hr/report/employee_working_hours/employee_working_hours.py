@@ -3,14 +3,15 @@
 
 Chỉ ĐỌC Attendance đã duyệt (`docstatus = 1`) — không ghi gì, nên payroll-neutral theo định nghĩa.
 
-**Giờ ở báo cáo này là giờ CÓ MẶT, không phải giờ quy công.** `Attendance.working_hours` của ca
-tách buổi chỉ cộng phần giờ nằm trong khung ca (`vn_day_classifier.classify_day`), nên người ở lại
-tới 19:30 vẫn chỉ được ghi 8h — dùng con số đó thì "TB giờ/ngày" hoá ra là công tháng chứ không
-phải thời gian thật ở văn phòng. Vì vậy giờ mỗi ngày được tính lại từ giờ vào/ra: (ra - vào) trừ
-phần giao với khung nghỉ trưa của ca. Giờ quy công vẫn giữ ở cột riêng để đối chiếu bảng chấm công.
+**Giờ ở báo cáo này là giờ CÓ MẶT, không phải giờ quy công.** Giờ mỗi ngày tính từ giờ vào/ra:
+(ra - vào) trừ phần giao với khung nghỉ trưa của ca, KHÔNG cắt theo khung ca — ở lại tới 19:30 thì
+hiện đủ 10h. Giờ quy công đứng ở cột riêng để đối chiếu bảng chấm công: với ca tách buổi nó là
+phần giờ nằm trong khung ca (`vn_day_classifier.counted_hours`, đúng con số quyết định mã công),
+với ca thường là `compute_net_hours`. Hai cột phải KHÁC nhau khi có người ở lại ngoài khung ca —
+bằng nhau tức cột đối chiếu đã hỏng.
 
 Ngày không có giờ vào/ra (WFH, yêu cầu chấm công, nhập tay) không phải ngày làm ở văn phòng → 0 giờ
-và không vào mẫu số TB. Xem `spec/employee-working-hours-report.md`.
+và không vào mẫu số TB. Xem `docs/spec/employee-working-hours-report.md`.
 """
 
 import frappe
@@ -20,7 +21,9 @@ from frappe.utils import cint, get_datetime, get_first_day, get_last_day, getdat
 from hrms.hr.working_hours import (
 	NON_PRESENCE_STATUSES,
 	compute_net_hours,
+	credited_hours,
 	get_lunch_window_map,
+	get_split_shift_config_map,
 	presence_hours,
 )
 
@@ -78,17 +81,6 @@ def get_employees(filters):
 	)
 
 
-def get_split_shift_names():
-	"""Ca bật tách buổi — `working_hours` của chúng ĐÃ là giờ net, không trừ trưa lần hai.
-
-	Đọc phòng thủ: `custom_split_half_day` là custom field (fixtures), site chưa migrate thì chưa
-	có field và câu lọc sẽ vỡ.
-	"""
-	if not frappe.get_meta("Shift Type").has_field("custom_split_half_day"):
-		return set()
-	return set(frappe.get_all("Shift Type", filters={"custom_split_half_day": 1}, pluck="name"))
-
-
 def get_daily_rows(filters, employees=None):
 	"""Một dòng cho mỗi ngày có Attendance đã duyệt, kèm giờ có mặt và giờ quy công của ngày đó."""
 	filters = prepare_filters(filters)
@@ -98,7 +90,7 @@ def get_daily_rows(filters, employees=None):
 		return []
 
 	employee_map = {e.name: e for e in employees}
-	split_shifts = get_split_shift_names()
+	split_configs = get_split_shift_config_map()
 	lunch_windows = get_lunch_window_map()
 
 	Attendance = frappe.qb.DocType("Attendance")
@@ -134,13 +126,16 @@ def get_daily_rows(filters, employees=None):
 			hours = presence_hours(
 				record.in_time, record.out_time, record.attendance_date, lunch_start, lunch_end
 			)
-		credited_hours = compute_net_hours(
-			record.status,
-			record.in_time,
-			record.out_time,
-			record.working_hours,
-			is_split=(record.shift or "") in split_shifts,
-		)
+		split_cfg = split_configs.get(record.shift or "")
+		if record.status in NON_PRESENCE_STATUSES:
+			# spec §3.2: ngày vắng / nghỉ phép không quy công giờ nào, kể cả khi còn punch lẻ. Ca
+			# tách buổi trước đây lọt lưới vì nhánh `is_split` của `compute_net_hours` trả thẳng
+			# `working_hours` trước cả khi nhìn tới status.
+			credited = 0.0
+		elif split_cfg:
+			credited = credited_hours(record.in_time, record.out_time, record.attendance_date, split_cfg)
+		else:
+			credited = compute_net_hours(record.status, record.in_time, record.out_time, record.working_hours)
 		rows.append(
 			{
 				"employee": record.employee,
@@ -155,7 +150,7 @@ def get_daily_rows(filters, employees=None):
 				"in_minutes": clock_minutes(record.in_time),
 				"out_minutes": clock_minutes(record.out_time),
 				"hours": hours,
-				"credited_hours": credited_hours,
+				"credited_hours": credited,
 			}
 		)
 

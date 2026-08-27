@@ -169,7 +169,7 @@ class TestBangCongMonthEndToEnd(ShortHoursCodeMixin, FrappeTestCase):
 			7: "1/2X",
 			8: "1/2P",
 			9: "1/2K",
-			10: "KH",
+			10: "R2",  # nghỉ tang — đại diện "Việc riêng" (KH đã tách cột riêng 2026-08-04)
 			11: "TS",
 			12: "NB",
 			13: "T",
@@ -185,7 +185,7 @@ class TestBangCongMonthEndToEnd(ShortHoursCodeMixin, FrappeTestCase):
 		self.assertEqual(t["Ốm"], 2.0, "Ô1 + Cô1")
 		self.assertEqual(t["Không lương"], 1.5, "K1 + 1/2K.5")
 		self.assertEqual(t["Vắng"], 1.5, "V1 + 1/2X.5")
-		self.assertEqual(t["Việc riêng"], 1.0)
+		self.assertEqual(t["Việc riêng"], 1.0, "R2 (tang); KH nay có cột riêng")
 		self.assertEqual(t["Thai sản"], 1.0)
 		self.assertEqual(t["Nghỉ bù"], 1.0)
 		self.assertEqual(t["Tai nạn LĐ"], 1.0)

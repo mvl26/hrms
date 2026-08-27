@@ -53,3 +53,15 @@ class TestSetupVnDefaults(PerTestRollback, FrappeTestCase):
 				file_names,
 				f"hooks.py fixtures filter for {entry['dt']} is out of sync with its fixture file",
 			)
+
+	def test_reports_leave_types_without_any_attendance_code(self):
+		"""Loại nghỉ chưa gắn mã phải lộ ra lúc migrate, không đợi tới lúc in bảng công."""
+		from hrms.setup_vn_defaults import leave_types_without_code
+
+		self.assertEqual(leave_types_without_code(), [], "tiền đề: site đang sạch")
+
+		frappe.get_doc(
+			{"doctype": "Leave Type", "leave_type_name": "Nghỉ thử chưa gắn mã", "is_lwp": 0}
+		).insert(ignore_permissions=True)
+
+		self.assertIn("Nghỉ thử chưa gắn mã", leave_types_without_code())

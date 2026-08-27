@@ -103,7 +103,7 @@ watch(
 	() => leaveApplication.value.leave_type,
 	(leave_type) => {
 		setLeaveBalance(leave_type)
-		setLeaveReasonVisibility(leave_type)
+		setLeaveReasonVisibility()
 	}
 )
 
@@ -260,17 +260,16 @@ function setHalfDayDateRange() {
 	half_day_date.maxDate = leaveApplication.value.to_date
 }
 
-// Miyano: "Loại nghỉ" (Nghỉ phép năm / Nghỉ ốm / Nghỉ chăm con ốm) bắt buộc khi rút quỹ phép năm;
-// hệ thống tự suy mã công. Ẩn/hiện thủ công vì FormView không đọc depends_on như desk.
-function setLeaveReasonVisibility(leave_type) {
+// Miyano: "Loại nghỉ" chỉ còn là ghi chú lịch sử — mã công KHÔNG suy từ nó nữa mà tra thẳng bảng
+// Attendance Code (xem docs/spec/attendance-code-as-anchor.md). Trước đây trường này bắt buộc khi
+// leave_type === "Nghỉ phép năm"; cái tên cứng đó đã gỡ khỏi cả server lẫn fixture, nên ẩn hẳn.
+function setLeaveReasonVisibility() {
 	const field = formFields.data?.find(
 		(field) => field.fieldname === "custom_leave_reason"
 	)
 	if (!field) return
-	const is_pool = leave_type === "Nghỉ phép năm"
-	field.hidden = !is_pool
-	field.reqd = is_pool
-	if (!is_pool) leaveApplication.value.custom_leave_reason = null
+	field.hidden = true
+	field.reqd = false
 }
 
 // Miyano: nghỉ nửa ngày phải chọn buổi (Sáng/Chiều) → bảng công tách sáng/chiều.
@@ -323,7 +322,7 @@ function areValuesSet() {
 function validateForm() {
 	setHalfDayDate(leaveApplication.value.half_day)
 	setHalfDayPeriodVisibility(leaveApplication.value.half_day)
-	setLeaveReasonVisibility(leaveApplication.value.leave_type)
+	setLeaveReasonVisibility()
 	leaveApplication.value.employee = currEmployee.value
 }
 </script>

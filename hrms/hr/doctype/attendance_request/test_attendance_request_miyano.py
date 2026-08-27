@@ -19,7 +19,15 @@ _FIX_DIR = os.path.join(frappe.get_app_path("hrms"), "fixtures")
 _FIXTURE = os.path.join(_FIX_DIR, "attendance_code.json")
 
 # 4 tình huống yêu cầu chấm công (giá trị reason) — WFH/On Duty là option native, 2 cái sau Miyano thêm.
-EXPECTED_REASONS = {"Work From Home", "On Duty", "Quên chấm công", "Đi muộn/về sớm"}
+EXPECTED_REASONS = {
+	"Work From Home",
+	"On Duty",
+	# Giá trị LƯU là tiếng Anh, UI hiện tiếng Việt qua translations/vi.csv — quy ước 2026-08-05:
+	# code + database nói tiếng Anh, người dùng chỉ thấy tiếng Việt.
+	"Remote Work",  # Làm việc từ xa → mã X
+	"Missed Punch",  # Quên chấm công
+	"Late Or Early Leave",  # Đi muộn/về sớm
+}
 
 
 def _codes():
@@ -609,3 +617,128 @@ class TestRequestAlwaysLinksItsDay(PerTestRollback, FrappeTestCase):
 		lai = self.attendance()
 		self.assertEqual(lai.attendance_request, ar.name, "phải gắn lại về đơn đã duyệt")
 		self.assertEqual(lai.custom_attendance_code, "CT", "on-duty phải mang lại mã hiển thị CT")
+
+
+class TestThreeCodesOnly(FrappeTestCase):
+	"""Kênh Yêu cầu chấm công chỉ sinh ĐÚNG BA mã: W, CT, X (HR chốt 2026-08-05).
+
+	Cả ba đều là ngày ĐI LÀM, đủ công — nghỉ đi đường Đơn xin nghỉ, không phải đường này."""
+
+	def test_remote_work_maps_to_the_plain_working_code(self):
+		from hrms.hr.doctype.attendance_request.attendance_request_miyano import REASON_TO_CODE
+
+		# làm việc từ xa (chiều đi gặp khách hàng) vẫn là một ngày công bình thường → X, không phải W
+		self.assertEqual(REASON_TO_CODE["Remote Work"], "X")
+		self.assertEqual(REASON_TO_CODE["Work From Home"], "W")
+		self.assertEqual(REASON_TO_CODE["On Duty"], "CT")
+
+	def test_no_reason_produces_a_code_outside_the_three(self):
+		from hrms.hr.doctype.attendance_request.attendance_request_miyano import (
+			DEFAULT_CODE,
+			REASON_TO_CODE,
+		)
+
+		self.assertEqual(set(REASON_TO_CODE.values()) | {DEFAULT_CODE}, {"W", "CT", "X"})
+
+	def test_every_reason_option_on_the_form_has_a_code(self):
+		"""Thêm lý do vào Property Setter mà quên map là ngày đó âm thầm rơi về mã mặc định."""
+		from hrms.hr.doctype.attendance_request.attendance_request_miyano import REASON_TO_CODE
+
+		options = frappe.db.get_value(
+			"Property Setter",
+			{"doc_type": "Attendance Request", "field_name": "reason", "property": "options"},
+			"value",
+		)
+		if not options:
+			self.skipTest("site chưa sync Property Setter cho reason")
+		for reason in [o.strip() for o in options.split("\n") if o.strip()]:
+			self.assertIn(reason, REASON_TO_CODE, f"lý do {reason!r} chưa có mã công")
+
+
+class TestHalfDaySession(FrappeTestCase):
+	"""Nửa ngày phải theo BUỔI người nộp chọn, không mặc định buổi sáng (HR nêu 2026-08-05)."""
+
+	def test_the_session_field_exists_on_the_form(self):
+		meta = frappe.get_meta("Attendance Request")
+		df = meta.get_field("custom_half_day_session")
+		if not df:
+			self.skipTest("site chưa sync custom field")
+		self.assertEqual(df.fieldtype, "Select")
+		self.assertEqual([o for o in df.options.split("\n") if o], ["Sáng", "Chiều"])
+		self.assertEqual(df.depends_on, "eval:doc.half_day", "chỉ hiện khi tick nửa ngày")
+		self.assertEqual(df.mandatory_depends_on, "eval:doc.half_day", "tick nửa ngày thì bắt buộc chọn")
+
+	def test_afternoon_request_writes_the_code_on_the_afternoon(self):
+		from hrms.hr.doctype.attendance_request.attendance_request_miyano import AFTERNOON, MORNING
+
+		self.assertEqual((MORNING, AFTERNOON), ("Sáng", "Chiều"))
+
+
+class TestAttendanceRequestWorkCredit(PerTestRollback, FrappeTestCase):
+	"""Ngày do Yêu cầu chấm công sinh ra phải mang đủ số "Công" — cả ba mã đều là ngày ĐI LÀM.
+
+	Hook chỉ ghi mã mà quên `custom_work_credit`, nên ngày `CT`/`W`/`X` từ phiếu hiện **Công = 0**
+	trên form Ngày công trong khi ngày CT do Công Tác sinh ra hiện 1,0 — cùng một loại ngày, hai số.
+	Luật nằm ở `paid_credit` (nguồn duy nhất, xem spec §"Field Công")."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.emp = test_employee()
+		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
+
+	def day_from_request(self, date, reason, existing_absent=True):
+		"""Dựng đúng đường sinh ra lỗi: ngày ĐÃ có bản ghi Vắng (auto-attendance chấm vì không có
+		checkin), rồi phiếu mới được duyệt → upstream đi nhánh `db_set`, cầu nối KHÔNG chạy nên
+		`custom_work_credit` nằm nguyên ở 0.0 của mã `V`."""
+		if existing_absent:
+			att = frappe.get_doc(
+				{
+					"doctype": "Attendance",
+					"employee": self.emp,
+					"attendance_date": date,
+					"company": self.company,
+					"status": "Absent",
+				}
+			)
+			att.insert(ignore_permissions=True)
+			att.submit()
+
+		req = frappe.get_doc(
+			{
+				"doctype": "Attendance Request",
+				"employee": self.emp,
+				"from_date": date,
+				"to_date": date,
+				"reason": reason,
+				"company": self.company,
+			}
+		)
+		req.insert(ignore_permissions=True)
+		req.submit()
+		return frappe.db.get_value(
+			"Attendance",
+			{"employee": self.emp, "attendance_date": date, "docstatus": ("<", 2)},
+			["custom_attendance_code", "custom_work_credit", "status"],
+			as_dict=True,
+		)
+
+	def test_on_duty_over_an_absent_day_is_full_credit(self):
+		row = self.day_from_request("2094-04-14", "On Duty")
+		self.assertEqual(row.custom_attendance_code, "CT")
+		self.assertEqual(row.custom_work_credit, 1.0, "đi công tác là ngày đi làm, đủ công")
+
+	def test_work_from_home_over_an_absent_day_is_full_credit(self):
+		row = self.day_from_request("2094-04-15", "Work From Home")
+		self.assertEqual(row.custom_attendance_code, "W")
+		self.assertEqual(row.custom_work_credit, 1.0)
+
+	def test_missed_punch_over_an_absent_day_is_full_credit(self):
+		row = self.day_from_request("2094-04-16", "Missed Punch")
+		self.assertEqual(row.custom_attendance_code, "X")
+		self.assertEqual(row.custom_work_credit, 1.0)
+
+	def test_new_day_without_prior_record_stays_full_credit(self):
+		"""Nhánh tạo mới vốn đã đúng (cầu nối chạy) — chốt lại để bản sửa không làm hỏng."""
+		row = self.day_from_request("2094-04-17", "On Duty", existing_absent=False)
+		self.assertEqual(row.custom_work_credit, 1.0)

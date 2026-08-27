@@ -9,13 +9,16 @@ from frappe.tests.utils import FrappeTestCase
 from hrms.tests.isolation import PerTestRollback
 
 # The VN labels HR must see for the doctypes/reports renamed to English names
-# (tasks/plan-english-naming-standardization.md). Source string -> expected translation.
+# (docs/tasks/plan-english-naming-standardization.md). Source string -> expected translation.
 VN_TIMEKEEPING_LABELS = {
 	"Monthly Attendance Sheet": "Bảng Công Tháng",
 	"Monthly Attendance Sheet Detail": "Chi tiết Bảng Công Tháng",
 	"Monthly Attendance Report": "Bảng chấm công tháng",
 	"Business Trip": "Công Tác",
 	"Business Trip Traveler": "Người đi công tác",
+	# Đổi tên 2026-08-25: tên cũ "Bảng Lương MVL" có DẤU nên `scrub(name)` ra đường dẫn không
+	# khớp thư mục ASCII → báo cáo không import được, mở trên Desk là ModuleNotFoundError.
+	"MVL Salary Register": "Bảng lương MVL",
 }
 
 

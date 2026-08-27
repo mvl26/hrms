@@ -133,10 +133,16 @@ doc_events = {
 	},
 	"Timesheet": {"validate": "hrms.hr.utils.validate_active_employee"},
 	# Miyano: lương NET gross-up theo công thức MVL — chạy sau calculate_net_pay của controller.
-	# `sheet_gate.gate` chạy TRƯỚC engine MVL: chặn phiếu khi kỳ chưa chốt công và đối soát với
-	# bảng đã chốt. Mặc định TẮT — bật bằng site config `hrms_enforce_sheet_gate` (spec §7).
+	# THỨ TỰ BA BƯỚC NÀY LÀ BẮT BUỘC, đừng đổi:
+	# 1. `add_paid_holidays` — cộng ngày nghỉ lễ vào `total_working_days`/`payment_days`. Phải chạy
+	#    TRƯỚC cổng, vì cổng so `payment_days` với "Tổng công" của bảng đã chốt mà bảng đã đếm lễ;
+	#    chạy sau thì cổng so số chưa cộng với số đã cộng và chặn sạch phiếu tháng có lễ.
+	# 2. `sheet_gate.gate` — chặn phiếu khi kỳ chưa chốt công và đối soát với bảng đã chốt. Mặc định
+	#    TẮT — bật bằng site config `hrms_enforce_sheet_gate` (spec §7).
+	# 3. `apply_mvl` — engine lương, đọc số ngày đã chuẩn hoá ở bước 1.
 	"Salary Slip": {
 		"validate": [
+			"hrms.vn_payroll.salary_slip_hook.add_paid_holidays",
 			"hrms.vn_payroll.sheet_gate.gate",
 			"hrms.vn_payroll.salary_slip_hook.apply_mvl",
 		]
@@ -150,10 +156,15 @@ doc_events = {
 			"hrms.hr.leave_type_code.warn_if_unmapped",
 		],
 	},
-	# Miyano: gộp một quỹ phép năm — validate mã lý do; sau duyệt ghi mã lên Attendance (thuần hiển thị).
+	# Miyano: mã công là neo — chặn loại nghỉ chưa có mã, bắt chọn buổi khi nghỉ nửa ngày. Cả hai ở
+	# `before_validate` để nổ TRƯỚC chốt số dư phép của upstream (xem docstring của module). Sau
+	# duyệt thì ghi mã lên Attendance (thuần hiển thị).
 	"Leave Application": {
-		"validate": "hrms.hr.doctype.leave_application.leave_single_pool.validate_pool_code",
-		"on_submit": "hrms.hr.doctype.leave_application.leave_single_pool.set_leave_attendance_code",
+		"before_validate": [
+			"hrms.hr.doctype.leave_application.leave_attendance_code.validate_leave_type_has_code",
+			"hrms.hr.doctype.leave_application.leave_attendance_code.validate_half_day_period",
+		],
+		"on_submit": "hrms.hr.doctype.leave_application.leave_attendance_code.set_leave_attendance_code",
 	},
 	"Payment Entry": {
 		"on_submit": "hrms.hr.doctype.expense_claim.expense_claim.update_payment_for_expense_claim",
@@ -202,6 +213,8 @@ scheduler_events = {
 		"hrms.hr.doctype.shift_type.shift_type.update_last_sync_of_checkin",
 		"hrms.hr.doctype.shift_type.shift_type.process_auto_attendance_for_all_shifts",
 		"hrms.hr.doctype.shift_schedule_assignment.shift_schedule_assignment.process_auto_shift_creation",
+		# Miyano: người miễn chấm công — chạy SAU auto-attendance để không đua với nhánh chấm vắng.
+		"hrms.hr.attendance_exempt.process_exempt_employees",
 	],
 	"daily": [
 		"hrms.controllers.employee_reminders.send_birthday_reminders",
@@ -321,6 +334,7 @@ fixtures = [
 					"Leave Application-custom_leave_reason",
 					"Leave Application-custom_half_day_period",
 					"Attendance Request-custom_approver",
+					"Attendance Request-custom_half_day_session",
 					"Expense Claim-custom_business_trip",
 					"Shift Type-custom_split_half_day",
 					"Shift Type-custom_lunch_start",
@@ -330,6 +344,9 @@ fixtures = [
 					"Shift Type-custom_min_work_hours",
 					"Employee-custom_citizen_id",
 					"Employee-custom_social_insurance_no",
+					"Employee-custom_exempt_from_checkin",
+					"Employee-custom_exempt_from_checkin_from",
+					"Attendance-custom_auto_filled",
 				],
 			]
 		},

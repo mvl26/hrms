@@ -1,0 +1,218 @@
+# Copyright (c) 2026, Miyano Việt Nam.
+"""Đơn nghỉ duyệt xong ghi MÃ CÔNG lên Attendance — mã suy thuần từ bảng `Attendance Code`.
+
+Từ 2026-08-24 không loại nghỉ nào là trường hợp đặc biệt trong code: hằng `POOL_LEAVE_TYPE` và bảng
+map cứng loại nghỉ → mã đã bị gỡ (spec `docs/spec/attendance-code-as-anchor.md`). Vì thế mấy test
+cũ chỉ kiểm trường "Loại nghỉ" bắt buộc (`validate_pool_code`) đã bỏ — chúng khoá một luật không
+còn tồn tại. Thứ còn phải đúng là KẾT QUẢ: `Nghỉ phép năm` vẫn ra `P` / `1/2P`, nghỉ ốm ra `Ô`,
+quỹ phép năm vẫn chỉ bị trừ bởi đúng loại nghỉ của nó.
+
+Nghỉ nửa ngày vẫn phải chọn buổi (Sáng/Chiều) — nay `validate_half_day_period`, áp cho mọi loại nghỉ.
+
+Chạy qua harness rollback (KHÔNG bench run-tests trên miyano)."""
+
+import frappe
+from frappe.tests.utils import FrappeTestCase
+
+from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import test_employee
+
+
+class TestLeaveAttendanceCode(PerTestRollback, FrappeTestCase):
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.year = 2099
+		# Tự tạo nhân viên: tra "Active" bất kỳ chỉ chạy được trên site có sẵn dữ liệu; trên
+		# test_site của CI, class trước rollback xong là không còn ai và get_value trả None.
+		cls.emp = test_employee()
+		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
+
+	def _alloc(self, leave_type, days):
+		a = frappe.get_doc(
+			{
+				"doctype": "Leave Allocation",
+				"employee": self.emp,
+				"leave_type": leave_type,
+				"from_date": f"{self.year}-01-01",
+				"to_date": f"{self.year}-12-31",
+				"new_leaves_allocated": days,
+				"company": self.company,
+			}
+		)
+		a.insert(ignore_permissions=True)
+		a.submit()
+		return a
+
+	def _leave_app(self, leave_type, from_d, to_d, reason=None, half_day=0, period=None):
+		la = frappe.get_doc(
+			{
+				"doctype": "Leave Application",
+				"employee": self.emp,
+				"leave_type": leave_type,
+				"from_date": from_d,
+				"to_date": to_d,
+				"company": self.company,
+				"status": "Approved",
+				"half_day": half_day,
+			}
+		)
+		if reason:
+			la.custom_leave_reason = reason
+		if period:
+			la.custom_half_day_period = period
+		la.insert(ignore_permissions=True)
+		la.submit()
+		return la
+
+	def _att(self, la):
+		return frappe.db.get_value(
+			"Attendance",
+			{"leave_application": la.name},
+			[
+				"status",
+				"leave_type",
+				"half_day_status",
+				"custom_attendance_code",
+				"custom_morning_code",
+				"custom_afternoon_code",
+			],
+			as_dict=True,
+		)
+
+	def test_annual_leave_reason_creates_P_attendance(self):
+		self._alloc("Nghỉ phép năm", 12)
+		# KHÔNG truyền `reason`: mã `P` phải suy được thuần từ bảng Attendance Code, không cần
+		# trường "Loại nghỉ" nào cả — đây chính là điều việc gỡ hằng phải chứng minh.
+		la = self._leave_app("Nghỉ phép năm", f"{self.year}-03-05", f"{self.year}-03-05")
+		att = self._att(la)
+		self.assertIsNotNone(att, "đơn duyệt phải sinh Attendance")
+		self.assertEqual(att.status, "On Leave")
+		self.assertEqual(att.leave_type, "Nghỉ phép năm")
+		self.assertEqual(att.custom_attendance_code, "P")
+
+	def test_sick_via_own_leave_type_does_not_touch_annual_pool(self):
+		# nghỉ ốm nộp bằng loại nghỉ riêng "Nghỉ ốm": KHÔNG giảm quỹ phép năm, bảng công vẫn hiện Ô
+		# (bridge reverse suy mã) — nhưng KHÔNG vào Tổng công: BHXH chi trả ngày đó, doanh nghiệp
+		# không trả lương (quyết định 2026-07-30). Hai chuyện tách bạch: không trừ quỹ phép ≠ có công.
+		from hrms.hr.doctype.leave_application.leave_application import get_leave_balance_on
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
+
+		self._alloc("Nghỉ phép năm", 12)
+		self._alloc("Nghỉ ốm", 30)
+		before = get_leave_balance_on(self.emp, "Nghỉ phép năm", f"{self.year}-03-06")
+		la = self._leave_app("Nghỉ ốm", f"{self.year}-03-06", f"{self.year}-03-06")
+		after = get_leave_balance_on(self.emp, "Nghỉ phép năm", f"{self.year}-03-06")
+		self.assertEqual(before, after)  # quỹ phép năm KHÔNG đổi
+		att = self._att(la)
+		self.assertEqual(att.leave_type, "Nghỉ ốm")
+		self.assertEqual(att.custom_attendance_code, "Ô")
+		self.assertEqual(frappe.db.get_value("Leave Type", "Nghỉ ốm", "is_ppl"), 1)  # BHXH trả, công ty không
+		# ngày ốm KHÔNG vào Tổng công (BHXH trả), nhưng vẫn được đếm ở cột "Ốm" để không biến mất
+		row = next(r for r in get_sheet_rows({"month": 3, "year": self.year}) if r["employee"] == self.emp)
+		self.assertEqual(row["days"][6], "Ô")
+		self.assertEqual(row["totals"].get("Tổng công", 0), 0.0, "ngày BHXH trả không phải công công ty")
+		self.assertEqual(row["totals"].get("Ốm", 0), 1.0, "nhưng phải hiện ở cột Ốm")
+
+	def test_blocks_when_pool_exhausted(self):
+		# hết quỹ → Frappe chặn nộp đơn (số dư âm, allow_negative=0). "không cho xin phép nghỉ".
+		self._alloc("Nghỉ phép năm", 1)
+		with self.assertRaises(frappe.ValidationError):
+			self._leave_app(
+				"Nghỉ phép năm", f"{self.year}-03-10", f"{self.year}-03-11", reason="Nghỉ phép năm"
+			)  # 2 > 1
+
+	def test_annual_pool_leave_is_paid(self):
+		# ngày rút quỹ phép năm là On Leave, có lương (is_lwp=0) → không trừ lương.
+		self._alloc("Nghỉ phép năm", 12)
+		p = self._att(
+			self._leave_app(
+				"Nghỉ phép năm", f"{self.year}-04-05", f"{self.year}-04-05", reason="Nghỉ phép năm"
+			)
+		)
+		self.assertEqual((p.status, p.leave_type), ("On Leave", "Nghỉ phép năm"))
+		self.assertEqual(frappe.db.get_value("Leave Type", "Nghỉ phép năm", "is_lwp"), 0)  # có lương
+
+	def test_exempt_leave_does_not_touch_annual_pool(self):
+		# thai sản (miễn trừ) dùng loại nghỉ riêng, KHÔNG giảm quỹ phép năm, KHÔNG cần chọn Loại nghỉ.
+		from hrms.hr.doctype.leave_application.leave_application import get_leave_balance_on
+
+		self._alloc("Nghỉ phép năm", 12)
+		self._alloc("Nghỉ thai sản", 180)
+		before = get_leave_balance_on(self.emp, "Nghỉ phép năm", f"{self.year}-05-02")
+		la = self._leave_app("Nghỉ thai sản", f"{self.year}-05-02", f"{self.year}-05-02")
+		after = get_leave_balance_on(self.emp, "Nghỉ phép năm", f"{self.year}-05-02")
+		self.assertEqual(before, after)  # quỹ phép năm không đổi
+		self.assertEqual(self._att(la).custom_attendance_code, "TS")  # hiện mã thai sản
+
+	def test_half_day_morning_leave_uses_single_token(self):
+		# nghỉ nửa ngày buổi Sáng: mã CHUẨN là token đơn 1/2P (không tách P/X); payroll = Half Day.
+		self._alloc("Nghỉ phép năm", 12)
+		la = self._leave_app(
+			"Nghỉ phép năm",
+			f"{self.year}-07-01",
+			f"{self.year}-07-01",
+			half_day=1,
+			period="Sáng",
+		)
+		att = self._att(la)
+		self.assertEqual(att.status, "Half Day")  # payroll: nửa ngày
+		self.assertEqual(att.custom_attendance_code, "1/2P")  # nghỉ phép nửa ngày + nửa ngày đi làm
+		self.assertIsNone(att.custom_morning_code)
+		self.assertIsNone(att.custom_afternoon_code)
+
+	def test_half_day_afternoon_leave_uses_single_token(self):
+		# nghỉ nửa ngày buổi Chiều → cùng token đơn 1/2P (không phân biệt sáng/chiều ở hiển thị).
+		self._alloc("Nghỉ phép năm", 12)
+		la = self._leave_app(
+			"Nghỉ phép năm",
+			f"{self.year}-07-02",
+			f"{self.year}-07-02",
+			half_day=1,
+			period="Chiều",
+		)
+		att = self._att(la)
+		self.assertEqual(att.status, "Half Day")
+		self.assertEqual(att.custom_attendance_code, "1/2P")
+		self.assertIsNone(att.custom_morning_code)
+		self.assertIsNone(att.custom_afternoon_code)
+
+	def test_half_day_requires_period(self):
+		# nửa ngày mà không chọn buổi (Sáng/Chiều) → chặn.
+		self._alloc("Nghỉ phép năm", 12)
+		with self.assertRaises(frappe.ValidationError):
+			self._leave_app(
+				"Nghỉ phép năm",
+				f"{self.year}-07-05",
+				f"{self.year}-07-05",
+				half_day=1,
+			)
+
+	def test_work_credit_is_paid_cong_not_work_fraction(self):
+		"""Field "Công" của ngày nghỉ phải là công DOANH NGHIỆP TRẢ, không phải công đi làm thực.
+
+		Nghĩa này do patch `recompute_work_credit_as_paid_cong` chốt và cầu nối mã công + bộ đồng bộ
+		đều dùng `paid_credit`. Hook đơn nghỉ từng ghi thẳng `work_fraction` — nghĩa CŨ đã bị bỏ —
+		nên cùng một ngày, đường đơn nghỉ và đường cầu nối ra hai số khác nhau.
+
+		Nghỉ phép năm là nghỉ CÓ LƯƠNG: cả ngày → 1.0; nửa ngày (nửa kia đi làm) → cũng 1.0.
+		`work_fraction` sẽ là 0.0 và 0.5 tương ứng."""
+		self._alloc("Nghỉ phép năm", 12)
+		la = self._leave_app(
+			"Nghỉ phép năm", f"{self.year}-08-03", f"{self.year}-08-03", reason="Nghỉ phép năm"
+		)
+		credit = frappe.db.get_value("Attendance", {"leave_application": la.name}, "custom_work_credit")
+		self.assertEqual(credit, 1.0, "cả ngày nghỉ phép năm: công ty trả đủ công")
+
+		half = self._leave_app(
+			"Nghỉ phép năm",
+			f"{self.year}-08-04",
+			f"{self.year}-08-04",
+			reason="Nghỉ phép năm",
+			half_day=1,
+			period="Sáng",
+		)
+		half_credit = frappe.db.get_value(
+			"Attendance", {"leave_application": half.name}, "custom_work_credit"
+		)
+		self.assertEqual(half_credit, 1.0, "nửa nghỉ có lương + nửa đi làm = đủ công")

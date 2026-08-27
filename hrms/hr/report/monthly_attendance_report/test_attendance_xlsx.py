@@ -19,12 +19,19 @@ from hrms.hr.attendance_xlsx import (
 	LEGEND_LABEL,
 	LEGEND_LABEL_COLUMN,
 	MAX_LEGEND_ROWS,
-	MIYANO_LETTERHEAD,
 	WEEKDAY_ROW,
 	build_workbook,
 	legend_layout,
 )
 from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import STATE_STYLE, execute
+from hrms.miyano_xlsx import (
+	MIYANO_LETTERHEAD,
+	SIGN_APPROVED_LABEL,
+	SIGN_NAME_GAP,
+	SIGN_PREPARED_LABEL,
+	sign_blocks,
+	signature_date_line,
+)
 from hrms.tests.isolation import PerTestRollback
 from hrms.tests.vn_test_utils import test_employee
 
@@ -185,7 +192,8 @@ class TestAttendanceXlsx(PerTestRollback, FrappeTestCase):
 
 		ws = self.sheet()
 		cell = ws.cell(self.find_row(ws, self.emp), self.col_of(ws, "TB giờ/ngày"))
-		self.assertEqual(cell.value, 8.0)  # 9.5h trừ 1.5h nghỉ trưa
+		self.assertEqual(cell.value, "8h00")  # 9.5h trừ 1.5h nghỉ trưa, đọc thành thời lượng
+		self.assertEqual(cell.alignment.horizontal, "center", "cột đọc như số thì không dạt trái")
 
 	# ── thứ trong tuần ──────────────────────────────────────────────────────────────────────
 
@@ -275,6 +283,129 @@ class TestAttendanceXlsx(PerTestRollback, FrappeTestCase):
 			self.assertEqual(period, f"Tháng {self.month:02d} Năm {self.year}")
 		finally:
 			frappe.local.response = response
+
+	def test_download_says_plainly_when_called_without_a_period(self):
+		"""Bị gọi nhầm từ báo cáo khác (Salary Register, 2026-08-03) thì phải nói rõ là gọi nhầm.
+
+		`execute()` ném "Please select month and year" — đọc log một mình không lần ra được là nút
+		Export của báo cáo NÀO gọi sai."""
+		from hrms.hr.attendance_xlsx import download
+
+		with self.assertRaises(frappe.ValidationError) as caught:
+			download(filters=frappe.as_json({}))
+		self.assertIn("Bảng chấm công tháng", str(caught.exception))
+
+	# ── khối ký tên cuối bảng ───────────────────────────────────────────────────────────────
+
+	def sign_rows(self, ws):
+		"""(dòng ngày tháng, dòng chức danh, dòng tên) của khối ký cuối bảng."""
+		for row in ws.iter_rows(min_row=FIRST_DATA_ROW):
+			for cell in row:
+				if cell.value == SIGN_PREPARED_LABEL:
+					return cell.row - 1, cell.row, cell.row + SIGN_NAME_GAP
+		raise AssertionError("không thấy khối ký tên cuối bảng")
+
+	def merged_at(self, ws, row, col) -> str:
+		"""Vùng gộp chứa ô (row, col) — chuỗi rỗng nếu ô không nằm trong vùng nào."""
+		for rng in ws.merged_cells.ranges:
+			if rng.min_row <= row <= rng.max_row and rng.min_col <= col <= rng.max_col:
+				return str(rng)
+		return ""
+
+	def test_signature_block_sits_below_the_legend(self):
+		"""Đủ ba dòng như biểu mẫu gốc: địa danh + ngày, hai chức danh, rồi chỗ ký."""
+		ws = self.sheet()
+		legend_row = next(c.row for row in ws.iter_rows() for c in row if c.value == LEGEND_LABEL)
+		date_row, title_row, name_row = self.sign_rows(ws)
+		self.assertGreater(date_row, legend_row, "khối ký phải nằm dưới khối chú thích")
+
+		last_col = max(c.column for c in ws[HEADER_ROW] if c.value is not None)
+		prepared, approved = sign_blocks(last_col)
+
+		title = ws.cell(title_row, prepared[0])
+		self.assertEqual(title.value, SIGN_PREPARED_LABEL)
+		self.assertTrue(title.font.bold, "chức danh phải in đậm")
+		self.assertEqual(title.alignment.horizontal, "center")
+
+		approver = ws.cell(title_row, approved[0])
+		self.assertEqual(approver.value, SIGN_APPROVED_LABEL)
+		self.assertEqual(approved[1], last_col, "khối Người duyệt phải sát mép phải bảng")
+		self.assertEqual(ws.cell(date_row, approved[0]).value, signature_date_line(None))
+		self.assertTrue(ws.cell(date_row, approved[0]).font.italic, "dòng ngày tháng in nghiêng")
+
+		# mỗi chức danh gộp cả khối cột của nó → chữ nằm giữa chỗ ký
+		self.assertTrue(self.merged_at(ws, title_row, prepared[0]), "Người lập phải gộp ô")
+		self.assertTrue(self.merged_at(ws, title_row, approved[0]), "Người duyệt phải gộp ô")
+
+		self.assertGreater(name_row, title_row, "phải chừa chỗ ký giữa chức danh và tên")
+		for row in range(title_row + 1, name_row):
+			self.assertFalse(
+				[c.value for c in ws[row] if c.value not in (None, "")],
+				f"dòng {row} phải để trống làm chỗ ký",
+			)
+
+	def test_signature_date_is_the_export_day_in_the_company_city(self):
+		"""`Hà Nội, ngày 02 tháng 7 năm 2026` — địa danh của công ty, ngày xuất file."""
+		from frappe.utils import getdate, nowdate
+
+		today = getdate(nowdate())
+		self.assertEqual(
+			signature_date_line(None),
+			f"{MIYANO_LETTERHEAD['city']}, ngày {today.day:02d} tháng {today.month} năm {today.year}",
+		)
+
+	def test_signature_names_land_under_their_titles(self):
+		filters = {"month": self.month, "year": self.year}
+		columns, data, _msg = execute(filters)
+		ws = build_workbook(
+			columns,
+			data,
+			filters,
+			signatures={"prepared_by": "Phan Thị Thu Lan", "approved_by": "Đoàn Ngọc Anh"},
+		).active
+
+		_date_row, title_row, name_row = self.sign_rows(ws)
+		last_col = max(c.column for c in ws[HEADER_ROW] if c.value is not None)
+		prepared, approved = sign_blocks(last_col)
+
+		self.assertEqual(ws.cell(name_row, prepared[0]).value, "Phan Thị Thu Lan")
+		self.assertEqual(ws.cell(name_row, approved[0]).value, "Đoàn Ngọc Anh")
+		self.assertEqual(ws.cell(name_row, prepared[0]).alignment.horizontal, "center")
+		self.assertEqual(name_row, title_row + SIGN_NAME_GAP)
+
+	def test_signature_names_are_blank_when_nobody_is_named(self):
+		"""Không ai được điền thì để trống cho ký tay — không in `Administrator` lên bản in."""
+		ws = self.sheet()
+		_date_row, _title_row, name_row = self.sign_rows(ws)
+		self.assertFalse([c.value for c in ws[name_row] if c.value not in (None, "")])
+
+	def test_sign_blocks_stay_inside_the_table(self):
+		"""Bảng rộng hẹp thế nào hai khối cũng nằm trong bảng và không chồng lên nhau."""
+		for last_col in range(FIRST_DAY_COLUMN + 2, 60):
+			prepared, approved = sign_blocks(last_col)
+			self.assertEqual(approved[1], last_col)
+			self.assertGreaterEqual(prepared[0], FIRST_DAY_COLUMN, f"tràn sang cột tên ({last_col})")
+			self.assertLess(prepared[1], approved[0], f"hai khối chồng nhau ({last_col})")
+
+	def test_download_carries_the_signature_names(self):
+		from openpyxl import load_workbook
+
+		from hrms.hr.attendance_xlsx import download
+
+		response = frappe.local.response
+		try:
+			download(
+				filters=frappe.as_json({"month": self.month, "year": self.year}),
+				prepared_by="Phan Thị Thu Lan",
+				approved_by="Đoàn Ngọc Anh",
+			)
+			ws = load_workbook(BytesIO(frappe.response["filecontent"])).active
+		finally:
+			frappe.local.response = response
+
+		names = [c.value for row in ws.iter_rows() for c in row if isinstance(c.value, str)]
+		self.assertIn("Phan Thị Thu Lan", names)
+		self.assertIn("Đoàn Ngọc Anh", names)
 
 	# ── luật chia cụm cột (thuần hàm, không cần dữ liệu) ─────────────────────────────────────
 

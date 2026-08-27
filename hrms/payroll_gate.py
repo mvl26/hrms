@@ -1,5 +1,5 @@
 # Copyright (c) 2026, Miyano Việt Nam.
-"""Verification tooling for the prod payroll sign-off gates (`tasks/plan-prod-deploy.md`).
+"""Verification tooling for the prod payroll sign-off gates (`docs/tasks/plan-prod-deploy.md`).
 
 Read-only against the database — the only thing written is the snapshot file you name.
 

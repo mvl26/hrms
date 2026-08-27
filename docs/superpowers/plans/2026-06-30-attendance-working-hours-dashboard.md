@@ -25,12 +25,12 @@
 
 **Files:**
 - Create: `hrms/hr/working_hours.py`
-- Test: `hrms/hr/test_working_hours.py`
+- Test: `hrms/hr/tests/test_working_hours.py`
 
 **Interfaces:**
 - Produces: `LUNCH_BREAK_HOURS = 1.5`; `compute_net_hours(status: str, in_time, out_time, working_hours) -> float`
 
-- [ ] **Step 1: Viết test fail** — tạo `hrms/hr/test_working_hours.py`
+- [ ] **Step 1: Viết test fail** — tạo `hrms/hr/tests/test_working_hours.py`
 
 ```python
 # Copyright (c) 2026, Miyano Việt Nam.
@@ -72,7 +72,7 @@ class TestComputeNetHours(FrappeTestCase):
 
 - [ ] **Step 2: Chạy test, xác nhận FAIL**
 
-Run: `bench --site miyano run-tests --module hrms.hr.test_working_hours`
+Run: `bench --site miyano run-tests --module hrms.hr.tests.test_working_hours`
 Expected: FAIL — `ModuleNotFoundError` / `ImportError: cannot import name 'compute_net_hours'`
 
 - [ ] **Step 3: Viết `hrms/hr/working_hours.py` (phần lõi)**
@@ -107,13 +107,13 @@ def compute_net_hours(status, in_time, out_time, working_hours):
 
 - [ ] **Step 4: Chạy test, xác nhận PASS**
 
-Run: `bench --site miyano run-tests --module hrms.hr.test_working_hours`
+Run: `bench --site miyano run-tests --module hrms.hr.tests.test_working_hours`
 Expected: PASS (6 test trong `TestComputeNetHours`)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add hrms/hr/working_hours.py hrms/hr/test_working_hours.py
+git add hrms/hr/working_hours.py hrms/hr/tests/test_working_hours.py
 git commit -m "feat(hr): add compute_net_hours core for working hours
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -125,12 +125,12 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `hrms/hr/working_hours.py`
-- Test: `hrms/hr/test_working_hours.py`
+- Test: `hrms/hr/tests/test_working_hours.py`
 
 **Interfaces:**
 - Produces: `get_week_buckets(year, month) -> list[dict]` — mỗi phần tử `{"label": "Week i", "days": [int,...]}`, theo thứ tự thời gian, tuần dương lịch T2–CN, chỉ chứa ngày thuộc tháng.
 
-- [ ] **Step 1: Viết test fail** — thêm class vào `hrms/hr/test_working_hours.py`
+- [ ] **Step 1: Viết test fail** — thêm class vào `hrms/hr/tests/test_working_hours.py`
 
 ```python
 from hrms.hr.working_hours import compute_net_hours, get_week_buckets
@@ -158,7 +158,7 @@ Lưu ý: thêm `from frappe import _` vào đầu file test.
 
 - [ ] **Step 2: Chạy test, xác nhận FAIL**
 
-Run: `bench --site miyano run-tests --module hrms.hr.test_working_hours`
+Run: `bench --site miyano run-tests --module hrms.hr.tests.test_working_hours`
 Expected: FAIL — `cannot import name 'get_week_buckets'`
 
 - [ ] **Step 3: Thêm hàm vào `hrms/hr/working_hours.py`**
@@ -187,13 +187,13 @@ def get_week_buckets(year, month):
 
 - [ ] **Step 4: Chạy test, xác nhận PASS**
 
-Run: `bench --site miyano run-tests --module hrms.hr.test_working_hours`
+Run: `bench --site miyano run-tests --module hrms.hr.tests.test_working_hours`
 Expected: PASS (cả `TestComputeNetHours` và `TestGetWeekBuckets`)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add hrms/hr/working_hours.py hrms/hr/test_working_hours.py
+git add hrms/hr/working_hours.py hrms/hr/tests/test_working_hours.py
 git commit -m "feat(hr): add get_week_buckets for weekly aggregation
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -205,7 +205,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `hrms/hr/working_hours.py`
-- Test: `hrms/hr/test_working_hours.py`
+- Test: `hrms/hr/tests/test_working_hours.py`
 
 **Interfaces:**
 - Consumes: `compute_net_hours` (Task 1)
@@ -213,7 +213,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
   - `get_net_hours_map(filters) -> dict` dạng `{employee: {shift: {day_of_month: net_hours}}}` (shift None → khóa `""`). `filters` cần `companies` (list) hoặc `company`, `month`, `year`, optional `employee`.
   - `prepare_filters(filters) -> frappe._dict` — đảm bảo `month`/`year` mặc định tháng hiện tại và `companies` suy ra từ `company` (+ descendants nếu `include_company_descendants`).
 
-- [ ] **Step 1: Viết test fail** — thêm class vào `hrms/hr/test_working_hours.py`
+- [ ] **Step 1: Viết test fail** — thêm class vào `hrms/hr/tests/test_working_hours.py`
 
 ```python
 import frappe
@@ -258,7 +258,7 @@ class TestGetNetHoursMap(FrappeTestCase):
 
 - [ ] **Step 2: Chạy test, xác nhận FAIL**
 
-Run: `bench --site miyano run-tests --module hrms.hr.test_working_hours`
+Run: `bench --site miyano run-tests --module hrms.hr.tests.test_working_hours`
 Expected: FAIL — `cannot import name 'get_net_hours_map'`
 
 - [ ] **Step 3: Thêm hàm vào `hrms/hr/working_hours.py`**
@@ -321,13 +321,13 @@ def get_net_hours_map(filters):
 
 - [ ] **Step 4: Chạy test, xác nhận PASS**
 
-Run: `bench --site miyano run-tests --module hrms.hr.test_working_hours`
+Run: `bench --site miyano run-tests --module hrms.hr.tests.test_working_hours`
 Expected: PASS (cả 4 class)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add hrms/hr/working_hours.py hrms/hr/test_working_hours.py
+git add hrms/hr/working_hours.py hrms/hr/tests/test_working_hours.py
 git commit -m "feat(hr): add get_net_hours_map and prepare_filters
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -339,7 +339,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `hrms/hr/working_hours.py`
-- Test: `hrms/hr/test_working_hours.py`
+- Test: `hrms/hr/tests/test_working_hours.py`
 
 **Interfaces:**
 - Consumes: `get_net_hours_map`, `get_week_buckets`, `prepare_filters` (Task 1–3)
@@ -347,7 +347,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
   - `get_hours_by_week(filters) -> {"labels": [str], "values": [float]}`
   - `get_hours_by_department(filters) -> {"labels": [str], "values": [float]}`
 
-- [ ] **Step 1: Viết test fail** — thêm class vào `hrms/hr/test_working_hours.py`
+- [ ] **Step 1: Viết test fail** — thêm class vào `hrms/hr/tests/test_working_hours.py`
 
 ```python
 from hrms.hr.working_hours import get_hours_by_department, get_hours_by_week
@@ -380,7 +380,7 @@ class TestHoursAggregation(FrappeTestCase):
 
 - [ ] **Step 2: Chạy test, xác nhận FAIL**
 
-Run: `bench --site miyano run-tests --module hrms.hr.test_working_hours`
+Run: `bench --site miyano run-tests --module hrms.hr.tests.test_working_hours`
 Expected: FAIL — `cannot import name 'get_hours_by_week'`
 
 - [ ] **Step 3: Thêm hàm vào `hrms/hr/working_hours.py`**
@@ -434,13 +434,13 @@ def get_hours_by_department(filters):
 
 - [ ] **Step 4: Chạy test, xác nhận PASS**
 
-Run: `bench --site miyano run-tests --module hrms.hr.test_working_hours`
+Run: `bench --site miyano run-tests --module hrms.hr.tests.test_working_hours`
 Expected: PASS (cả 5 class)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add hrms/hr/working_hours.py hrms/hr/test_working_hours.py
+git add hrms/hr/working_hours.py hrms/hr/tests/test_working_hours.py
 git commit -m "feat(hr): add weekly and department working-hours aggregation
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"

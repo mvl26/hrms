@@ -12,6 +12,7 @@ Chạy qua harness rollback (KHÔNG bench run-tests trên miyano).
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from hrms.hr.doctype.leave_application.leave_attendance_code import ENFORCE_LEAVE_CODE_FLAG
 from hrms.tests.isolation import PerTestRollback
 from hrms.tests.vn_test_utils import test_employee
 
@@ -127,18 +128,45 @@ class TestLeaveCodeOnExistingAttendance(PerTestRollback, FrappeTestCase):
 		self.assertEqual(row.leave_type, "Nghỉ ốm")
 		self.assertIsNone(row.half_day_status)
 
-	def test_unmapped_leave_type_leaves_code_alone(self):
-		"""Loại nghỉ chưa có Attendance Code nào trỏ tới: KHÔNG bịa mã, để nguyên."""
+	def test_unmapped_leave_type_can_no_longer_reach_attendance(self):
+		"""Loại nghỉ chưa có mã: từ 2026-08-24 bị CHẶN ngay ở đơn nghỉ.
+
+		Trước đó đơn vẫn duyệt được và ngày công kẹt mã `V` — lương (đọc `status`) tính là nghỉ
+		trong khi bảng công (đọc mã) hiện Vắng. Chặn ở nguồn tốt hơn dọn ở đích: xem
+		`test_leave_type_code_gate.py` và spec `docs/spec/attendance-code-as-anchor.md`."""
+		# Chốt tự tắt khi chạy test (xem `leave_code_gate_is_active`); test này đo chính nó nên bật.
+		frappe.flags[ENFORCE_LEAVE_CODE_FLAG] = True
+		self.addCleanup(frappe.flags.pop, ENFORCE_LEAVE_CODE_FLAG, None)
+
 		lt = frappe.get_doc({"doctype": "Leave Type", "leave_type_name": "Nghỉ thử chưa map", "is_lwp": 0})
 		lt.insert(ignore_permissions=True)
 
 		date = f"{self.year}-03-14"
 		self._alloc(lt.name)
 		self._absent_attendance(date)
-		self._approve_leave(lt.name, date)
+		with self.assertRaisesRegex(frappe.ValidationError, "mã công"):
+			self._approve_leave(lt.name, date)
 
+		# ngày công không bị đụng tới: vẫn là bản ghi Vắng như trước khi có ai nộp đơn
 		row = self._att_row(date)
-		self.assertEqual(row.status, "On Leave")
-		self.assertEqual(row.leave_type, lt.name)
-		# không map được thì giữ nguyên mã cũ, tuyệt đối không tự chế mã mới
+		self.assertEqual(row.status, "Absent")
 		self.assertEqual(row.custom_attendance_code, "V")
+
+	def test_the_hook_never_invents_a_code_it_cannot_look_up(self):
+		"""Bảo đảm phòng thủ tầng dưới: mã bị xoá SAU khi đơn đã duyệt thì giữ nguyên mã cũ.
+
+		Chốt chặn ở đơn nghỉ lo trường hợp thường gặp, nhưng hook ghi mã vẫn phải tự thủ: không tra
+		được thì để nguyên, tuyệt đối không tự chế mã mới."""
+		from hrms.hr.doctype.leave_application.leave_attendance_code import set_leave_attendance_code
+
+		date = f"{self.year}-03-15"
+		att = self._absent_attendance(date)
+		frappe.db.set_value("Attendance", att.name, "leave_application", "KHONG-CO-THAT")
+
+		set_leave_attendance_code(frappe._dict(name="KHONG-CO-THAT", leave_type="Nghỉ thử không mã"))
+
+		self.assertEqual(
+			frappe.db.get_value("Attendance", att.name, "custom_attendance_code"),
+			"V",
+			"không tra được mã thì phải giữ nguyên, không bịa",
+		)

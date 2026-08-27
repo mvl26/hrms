@@ -1,4 +1,7 @@
 // Copyright (c) 2026, Miyano Việt Nam.
+// Tên báo cáo viết thẳng chứ không đặt hằng số ở top-level: `frappe.dom.eval` chèn file này
+// thành <script> chạy ở phạm vi TOÀN CỤC, và Custom Report dẫn xuất sẽ nạp lại — `const` gặp
+// lần eval thứ hai là vỡ `SyntaxError: already been declared`, kéo sập cả script báo cáo.
 frappe.query_reports["Monthly Attendance Report"] = {
 	filters: [
 		{
@@ -102,9 +105,20 @@ frappe.query_reports["Monthly Attendance Report"] = {
 								)}</td>
 								 <td>${c.attendance_date}</td>
 								 <td>${frappe.utils.escape_html(c.leave_type || c.status || "")}</td>
-								 <td><b>${frappe.utils.escape_html(c.old_code || "—")}</b> → <b>${frappe.utils.escape_html(
-										c.new_code,
-									)}</b></td></tr>`,
+								 <td>${
+										c.old_code === c.new_code
+											? frappe.utils.escape_html(c.new_code)
+											: `<b>${frappe.utils.escape_html(
+													c.old_code || "—",
+											  )}</b> → <b>${frappe.utils.escape_html(
+													c.new_code,
+											  )}</b>`
+									}</td>
+								 <td>${
+										c.old_credit === c.new_credit
+											? c.new_credit
+											: `<b>${c.old_credit}</b> → <b>${c.new_credit}</b>`
+									}</td></tr>`,
 						)
 						.join("");
 					const d = new frappe.ui.Dialog({
@@ -120,7 +134,7 @@ frappe.query_reports["Monthly Attendance Report"] = {
 								<table class="table table-bordered"><thead><tr>
 								<th>${__("Nhân viên")}</th><th>${__("Ngày")}</th><th>${__("Loại nghỉ")}</th><th>${__(
 									"Mã công",
-								)}</th>
+								)}</th><th>${__("Công")}</th>
 								</tr></thead><tbody>${rows}</tbody></table></div>`,
 							},
 							{
@@ -164,9 +178,22 @@ frappe.query_reports["Monthly Attendance Report"] = {
 		});
 
 		// Export mặc định của Frappe dựng file qua `make_xlsx()` — đường đó không có chỗ móc để tô
-		// màu nên file ra trắng trơn, mất sạch 10 màu trạng thái của bảng. Ghi đè ở mức INSTANCE
-		// (không vá prototype) để chỉ báo cáo này đổi đường xuất, mọi report khác giữ nguyên.
-		report.export_report = () => vn_export_dialog(report);
+		// màu nên file ra trắng trơn, mất sạch 10 màu trạng thái của bảng.
+		//
+		// CẨN THẬN: `frappe.query_report` là MỘT instance dùng chung cho MỌI query report —
+		// `load_report()` chỉ đổi `report_name` chứ không dựng lại object. Ghi đè thẳng
+		// `export_report` vì thế rò sang mọi báo cáo khác trong cùng phiên: mở bảng chấm công rồi
+		// sang Salary Register bấm Export là gọi nhầm vào đây (lỗi "Please select month and year",
+		// 2026-08-03). Nên phải bọc MỘT LẦN và luôn kiểm tên báo cáo lúc bấm.
+		if (!report._vn_export_patched) {
+			report._vn_export_patched = true;
+			const fallback = report.export_report.bind(report); // bản gốc trên prototype
+			report.export_report = function () {
+				if (this.report_name === "Monthly Attendance Report")
+					return vn_export_dialog(this);
+				return fallback();
+			};
+		}
 
 		// bảng màu do server định nghĩa (một nguồn duy nhất) — formatter chỉ tra, không tự phân loại
 		frappe.call({
@@ -229,9 +256,27 @@ function vn_export_dialog(report) {
 				default: "Excel",
 				reqd: 1,
 			},
+			{
+				fieldtype: "Section Break",
+				label: __("Khối trình ký"),
+				depends_on: "eval:doc.file_format=='Excel'",
+			},
+			{
+				fieldname: "prepared_by",
+				label: __("Người lập"),
+				fieldtype: "Data",
+				description: __("Để trống = tên người đang đăng nhập"),
+			},
+			{ fieldtype: "Column Break" },
+			{
+				fieldname: "approved_by",
+				label: __("Người duyệt"),
+				fieldtype: "Data",
+				description: __("Để trống = chỉ in chức danh, ký tên tay"),
+			},
 		],
 		primary_action_label: __("Tải về"),
-		primary_action: ({ file_format }) => {
+		primary_action: ({ file_format, prepared_by, approved_by }) => {
 			d.hide();
 			report.make_access_log("Export", file_format);
 
@@ -246,6 +291,8 @@ function vn_export_dialog(report) {
 					cmd: "hrms.hr.attendance_xlsx.download",
 					filters,
 					visible_idx,
+					prepared_by: prepared_by || "",
+					approved_by: approved_by || "",
 				});
 			} else {
 				open_url_post(frappe.request.url, {

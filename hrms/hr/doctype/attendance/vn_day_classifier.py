@@ -5,7 +5,7 @@ Tách khỏi `attendance.py` và giữ THUẦN (không chạm DB, không biết 
 test được đầy đủ mà không cần site/custom field. `Attendance.apply_vn_half_day_classifier` chỉ
 làm phần đọc cấu hình Shift Type rồi gọi vào đây.
 
-Luật (spec/flex-shift-and-timekeeping-pipeline.md §4.2):
+Luật (docs/spec/flex-shift-and-timekeeping-pipeline.md §4.2):
 
 1. **Ca trượt** — khung ca dịch theo giờ check-in, tối đa ±`band_minutes` (mặc định 180). Vào muộn
    hơn biên thì kẹp ở biên: đi muộn quá mức vẫn phải bù đủ giờ tính từ mốc kẹp.
@@ -29,6 +29,9 @@ CODE_ABSENT = "V"  # không có mặt phút nào trong khung ca → vắng
 # nghỉ trưa mặc định khi ca không cấu hình được khung hợp lệ
 DEFAULT_LUNCH_START = timedelta(hours=12)
 DEFAULT_LUNCH_END = timedelta(hours=13, minutes=30)
+
+# biên trượt mặc định của ca linh hoạt (±3h) khi ca chưa nhập `custom_flex_band_minutes`
+DEFAULT_FLEX_BAND_MINUTES = 180
 
 
 def resolve_lunch_window(start, end) -> tuple[timedelta, timedelta]:
@@ -84,6 +87,35 @@ class DayResult(NamedTuple):
 	code: str
 
 
+def counted_hours(
+	in_time: datetime,
+	out_time: datetime,
+	*,
+	day: datetime,
+	start_time: timedelta,
+	end_time: timedelta,
+	lunch_start: timedelta,
+	lunch_end: timedelta,
+	flexible: bool = False,
+	band_minutes: int = 0,
+) -> float:
+	"""Giờ TÍNH CÔNG của một ngày: phần có mặt nằm TRONG khung ca, trừ giờ trưa nằm trong khung đó.
+
+	Tách riêng khỏi `classify_day` vì đây là con số duy nhất không còn đọc được từ Attendance:
+	`working_hours` nay giữ giờ CÓ MẶT thật (xem `DayResult`), nên báo cáo nào muốn đối chiếu
+	"có mặt bao nhiêu / được quy công bao nhiêu" phải tính lại chỗ này. Một nguồn sự thật, để cột
+	đối chiếu của báo cáo không trôi khỏi mã công mà `classify_day` chấm.
+
+	(Khung trượt xa có thể không chứa trọn giờ trưa, nên phần trưa cũng phải kẹp vào khung.)
+	"""
+	w_start, w_end = shift_window(in_time, day, start_time, end_time, flexible, band_minutes)
+	l_start, l_end = day + lunch_start, day + lunch_end
+
+	in_window = overlap_hours(in_time, out_time, w_start, w_end)
+	lunch_in_window = overlap_hours(in_time, out_time, max(w_start, l_start), min(w_end, l_end))
+	return round(max(in_window - lunch_in_window, 0.0), 2)
+
+
 def classify_day(
 	in_time: datetime,
 	out_time: datetime,
@@ -106,7 +138,6 @@ def classify_day(
 	Hệ quả: làm 08:23-18:55 (9h02 thật) bị ghi thành 8h vì khung ca trượt kết thúc 17:53. Khung ca
 	có việc của nó là chặn làm thêm biến thành công, nhưng **không được bóp méo số giờ đã làm**.
 	"""
-	w_start, w_end = shift_window(in_time, day, start_time, end_time, flexible, band_minutes)
 	l_start, l_end = day + lunch_start, day + lunch_end
 
 	# giờ làm THỰC TẾ: toàn bộ thời gian có mặt, chỉ trừ phần trùng nghỉ trưa
@@ -115,11 +146,17 @@ def classify_day(
 	)
 	hours = round(max(actual, 0.0), 2)
 
-	# giờ TÍNH CÔNG: chỉ phần nằm trong khung ca, trừ phần giờ trưa thực sự nằm trong khung đó
-	# (khung trượt xa có thể không chứa trọn giờ trưa)
-	in_window = overlap_hours(in_time, out_time, w_start, w_end)
-	lunch_in_window = overlap_hours(in_time, out_time, max(w_start, l_start), min(w_end, l_end))
-	counted = round(max(in_window - lunch_in_window, 0.0), 2)
+	counted = counted_hours(
+		in_time,
+		out_time,
+		day=day,
+		start_time=start_time,
+		end_time=end_time,
+		lunch_start=lunch_start,
+		lunch_end=lunch_end,
+		flexible=flexible,
+		band_minutes=band_minutes,
+	)
 
 	if counted >= min_work_hours:
 		return DayResult(hours, counted, CODE_FULL_DAY)

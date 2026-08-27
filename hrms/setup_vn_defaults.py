@@ -9,6 +9,9 @@ It is intentionally narrow and safe to run on every migrate:
   - Verifies the fixture-backed master data (VN leave types, attendance codes, custom fields) is
     present and logs a warning if any is missing. It does NOT recreate fixture data — the `fixtures`
     mechanism owns that (and re-syncs it every migrate); recreating here would risk partial/dup rows.
+  - Warns about Leave Types that no Attendance Code points at. Mã công là neo của tuyến chấm công:
+    một loại nghỉ không có mã cả ngày nào trỏ tới sẽ cho ra 0 công, im lặng. Nó chỉ CẢNH BÁO — mã
+    công là master data do HR quyết, đoán một ký hiệu thay họ chỉ tạo rác.
 
 It never mutates HR Settings (geolocation tracking stays off by default), seeds no sample master data,
 and touches no payroll/attendance transactional data.
@@ -40,11 +43,35 @@ def ensure_defaults():
 			f"(fixtures may not have synced): {missing}"
 		)
 
+	unmapped = leave_types_without_code()
+	if unmapped:
+		frappe.logger("hrms").warning(
+			f"hrms.setup_vn_defaults.ensure_defaults: loại nghỉ chưa có mã công cả ngày "
+			f"(ngày nghỉ theo chúng sẽ ra 0 công): {unmapped}"
+		)
+
 	return {
 		"workflow": bool(frappe.db.exists("Workflow", "Cong Tac Approval")),
 		"coo_role": bool(frappe.db.exists("Role", "COO")),
 		"missing": missing,
+		"leave_types_without_code": unmapped,
 	}
+
+
+def leave_types_without_code() -> list[str]:
+	"""Loại nghỉ chưa có mã công CẢ NGÀY nào trỏ tới — ngày nghỉ theo chúng sẽ ra 0 công.
+
+	Không tự sửa: mã công là master data do HR quyết, đoán một ký hiệu thay họ chỉ tạo rác. Chốt
+	chặn thật nằm ở Đơn xin nghỉ (`leave_attendance_code.validate_leave_type_has_code`); hàm này chỉ
+	để lỗi lộ ra lúc deploy chứ không phải lúc in bảng công."""
+	linked = set(
+		frappe.get_all(
+			"Attendance Code",
+			filters={"maps_to_status": "On Leave", "leave_type": ("is", "set")},
+			pluck="leave_type",
+		)
+	)
+	return sorted(name for name in frappe.get_all("Leave Type", pluck="name") if name not in linked)
 
 
 def check_fixture_master_data() -> dict:

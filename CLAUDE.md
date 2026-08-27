@@ -56,18 +56,21 @@ The Vue dev page only renders via host `miyano` (vite `allowedHosts`, and Frappe
 
 **Doctypes** live under `hrms/<module>/doctype/<name>/` (JSON schema + `.py` controller + `.js` desk form + `test_*.py`). Only two modules — `HR` (119 doctypes) and `Payroll` (40) — see `hrms/modules.txt`. Shared logic: `hrms/hr/utils.py`, `hrms/controllers/`, `hrms/mixins/`; `hrms/api/` holds the whitelisted endpoints the Vue apps call.
 
+**Where tests go** — see the **File placement** section under Conventions below.
+
 **Two Vue 3 SPAs** (not desk), built with vite + `frappe-ui`, wired via `website_route_rules`:
 - `frontend/` — Ionic PWA, employee self-service (attendance, leave, expense, salary slips) → route `/hrms`.
 - `roster/` — TypeScript, shift roster/planning → route `/hr`. (`frappe-ui/` at repo root is a git submodule.)
 
 ## Miyano customizations (Vietnamese HR / timekeeping)
 
-An additive VN localization layer. Each feature has a spec in `spec/` — read it before extending.
+An additive VN localization layer. Each feature has a spec in `docs/spec/` — read it before extending.
 
 - **Attendance-code timekeeping (mã công):** 13 `Attendance Code` symbols (X, P, Ô, TS, V, …) driving an Excel-style monthly *bảng chấm công* **without changing payroll**. A two-way `Attendance.before_validate` bridge maps codes ↔ `status`/`leave_type`/`half_day_status` and computes `custom_cong`.
 - **Bảng Công Tháng:** submittable monthly-timesheet DocType — a **read-only snapshot** of Attendance (never writes back → payroll-neutral), with a VN print format + sign-off boxes. Detail row totals: `cong/phep/om/thai_san/tnld/nghi_bu/khong_luong/vang`.
 - **Công Tác (business trip):** submittable multi-traveler DocType driven by a Frappe **Workflow** ("Cong Tac Approval"); approval auto-generates trip attendance + per-traveler Expense Claims. Introduces a `COO` role.
-- **Yêu cầu chấm công (Attendance Request):** native Frappe channel re-enabled (was locked 2026-07-24) for days the employee **is working / must count present** — WFH, missed-punch, on-duty, late/early — approved by the **line manager** (`reports_to`), distinct from Leave Application (time off) and Công Tác (trips). Miyano layer in `attendance_request_miyano.py`: default approver + ToDo assign + submit guard + display codes (WFH→`W`, on-duty→`CT`, missed/late→`X`) written display-only → **payroll-neutral**. `reason` options extended via Property Setter. Spec `spec/attendance-request-vs-leave.md`.
+- **Yêu cầu chấm công (Attendance Request):** native Frappe channel re-enabled (was locked 2026-07-24) for days the employee **is working / must count present** — WFH, missed-punch, on-duty, late/early — approved by the **line manager** (`reports_to`), distinct from Leave Application (time off) and Công Tác (trips). Miyano layer in `attendance_request_miyano.py`: default approver + ToDo assign + submit guard + display codes (WFH→`W`, on-duty→`CT`, missed/late→`X`) written display-only → **payroll-neutral**. `reason` options extended via Property Setter. Spec `docs/spec/attendance-request-vs-leave.md`.
+- **Miễn chấm công (full công):** nhân viên tick `Employee.custom_exempt_from_checkin` (giám đốc, giờ làm không cố định) được `hrms/hr/attendance_exempt.py` tự sinh **X** cho mọi ngày làm việc — qua nhánh chấm vắng của `Shift Type` **và** một lượt quét `hourly_long` độc lập với phân ca (phân ca cấp theo từng tháng, quên là mất công cả tháng). Nghỉ phép / Yêu cầu chấm công ghi đè sẵn; **Công Tác** đổi ngày `X` tự sinh (`Attendance.custom_auto_filled`) thành **CT**. Hai chốt chặn upstream phải nới đúng phạm vi ngày tự sinh: `validate_attendance` của đơn nghỉ và `mark_absent_for_half_day_dates`. Spec `docs/spec/attendance-exempt-employees.md`.
 - **Geofence check-in:** server-emitted radius circle on Shift Location maps, click-to-set, read-only overlay on Employee Checkin (enforcement logic unchanged).
 - **Working-hours** report + desk dashboard (net vs. standard hours), in `hrms/hr/working_hours.py`.
 
@@ -81,11 +84,37 @@ Key files & mechanisms:
 
 ## Development workflow
 
-Spec-driven via the **superpowers** skills (brainstorm → spec → plan → build TDD → verify E2E → review → fix), committing each step. Read the relevant artifact before related work: `spec/*.md` (feature specs), `tasks/plan-*.md` (task breakdowns with done/remaining checkboxes), `SPEC.md` (active spec), `docs/superpowers/` (earlier ones).
+Spec-driven via the **superpowers** skills (brainstorm → spec → plan → build TDD → verify E2E → review → fix), committing each step. Read the relevant artifact before related work: `docs/spec/*.md` (feature specs), `docs/tasks/plan-*.md` (task breakdowns with done/remaining checkboxes), `docs/SPEC.md` (active spec), `docs/superpowers/` (earlier ones).
+
+**Which skill pack wins:** the `agent-skills` pack is enabled too and covers the same ground as superpowers for TDD, planning, spec, code review, debugging, simplification and shipping. **superpowers is this repo's workflow** — when both offer the same thing, take superpowers and don't run both. Skip process skills altogether for a one-line fix, a rename, or a question the repo already answers; invoking one there costs more than the work.
 
 Execution style: the user drives with short prompts ("chạy tiếp", "hoàn thiện") and expects the full lifecycle carried autonomously without per-step check-ins — keep momentum. Still surface genuine product decisions briefly, always honor the high-risk sign-off gates above, and reserve outward/irreversible actions (git push, PRs) for explicit approval.
 
 ## Conventions
+
+### File placement — enforced, not advisory
+
+Every new file must land in the right folder with the right name. This is **gated**, not
+suggested: `scripts/check_file_placement.py` is the single source of truth and runs as a
+Claude Code `PreToolUse` hook (blocks `Write` on a misplaced new file) *and* as a
+pre-commit hook (scans the whole tree). A blocked write prints the rule and the correct
+path. **Read `.claude/skills/code_structure/SKILL.md`** before creating a doctype, report,
+patch, test, or doc — it covers the judgment calls and scaffolding the checker can't make
+for you.
+
+| Kind | Goes in |
+|---|---|
+| Test of one doctype/report/page | beside it, `hrms/<module>/doctype/<name>/` — **mandatory**, Frappe binds `test_records.json` to that path |
+| Test of a module | `hrms/<module>/tests/` (`hr`, `vn_payroll`, `controllers`, …) |
+| Test that is cross-module, or of a patch/setup | `hrms/tests/` (also holds the `isolation.PerTestRollback` / `vn_test_utils` harness helpers) |
+| App source | `hrms/` — including anything run via `bench execute`, which imports by package path so `scripts/` would break it |
+| Repo tooling run by plain `python3` | `scripts/` |
+| Spec / plan / any doc | `docs/spec/<kebab>.md`, `docs/tasks/plan-<kebab>.md`, `docs/` |
+| Frontend | `frontend/src/`, `roster/src/` |
+
+`tests/` dirs are namespace packages — **no `__init__.py`**. Names: no spaces, `.py`
+snake_case, `.vue` PascalCase, tests use the `test_` **prefix** (a `_test.py` suffix is
+never collected). Reorganised 2026-08-14; `spec/` and `tasks/` at the repo root are gone.
 
 - **Conventional Commits**, enforced by `commitlint.config.js`. Miyano commits scope with `(hr)`, e.g. `feat(hr): ...`.
 - **Stage only the files your change touches** (`git add <paths>`, never `git add -A`) — the working tree often carries unrelated in-progress work. `.claude/` is tracked (local tooling config shared across machines).

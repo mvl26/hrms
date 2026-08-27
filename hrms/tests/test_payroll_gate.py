@@ -1,5 +1,5 @@
 # Copyright (c) 2026, Miyano Việt Nam.
-"""Tooling for the prod payroll sign-off gates (tasks/plan-prod-deploy.md T1 + T4)."""
+"""Tooling for the prod payroll sign-off gates (docs/tasks/plan-prod-deploy.md T1 + T4)."""
 
 import json
 import os

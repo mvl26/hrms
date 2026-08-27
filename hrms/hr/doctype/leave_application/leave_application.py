@@ -564,15 +564,21 @@ class LeaveApplication(Document, PWANotificationsMixin):
 		)
 
 	def validate_attendance(self):
+		filters = {
+			"employee": self.employee,
+			"attendance_date": ("between", [self.from_date, self.to_date]),
+			"status": ("in", ["Present", "Work From Home"]),
+			"docstatus": 1,
+			"half_day_status": ("!=", "Absent"),
+		}
+		# Miyano: ngày công TỰ SINH của nhân viên miễn chấm công không phải bằng chứng đi làm — nó
+		# là giá trị mặc định do máy điền. Chặn ở đây thì giám đốc không bao giờ xin nghỉ được, vì
+		# ngày nào của họ cũng đã là Present. `update_attendance` sẽ ghi đè ngày đó theo đơn.
+		if frappe.get_meta("Attendance").has_field("custom_auto_filled"):
+			filters["custom_auto_filled"] = 0
 		attendance_dates = frappe.get_all(
 			"Attendance",
-			filters={
-				"employee": self.employee,
-				"attendance_date": ("between", [self.from_date, self.to_date]),
-				"status": ("in", ["Present", "Work From Home"]),
-				"docstatus": 1,
-				"half_day_status": ("!=", "Absent"),
-			},
+			filters=filters,
 			fields=["name", "attendance_date"],
 			order_by="attendance_date",
 		)

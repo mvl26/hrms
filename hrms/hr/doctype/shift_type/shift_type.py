@@ -102,6 +102,8 @@ class ShiftType(Document):
 		):
 			return
 
+		from hrms.hr.attendance_exempt import ensure_exempt_days
+
 		logs = self.get_employee_checkins()
 		group_key = lambda x: (x["employee"], x["shift_start"])  # noqa
 		for key, group in groupby(sorted(logs, key=group_key), key=group_key):
@@ -120,6 +122,12 @@ class ShiftType(Document):
 				in_time,
 				out_time,
 			) = self.get_attendance(single_shift_logs)
+
+			from hrms.hr.attendance_exempt import is_exempt_working_day
+
+			if is_exempt_working_day(employee, attendance_date):
+				# ngưỡng giờ của ca không áp cho người miễn chấm công
+				attendance_status = "Present"
 
 			mark_attendance_and_link_log(
 				single_shift_logs,
@@ -141,6 +149,10 @@ class ShiftType(Document):
 		# right from "Process Attendance After" to "Last Sync of Checkin"
 		for batch in create_batch(assigned_employees, EMPLOYEE_CHUNK_SIZE):
 			for employee in batch:
+				# Người MIỄN CHẤM CÔNG đi nhánh riêng TRƯỚC: mỗi ngày làm việc phải là đủ công, kể
+				# cả ngày đã có bản ghi sai sẵn (V / nửa công do lượt chấm lỗi, hoặc dữ liệu ghi
+				# trước khi bật cờ). Chỉ "chấm khi trống" thì những ngày đó không đường nào sửa.
+				ensure_exempt_days(employee, *self.get_start_and_end_dates(employee))
 				self.mark_absent_for_dates_with_no_attendance(employee)
 				self.mark_absent_for_half_day_dates(employee)
 
@@ -218,6 +230,7 @@ class ShiftType(Document):
 		start_time = get_time(self.start_time)
 		dates = self.get_dates_for_attendance(employee)
 
+		from hrms.hr.attendance_exempt import ensure_full_day, is_exempt
 		from hrms.hr.doctype.attendance_request.attendance_request_miyano import (
 			reapply_attendance_request,
 		)
@@ -231,6 +244,14 @@ class ShiftType(Document):
 				# on-duty / quên chấm) rồi thôi — chấm vắng đè lên đơn đã duyệt là sai. Đơn chỉ ghi
 				# Attendance đúng một lần lúc submit, nên mỗi lần dựng lại dữ liệu phải hỏi lại nó.
 				if reapply_attendance_request(employee, date):
+					continue
+
+				# Người MIỄN CHẤM CÔNG: không quẹt thẻ là bình thường, không phải vắng. Phải chặn ở
+				# ĐÂY chứ không chỉ ở lượt quét riêng (`process_exempt_employees`): cả hai chạy trong
+				# cùng lượt `hourly_long` và nhánh này chạy TRƯỚC, ghi V xong thì lượt quét đến sau
+				# thấy "đã có bản ghi" và bỏ qua — người có phân ca vẫn vắng cả tháng.
+				if is_exempt(employee, date):
+					ensure_full_day(employee, date)
 					continue
 
 				attendance = mark_attendance(employee, date, "Absent", self.name)
@@ -369,6 +390,8 @@ class ShiftType(Document):
 		return True
 
 	def mark_absent_for_half_day_dates(self, employee):
+		from hrms.hr.attendance_exempt import is_exempt_working_day
+
 		half_day_attendances = frappe.get_all(
 			"Attendance",
 			filters={"employee": employee, "status": "Half Day", "modify_half_day_status": 1},
@@ -379,6 +402,12 @@ class ShiftType(Document):
 			timestamp = datetime.combine(attendance.attendance_date, start_time)
 			shift_details = get_employee_shift(employee, timestamp, True)
 			if shift_details and shift_details.shift_type.name == self.name:
+				if is_exempt_working_day(employee, attendance.attendance_date):
+					# Nửa còn lại của người miễn chấm công là CÔNG, không phải vắng vì thiếu lượt
+					# chấm. `get_half_absent_days` đọc `half_day_status` để trừ 0,5 → ép Absent ở đây
+					# là trừ oan đúng nửa ngày.
+					continue
+
 				frappe.db.set_value(
 					"Attendance",
 					attendance.name,

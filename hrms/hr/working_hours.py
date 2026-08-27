@@ -58,6 +58,64 @@ def get_lunch_window_map():
 	}
 
 
+def get_split_shift_config_map():
+	"""{ca tách buổi: cấu hình khung ca} — cùng nguồn cấu hình với `Attendance.get_split_shift_config`.
+
+	Đọc phòng thủ: cờ tách buổi và bộ field giờ linh hoạt đều là custom field (fixtures); site chưa
+	migrate thì chưa có field và câu lọc theo chúng sẽ vỡ. Ca bật cờ nhưng thiếu giờ vào/ra ca thì
+	bỏ qua — đúng như bộ chấm mã công, nó trả None và không chấm ngày nào cả.
+	"""
+	meta = frappe.get_meta("Shift Type")
+	if not meta.has_field("custom_split_half_day"):
+		return {}
+
+	optional = ("custom_lunch_start", "custom_lunch_end", "custom_flexible_shift", "custom_flex_band_minutes")
+	fields = ["name", "start_time", "end_time"] + [f for f in optional if meta.has_field(f)]
+
+	return {
+		row.name: row
+		for row in frappe.get_all("Shift Type", filters={"custom_split_half_day": 1}, fields=fields)
+		if row.start_time and row.end_time
+	}
+
+
+def credited_hours(in_time, out_time, attendance_date, cfg):
+	"""Giờ QUY CÔNG của một ngày ca tách buổi: phần có mặt nằm trong khung ca, đã trừ nghỉ trưa.
+
+	Không đọc `Attendance.working_hours` nữa: từ `19617d7` field đó giữ giờ CÓ MẶT thật (không bị
+	khung ca cắt), nên lấy nó làm "giờ quy công" thì cột đối chiếu của báo cáo bằng đúng cột giờ có
+	mặt và mất sạch ý nghĩa — người ở lại tới 19:30 hiện 10h quy công trong khi bảng chấm công chỉ
+	trả 8h. Tính lại bằng chính hàm mà `classify_day` dùng để chấm mã công.
+	"""
+	from hrms.hr.doctype.attendance.vn_day_classifier import (
+		DEFAULT_FLEX_BAND_MINUTES,
+		counted_hours,
+		resolve_lunch_window,
+	)
+
+	if not (in_time and out_time):
+		return 0.0
+
+	in_time, out_time = get_datetime(in_time), get_datetime(out_time)
+	if out_time <= in_time:
+		return 0.0
+
+	lunch_start, lunch_end = resolve_lunch_window(cfg.get("custom_lunch_start"), cfg.get("custom_lunch_end"))
+	band = cfg.get("custom_flex_band_minutes")
+
+	return counted_hours(
+		in_time,
+		out_time,
+		day=datetime.combine(getdate(attendance_date), datetime.min.time()),
+		start_time=cfg.get("start_time"),
+		end_time=cfg.get("end_time"),
+		lunch_start=lunch_start,
+		lunch_end=lunch_end,
+		flexible=bool(cint(cfg.get("custom_flexible_shift"))),
+		band_minutes=DEFAULT_FLEX_BAND_MINUTES if band is None else cint(band),
+	)
+
+
 def presence_hours(in_time, out_time, attendance_date, lunch_start=None, lunch_end=None):
 	"""Giờ thực sự có mặt: (giờ ra - giờ vào) trừ phần giao với khung nghỉ trưa.
 
@@ -121,6 +179,17 @@ def avg_office_hours(totals: dict | None) -> float:
 	if not totals or not totals.get("days"):
 		return 0.0
 	return round(totals["hours"] / totals["days"], 2)
+
+
+def format_hours_hm(hours) -> str:
+	"""Giờ thập phân -> "8h12" (7,75 giờ là "7h45").
+
+	Lối viết thời lượng của bảng chấm công VN. Không dùng "08:12" vì đọc ra thành giờ đồng hồ
+	(8 giờ 12 sáng) chứ không phải "làm 8 tiếng 12 phút". Không có giờ nào thì để trống."""
+	minutes = round(flt(hours) * 60)
+	if minutes <= 0:
+		return ""
+	return f"{minutes // 60}h{minutes % 60:02d}"
 
 
 def get_week_buckets(year, month):

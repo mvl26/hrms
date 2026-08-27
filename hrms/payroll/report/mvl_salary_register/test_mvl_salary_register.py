@@ -1,0 +1,93 @@
+# Copyright (c) 2026, Miyano Việt Nam.
+"""Test báo cáo MVL Salary Register (nhãn: Bảng lương MVL) — gom Salary Slip đã submit thành bảng lương đủ cột + dòng tổng."""
+
+import frappe
+from frappe.tests.utils import FrappeTestCase, change_settings
+
+from erpnext.setup.doctype.employee.test_employee import make_employee
+
+from hrms.payroll.report.mvl_salary_register.mvl_salary_register import execute
+from hrms.tests.isolation import PerTestRollback
+from hrms.tests.vn_test_utils import default_company
+from hrms.vn_payroll.setup_mvl import ensure_mvl_defaults
+from hrms.vn_payroll.tests.test_salary_slip_mvl import (
+	ensure_fiscal_year_2099,
+	make_slip,
+	make_ssa,
+	mark_full_month,
+)
+
+
+class TestBangLuongMVL(PerTestRollback, FrappeTestCase):
+	def setUp(self):
+		super().setUp()
+		# Kỳ 2099 dựng riêng cho test không có Bảng Công Tháng nào, nên cổng "phải chốt công trước
+		# khi tính lương" (`vn_payroll.sheet_gate`) chặn mọi phiếu ở đây — nhưng CHỈ trên site đã
+		# bật cờ `hrms_enforce_sheet_gate` (miyano), không phải trên CI. Không tắt thì bộ test đỏ
+		# hay xanh tuỳ site đang chạy. Cửa thoát `skip_sheet_gate` dựng sẵn cho đúng tình huống
+		# này; bản thân cổng vẫn được kiểm đầy đủ ở `tests/test_sheet_gate.py`.
+		frappe.flags.skip_sheet_gate = True
+		self.addCleanup(lambda: frappe.flags.pop("skip_sheet_gate", None))
+
+	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
+	def test_report_rows_and_total(self):
+		ensure_fiscal_year_2099()
+		ensure_mvl_defaults()
+		emp = make_employee("blmvl@codes.com", company=default_company())
+		make_ssa(
+			emp,
+			base=25_000_000,
+			custom_salary_type="Chính thức",
+			custom_bhxh_salary=25_000_000,
+			custom_dependents=1,
+			custom_register_personal_deduction=1,
+		)
+		mark_full_month(emp)
+		ss = make_slip(emp)
+		ss.submit()
+
+		columns, data = execute(frappe._dict({"company": default_company(), "month": 6, "year": 2099}))
+		labels = [c["label"] for c in columns]
+		# CỘT GIỐNG HỆT Excel, đúng thứ tự: Mã NV, Họ tên, Loại, NET/GROSS, E, F, G, H, I ... T, U
+		expected = [
+			"Mã NV",
+			"Họ tên",
+			"Loại",
+			"NET/GROSS",
+			"Hệ số (E)",
+			"Lương ngày công (F)",
+			"Lương đóng BHXH (G)",
+			"Số công (H)",
+			"Lương thực tế (I)",
+			"Phụ cấp ăn trưa (J)",
+			"Tổng thu nhập (K)",
+			"Giảm trừ bản thân (L)",
+			"Số người phụ thuộc (M)",
+			"Tổng giảm trừ (N)",
+			"Thu nhập quy đổi (O)",
+			"Thu nhập tính thuế (P)",
+			"Thuế TNCN (Q)",
+			"BH công ty (R)",
+			"BH NLĐ (S)",
+			"Thực lĩnh (T)",
+			"TN chịu thuế kê khai (U)",
+		]
+		self.assertEqual(labels, expected)
+		# KHÔNG còn cột thừa của ERP
+		for gone in ("Công chuẩn", "Chi phí công ty"):
+			self.assertNotIn(gone, labels)
+
+		row = next(r for r in data if r.get("employee") == emp)
+		self.assertEqual(row["work_type"], "Toàn thời gian")
+		self.assertEqual(row["pay_mode"], "NET")
+		self.assertEqual(row["work_i"], 25_000_000)  # I đi làm đủ
+		self.assertEqual(row["tax_q"], 173_684)  # Q
+		self.assertEqual(row["ins_company_r"], 5_375_000)  # R
+		self.assertEqual(row["net_t"], ss.net_pay)  # T
+
+		total = data[-1]
+		self.assertEqual(total["employee_name"], "TỔNG CỘNG")
+		self.assertGreaterEqual(total["net_t"], row["net_t"])
+
+	def test_empty_when_no_period(self):
+		self.assertEqual(execute(frappe._dict({"company": default_company()}))[1], [])

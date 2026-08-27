@@ -34,11 +34,13 @@
    "reqd": 1
   },
   {
-   "description": "Grouping for the timesheet totals, e.g. C\u00f4ng / Ph\u00e9p / \u1ed0m.",
+   "description": "Nh\u00f3m c\u1ed9t tr\u00ean b\u1ea3ng c\u00f4ng th\u00e1ng. Quy\u1ebft \u0111\u1ecbnh ng\u00e0y \u0111\u00f3 v\u00e0o c\u1ed9t n\u00e0o v\u00e0 c\u00f3 t\u00ednh T\u1ed5ng c\u00f4ng hay kh\u00f4ng.",
    "fieldname": "category",
-   "fieldtype": "Data",
+   "fieldtype": "Select",
    "in_list_view": 1,
-   "label": "Category"
+   "label": "Category",
+   "options": "C\u00f4ng\nPh\u00e9p\n\u1ed0m\nThai s\u1ea3n\nTai n\u1ea1n L\u0110\nNgh\u1ec9 b\u00f9\nVi\u1ec7c ri\u00eang\nKh\u00f4ng l\u01b0\u01a1ng\nV\u1eafng",
+   "reqd": 1
   },
   {
    "default": "1",

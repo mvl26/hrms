@@ -13,6 +13,34 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, getdate
 
+from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import (
+	BUCKET_MARRIAGE,
+	TOTAL_PAID,
+)
+
+# Nhóm của mã công → cột tổng trên bảng. Bảng chỉ mang MỘT con số công: "Tổng công" = số ngày công
+# ty trả lương, lấy đúng cột của báo cáo → một kỳ không thể có hai con số công. Phần đi làm thực tế
+# không có cột riêng ở đây; cần tách bạch thì xem mã công từng ngày, hoặc cột Công của báo cáo.
+#
+# Ở module level (không phải biến cục bộ trong `populate_from_attendance`) để
+# `hrms/hr/tests/test_attendance_category.py` soi được: nhóm nào thiếu cột ở đây là số ngày của
+# nhóm đó rơi khỏi bảng đã chốt, im lặng.
+CATEGORY_FIELD = {
+	TOTAL_PAID: "total_paid_days",
+	"Phép": "annual_leave",
+	# KH (nghỉ kết hôn) tách khỏi "Việc riêng" — HR chốt 2026-08-04. Phải có mặt ở ĐÂY nữa,
+	# không thì ngày KH rơi khỏi bảng: bảng chỉ ghi những loại có trong bảng ánh xạ này.
+	BUCKET_MARRIAGE: "marriage_leave",
+	"Việc riêng": "personal_leave",
+	"Ốm": "sick_leave",
+	"Thai sản": "maternity_leave",
+	"Tai nạn LĐ": "work_accident_leave",
+	"Nghỉ bù": "comp_off",
+	"Không lương": "unpaid_leave",
+	"Vắng": "absent",
+	"Nghỉ lễ": "public_holiday",
+}
+
 
 class MonthlyAttendanceSheet(Document):
 	def validate(self):
@@ -149,24 +177,6 @@ class MonthlyAttendanceSheet(Document):
 		if self.department:
 			filters.department = self.department
 
-		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import TOTAL_PAID
-
-		# Bảng chỉ mang MỘT con số công: "Tổng công" = số ngày công ty trả lương, lấy đúng cột của báo
-		# cáo → một kỳ không thể có hai con số công. Phần đi làm thực tế không có cột riêng ở đây; cần
-		# tách bạch thì xem mã công từng ngày, hoặc cột Công của báo cáo chấm công tháng.
-		category_field = {
-			TOTAL_PAID: "total_paid_days",
-			"Phép": "annual_leave",
-			"Việc riêng": "personal_leave",
-			"Ốm": "sick_leave",
-			"Thai sản": "maternity_leave",
-			"Tai nạn LĐ": "work_accident_leave",
-			"Nghỉ bù": "comp_off",
-			"Không lương": "unpaid_leave",
-			"Vắng": "absent",
-			"Nghỉ lễ": "public_holiday",
-		}
-
 		self.set("employees", [])
 		for r in get_sheet_rows(filters):
 			row = {
@@ -177,8 +187,8 @@ class MonthlyAttendanceSheet(Document):
 			for day, sym in r["days"].items():
 				row[f"d{int(day):02d}"] = sym
 			for cat, val in r["totals"].items():
-				if cat in category_field:
-					row[category_field[cat]] = val
+				if cat in CATEGORY_FIELD:
+					row[CATEGORY_FIELD[cat]] = val
 			self.append("employees", row)
 		return len(self.employees)
 
