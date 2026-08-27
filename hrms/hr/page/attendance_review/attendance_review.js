@@ -135,11 +135,11 @@ class AttendanceReview {
 									s.create || 0,
 									s.repair || 0,
 									s.attach || 0,
-								])
+							  ])
 							: __(
 									"Không có ngày nào cần sửa. {0} ngày dưới đây được giữ nguyên có chủ ý:",
 									[(plan.rows || []).length],
-								)
+							  )
 					}</p>
 					<div style="max-height:50vh;overflow:auto">
 					<table class="table table-bordered">
