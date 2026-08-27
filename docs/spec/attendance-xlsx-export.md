@@ -156,7 +156,7 @@ văn phòng thì để **trống**, không in `0h00`.
 
 ### 2f. Khối trình ký cuối bảng (2026-08-21)
 
-Biểu mẫu Excel gốc của Miyano (`docs/2. Bang_Cham_Cong_06-2026_final.xlsx`) kết thúc bằng khối
+Biểu mẫu Excel gốc của Miyano (`docs/Bang_Cham_Cong_06-2026_final.xlsx`) kết thúc bằng khối
 trình ký mà file xuất ra đang thiếu — không có nó thì bản in không ký được, phải gõ tay thêm:
 
 ```

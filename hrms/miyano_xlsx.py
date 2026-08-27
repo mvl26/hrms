@@ -43,7 +43,7 @@ RIGHT = Alignment(horizontal="right", vertical="center")
 HEADER_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
 HEADER_HEIGHT = 34  # đủ hai dòng chữ ở cỡ mặc định
 
-# Khối trình ký cuối bảng — bản Excel gốc của Miyano (`docs/2. Bang_Cham_Cong_06-2026_final.xlsx`)
+# Khối trình ký cuối bảng — bản Excel gốc của Miyano (`docs/Bang_Cham_Cong_06-2026_final.xlsx`)
 # xếp cả hai chữ ký ở NỬA PHẢI: người duyệt sát mép phải, người lập lùi vào giữa.
 SIGN_PREPARED_LABEL = "Người lập"
 SIGN_APPROVED_LABEL = "Người duyệt"
