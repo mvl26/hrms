@@ -8,6 +8,7 @@
  "field_order": [
   "year",
   "holiday_date",
+  "day_type",
   "description"
  ],
  "fields": [
@@ -28,20 +29,31 @@
    "reqd": 1
   },
   {
-   "columns": 5,
+   "columns": 2,
+   "default": "Nghỉ lễ",
+   "description": "Nghỉ lễ = cả công ty nghỉ, hưởng nguyên lương. Làm bù = ngày cuối tuần phải đi làm.",
+   "fieldname": "day_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Loại",
+   "options": "Nghỉ lễ\nLàm bù",
+   "reqd": 1
+  },
+  {
+   "columns": 4,
    "fieldname": "description",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Tên ngày lễ",
+   "label": "Tên ngày",
    "reqd": 1
   }
  ],
  "istable": 1,
  "links": [],
- "modified": "2026-07-24 10:00:00.000000",
+ "modified": "2026-08-30 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "HR",
- "name": "Lunar Holiday",
+ "name": "Work Calendar Day",
  "owner": "Administrator",
  "permissions": [],
  "sort_field": "modified",

@@ -296,3 +296,44 @@ class TestWorkScheduleResolution(PerTestRollback, FrappeTestCase):
 		start, end = shift_window(self.employee, "2026-07-21")
 		self.assertEqual(start.hour, 8)
 		self.assertEqual(end.hour, 17)
+
+	# --- ngoại lệ của lịch tuần (nghỉ ghép / làm bù) --------------------------
+
+	def set_calendar_days(self, rows):
+		settings = frappe.get_single("Work Calendar Settings")
+		settings.calendar_days = []
+		for year, day, day_type, desc in rows:
+			settings.append(
+				"calendar_days",
+				{"year": year, "holiday_date": day, "day_type": day_type, "description": desc},
+			)
+		settings.flags.ignore_permissions = True
+		settings.save()
+
+	def test_a_make_up_day_enters_the_payroll_denominator(self):
+		"""Đi làm bù thứ Bảy thì tháng đó có thêm MỘT ngày công thật.
+
+		Nếu ngoại lệ chỉ chạm `is_scheduled_day` mà quên `scheduled_days_between`, bảng công sẽ hiện
+		mã công cho ngày đó nhưng mẫu số lương lại không đếm — hai bên lệch nhau trong im lặng.
+		"""
+		self.set_shift_days(MON_TO_FRI_NAMES)
+		base = scheduled_days_between(self.employee, "2026-08-01", "2026-08-31")
+		self.assertEqual(len(base), 21)
+
+		self.set_calendar_days([(2026, "2026-08-29", "Làm bù", "Làm bù Quốc khánh")])
+		after = scheduled_days_between(self.employee, "2026-08-01", "2026-08-31")
+		self.assertEqual(len(after), 22)
+		self.assertIn(getdate("2026-08-29"), after)
+
+	def test_a_make_up_day_shows_as_scheduled_in_the_bulk_map(self):
+		"""Bulk và API lẻ phải nói giống nhau, kể cả ở ngày ngoại lệ."""
+		self.set_shift_days(MON_TO_FRI_NAMES)
+		self.set_calendar_days([(2026, "2026-08-29", "Làm bù", "Làm bù Quốc khánh")])
+		bulk = scheduled_days_map([self.employee], "2026-08-01", "2026-08-31")[self.employee]
+		self.assertEqual(bulk[getdate("2026-08-29")], "scheduled")
+		self.assertEqual(bulk[getdate("2026-08-30")], "rest")  # CN kế bên vẫn nghỉ
+
+	def test_an_exception_of_another_year_is_ignored(self):
+		self.set_shift_days(MON_TO_FRI_NAMES)
+		self.set_calendar_days([(2027, "2027-08-28", "Làm bù", "Làm bù 2027")])
+		self.assertTrue(is_rest_day(self.employee, "2026-08-29"))

@@ -43,6 +43,8 @@ def ensure_defaults():
 			f"(fixtures may not have synced): {missing}"
 		)
 
+	shifts_without_schedule = warn_shifts_without_working_days()
+
 	unmapped = leave_types_without_code()
 	if unmapped:
 		frappe.logger("hrms").warning(
@@ -55,7 +57,29 @@ def ensure_defaults():
 		"coo_role": bool(frappe.db.exists("Role", "COO")),
 		"missing": missing,
 		"leave_types_without_code": unmapped,
+		"shifts_without_working_days": shifts_without_schedule,
 	}
+
+
+def warn_shifts_without_working_days() -> list[str]:
+	"""Ca đang bật chấm công tự động mà chưa khai ngày làm việc trong tuần.
+
+	CẢNH BÁO, không tự vá: lịch tuần là MẪU SỐ của phiếu lương, đoán hộ một giá trị "hợp lý" là
+	đúng kiểu thay đổi im lặng mà repo này cấm. Có lịch mặc định của công ty thì chưa nguy hiểm —
+	ca sẽ rơi về đó — nên chỉ cảnh báo khi cả hai đều trống.
+	"""
+	from hrms.hr.work_schedule import company_default_weekdays, shift_weekdays
+
+	if company_default_weekdays():
+		return []
+	shifts = frappe.get_all("Shift Type", filters={"enable_auto_attendance": 1}, pluck="name")
+	missing = [s for s in shifts if shift_weekdays(s) is None]
+	if missing:
+		frappe.logger("hrms").warning(
+			f"hrms.setup_vn_defaults.ensure_defaults: ca chưa khai ngày làm việc trong tuần và "
+			f"công ty cũng chưa có lịch mặc định (chấm công sẽ nổ lỗi cấu hình): {missing}"
+		)
+	return missing
 
 
 def leave_types_without_code() -> list[str]:

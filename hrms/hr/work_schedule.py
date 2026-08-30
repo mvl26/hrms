@@ -25,6 +25,9 @@ from frappe import _
 from frappe.utils import getdate
 
 # date.weekday(): 0 = thứ Hai … 6 = Chủ nhật. Tên thứ khớp child doctype `Assignment Rule Day`.
+# Loại ngày đặc biệt (khớp `Work Calendar Day.day_type`) — chỉ "Làm bù" đổi được lịch tuần.
+MAKE_UP_DAY = "Làm bù"
+
 WEEKDAY_INDEX = {
 	"Monday": 0,
 	"Tuesday": 1,
@@ -164,9 +167,36 @@ def holiday_list_covers(holiday_list: str, date) -> bool:
 	return bool(from_date and to_date and getdate(from_date) <= getdate(date) <= getdate(to_date))
 
 
+def calendar_exceptions(year: int) -> dict:
+	"""{ngày: loại} của một năm — những ngày KHÁC với mẫu tuần (nghỉ ghép / làm bù).
+
+	`custom_working_days` là mẫu tuần lặp lại vô hạn: nó không nói được "riêng thứ Bảy 29/08/2026
+	thì đi làm". Mô hình cũ nói được (HR xoá dòng `weekly_off` của đúng ngày đó), nên thiếu bảng
+	này thì việc tách lịch là một bước LÙI về khả năng biểu đạt. Xem spec §3b.
+	"""
+	rows = frappe.get_all(
+		"Work Calendar Day",
+		filters={
+			"parent": "Work Calendar Settings",
+			"parenttype": "Work Calendar Settings",
+			"parentfield": "calendar_days",
+			"year": int(year),
+		},
+		fields=["holiday_date", "day_type"],
+	)
+	return {getdate(r.holiday_date): r.day_type for r in rows if r.holiday_date}
+
+
 def is_scheduled_day(employee: str, date) -> bool:
-	"""Nằm trong lịch tuần. KHÔNG xét ngày lễ."""
-	return getdate(date).weekday() in employee_weekdays(employee, date)
+	"""Nằm trong lịch tuần. KHÔNG xét ngày lễ.
+
+	= (thứ có trong mẫu tuần) HOẶC (ngày được khai "Làm bù"). Ngoại lệ chỉ cần biết ở ĐÂY; sáu nơi
+	tiêu thụ đúng theo mà không phải sửa dòng nào — đó là lợi tức của thiết kế một cửa.
+	"""
+	date = getdate(date)
+	if calendar_exceptions(date.year).get(date) == MAKE_UP_DAY:
+		return True
+	return date.weekday() in employee_weekdays(employee, date)
 
 
 def is_rest_day(employee: str, date) -> bool:
@@ -263,13 +293,30 @@ def weekdays_by_date(employee: str, start, end) -> dict[date, frozenset[int]]:
 	return out
 
 
+def make_up_days_between(start, end) -> set[date]:
+	"""Ngày `Làm bù` (cuối tuần phải đi làm) rơi trong khoảng — gộp mọi năm mà khoảng chạm tới."""
+	years = {getdate(start).year, getdate(end).year}
+	first, last = getdate(start), getdate(end)
+	out = set()
+	for year in years:
+		out |= {
+			d
+			for d, day_type in calendar_exceptions(year).items()
+			if day_type == MAKE_UP_DAY and first <= d <= last
+		}
+	return out
+
+
 def scheduled_days_between(employee: str, start, end) -> set[date]:
 	"""MẪU SỐ LƯƠNG: ngày theo lịch tuần trong khoảng, **KỂ CẢ ngày lễ**.
 
 	Ngày lễ hưởng nguyên lương nên nó nằm TRONG mẫu số (HR chốt 2026-08-04). Đừng đổi sang
 	`working_*` — sẽ hụt đúng bằng số ngày lễ của tháng, và chỉ lộ ở tháng có lễ.
+
+	Ngày `Làm bù` được cộng vào: đi làm thứ Bảy thì tháng đó có thêm một ngày công thật.
 	"""
-	return {d for d, days in weekdays_by_date(employee, start, end).items() if d.weekday() in days}
+	from_pattern = {d for d, days in weekdays_by_date(employee, start, end).items() if d.weekday() in days}
+	return from_pattern | make_up_days_between(start, end)
 
 
 def public_holidays_between(employee: str, start, end) -> set[date]:
@@ -328,9 +375,10 @@ def scheduled_days_map(employees: list[str], start, end) -> dict[str, dict[date,
 			holidays_by_list[holiday_list] = {getdate(d) for d in rows}
 		holidays = holidays_by_list.get(holiday_list, set())
 
+		make_up = make_up_days_between(start, end)
 		days = {}
 		for d, weekdays in weekdays_by_date(employee, start, end).items():
-			if d.weekday() not in weekdays:
+			if d.weekday() not in weekdays and d not in make_up:
 				days[d] = "rest"
 			elif d in holidays:
 				days[d] = "holiday"

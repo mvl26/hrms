@@ -8,19 +8,20 @@
  "field_order": [
   "intro_html",
   "company",
-  "weekly_off_section",
-  "weekly_off_days",
-  "lunar_section",
-  "lunar_holidays",
+  "default_days_section",
+  "default_working_days",
+  "calendar_days_section",
+  "calendar_days",
   "generate_section",
   "generate_for_year",
-  "generate_button"
+  "generate_button",
+  "preview_html"
  ],
  "fields": [
   {
    "fieldname": "intro_html",
    "fieldtype": "HTML",
-   "options": "<p>Đây là <b>nguồn sự thật</b> cho lịch làm việc. Holiday List là kết quả <i>sinh ra</i> từ đây — đừng sửa tay Holiday List, sửa ở đây rồi bấm sinh lại.</p><p>Ba loại ngày: <b>ngày làm việc</b> (không nằm trong Holiday List) · <b>nghỉ cuối tuần</b> (weekly_off=1, bảng công hiện <code>-</code>) · <b>nghỉ lễ</b> (weekly_off=0, hiện <code>NL</code>).</p>"
+   "options": "<p>Đây là <b>nguồn sự thật</b> cho lịch làm việc. Holiday List là kết quả <i>sinh ra</i> từ đây — đừng sửa tay Holiday List, sửa ở đây rồi bấm sinh lại.</p><p>Ngày làm việc trong tuần khai trên từng <b>Ca</b> (Shift Type); ô dưới đây chỉ là lịch mặc định cho nhân viên chưa phân ca.</p><p><b>Sửa ở trang này là đổi mẫu số của phiếu lương.</b> Xem bảng số ngày công trước/sau ở cuối trang trước khi lưu.</p>"
   },
   {
    "fieldname": "company",
@@ -30,28 +31,28 @@
    "reqd": 1
   },
   {
-   "fieldname": "weekly_off_section",
+   "fieldname": "default_days_section",
    "fieldtype": "Section Break",
-   "label": "Ngày nghỉ hàng tuần"
+   "label": "Lịch làm việc mặc định"
   },
   {
-   "description": "Những thứ trong tuần công ty KHÔNG làm việc. Bỏ trống = làm cả tuần.",
-   "fieldname": "weekly_off_days",
+   "description": "Những thứ trong tuần công ty đi làm, dùng cho nhân viên chưa phân ca hoặc ca chưa khai. Ca có khai riêng thì ca thắng.",
+   "fieldname": "default_working_days",
    "fieldtype": "Table",
-   "label": "Nghỉ vào các thứ",
+   "label": "Ngày làm việc mặc định",
    "options": "Assignment Rule Day"
   },
   {
-   "fieldname": "lunar_section",
+   "fieldname": "calendar_days_section",
    "fieldtype": "Section Break",
-   "label": "Ngày lễ âm lịch (nhập tay từng năm)"
+   "label": "Ngày đặc biệt trong năm"
   },
   {
-   "description": "Lễ dương (1/1, 30/4, 1/5, 1/9, 2/9) tự sinh theo Điều 112 — không cần nhập. Chỉ nhập lễ ÂM: Tết Nguyên Đán, Giỗ Tổ. Lễ rơi vào ngày nghỉ tuần sẽ tự sinh nghỉ bù.",
-   "fieldname": "lunar_holidays",
+   "description": "Mọi ngày KHÁC với lịch tuần. <b>Nghỉ lễ</b>: Tết Nguyên Đán, Giỗ Tổ, lễ riêng công ty, nghỉ ghép — đều hưởng nguyên lương và sẽ được đẩy xuống Holiday List. <b>Làm bù</b>: ngày cuối tuần phải đi làm. Lễ dương (1/1, 30/4, 1/5, 1/9, 2/9) tự sinh, không cần nhập. Lễ rơi vào ngày nghỉ sẽ tự sinh nghỉ bù. <b>Ngày làm bù nên nằm cùng tháng với ngày nghỉ ghép nó bù cho</b>, nếu không số ngày công của hai tháng đều đổi.",
+   "fieldname": "calendar_days",
    "fieldtype": "Table",
-   "label": "Ngày lễ âm lịch",
-   "options": "Lunar Holiday"
+   "label": "Ngày đặc biệt",
+   "options": "Work Calendar Day"
   },
   {
    "fieldname": "generate_section",
@@ -59,7 +60,7 @@
    "label": "Sinh Holiday List"
   },
   {
-   "description": "Năm cần sinh / cập nhật lịch.",
+   "description": "Năm cần sinh / cập nhật lịch nghỉ lễ.",
    "fieldname": "generate_for_year",
    "fieldtype": "Int",
    "label": "Sinh cho năm"
@@ -68,12 +69,17 @@
    "fieldname": "generate_button",
    "fieldtype": "Button",
    "label": "Sinh / Cập nhật Holiday List"
+  },
+  {
+   "fieldname": "preview_html",
+   "fieldtype": "HTML",
+   "label": "Số ngày công từng tháng"
   }
  ],
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-07-24 10:00:00.000000",
+ "modified": "2026-08-30 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "HR",
  "name": "Work Calendar Settings",

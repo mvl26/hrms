@@ -1,18 +1,20 @@
-"""On-demand generator for a Vietnamese Holiday List.
+"""Sinh Holiday List Việt Nam — CHỈ ngày nghỉ lễ.
 
-Creates ONE Holiday List per (company, year) using the stock Holiday List doctype:
-  - weekly-off rows (Chủ nhật, optionally + Thứ 7) via the doctype's own get_weekly_off_dates;
-  - the fixed SOLAR public holidays of Điều 112 BLLĐ 2019 (Tết dương, 30/4, 1/5, Quốc khánh x2);
-  - a compensatory day off (nghỉ bù, Điều 112 khoản 3) on the next working day whenever a solar
-    holiday coincides with a weekly-off day.
+Một Holiday List cho mỗi (công ty, năm), gồm:
+  - lễ dương cố định của Điều 112 BLLĐ 2019 (Tết dương, 30/4, 1/5, Quốc khánh x2);
+  - lễ nhập tay truyền vào qua `extra_holidays` (Tết Âm, Giỗ Tổ, lễ riêng công ty, nghỉ ghép);
+  - nghỉ bù (Điều 112 khoản 3) khi một ngày lễ rơi vào ngày KHÔNG làm việc.
 
-Tết Âm lịch (5 ngày) + Giỗ Tổ (10/3 âm) shift every year (lunar) → HR enters those by hand.
-Idempotent (re-running never duplicates dates). On-demand only — NOT wired to migrate/install,
-because creating a Holiday List is creating company data (ask-first on production).
+Danh sách này KHÔNG còn chứa ngày nghỉ cuối tuần: ngày làm việc trong tuần nay thuộc `Shift Type`
+(xem `hrms/hr/work_schedule.py`). Nhờ vậy quên tạo lịch của năm mới chỉ làm mất ký hiệu NL, chứ
+không biến mọi thứ Bảy thành ngày công.
 
-Usage:
+Idempotent (chạy lại không nhân đôi ngày). Chỉ chạy theo yêu cầu — KHÔNG gắn vào migrate/install,
+vì tạo Holiday List là tạo dữ liệu công ty (ask-first trên site thật).
+
+Dùng:
   bench --site <s> execute hrms.setup_vn_holiday.create_vn_holiday_list \
-        --kwargs "{'year': 2026, 'company': 'Miyano', 'weekly_off_days': ['Sunday']}"
+        --kwargs "{'year': 2026, 'company': 'Miyano'}"
 """
 
 from datetime import timedelta
@@ -20,6 +22,8 @@ from datetime import timedelta
 import frappe
 from frappe import _
 from frappe.utils import getdate
+
+from hrms.hr.work_schedule import company_default_weekdays, scheduled_dates
 
 # (month, day) of the fixed SOLAR public holidays. Quốc khánh = 2 ngày (01/09 + 02/09).
 SOLAR_HOLIDAYS = [
@@ -49,7 +53,7 @@ def vn_holiday_list_name(company, year) -> str:
 	return f"VN {company} {int(year)}"
 
 
-def create_vn_holiday_list(year, company, weekly_off_days=("Sunday",), name=None, extra_holidays=None):
+def create_vn_holiday_list(year, company, name=None, extra_holidays=None):
 	"""Create/refresh a VN Holiday List for `year`. Returns its name. Idempotent.
 
 	`extra_holidays` = {"YYYY-MM-DD": "Nhãn"} cho những ngày lễ KHÔNG cố định theo dương lịch
@@ -58,6 +62,8 @@ def create_vn_holiday_list(year, company, weekly_off_days=("Sunday",), name=None
 	"""
 	year = int(year)
 	list_name = name or vn_holiday_list_name(company, year)
+	settings = frappe.get_single("Work Calendar Settings")
+	make_up_days = {getdate(d) for d in settings.get_make_up_days(year)}
 
 	if frappe.db.exists("Holiday List", list_name):
 		doc = frappe.get_doc("Holiday List", list_name)
@@ -71,12 +77,6 @@ def create_vn_holiday_list(year, company, weekly_off_days=("Sunday",), name=None
 			}
 		)
 
-	# weekly-off rows: get_weekly_off_dates skips dates already present, so looping is idempotent
-	for day in weekly_off_days:
-		doc.weekly_off = day
-		doc.get_weekly_off_dates()
-
-	weekly_off_dates = {getdate(h.holiday_date) for h in doc.holidays if h.weekly_off}
 	holiday_dates = {getdate(h.holiday_date) for h in doc.holidays if not h.weekly_off}
 	bu_descriptions = {h.description for h in doc.holidays if not h.weekly_off}
 
@@ -86,15 +86,25 @@ def create_vn_holiday_list(year, company, weekly_off_days=("Sunday",), name=None
 	scheduled_holidays = {getdate(f"{year}-{mm:02d}-{dd:02d}") for mm, dd in SOLAR_HOLIDAYS}
 	scheduled_holidays |= {getdate(ds) for ds in (extra_holidays or {})}
 
+	weekdays = company_default_weekdays() or frozenset()
+
+	def is_scheduled(d) -> bool:
+		"""Ngày có nằm trong lịch tuần không — kể cả ngoại lệ làm bù."""
+		return d in scheduled_dates(weekdays, d, d) or d in make_up_days
+
 	def add_public_holiday(d, label):
-		"""Một ngày nghỉ lễ; nếu trùng ngày nghỉ hàng tuần thì sinh nghỉ bù (Điều 112 khoản 3)."""
-		if d in weekly_off_dates:
+		"""Một ngày nghỉ lễ; nếu rơi vào ngày KHÔNG làm việc thì sinh nghỉ bù (Điều 112 khoản 3).
+
+		Hỏi lịch tuần chứ không hỏi cờ `weekly_off` của chính danh sách này — danh sách nay chỉ còn
+		ngày lễ nên không còn cờ nào để hỏi. Kết quả bảo đảm một bất biến quan trọng: dòng lễ CHỈ
+		nằm trên ngày làm việc, nhờ đó không thể cộng khống một ngày công vào lương."""
+		if not is_scheduled(d):
 			bu_label = f"Nghỉ bù {label}"
 			if bu_label in bu_descriptions:
 				return  # đã có ngày bù cho lễ này -> chạy lại không nhân đôi
 			bu = d + timedelta(days=1)
-			# bỏ qua ngày nghỉ tuần + mọi ngày lễ khác (kể cả lễ chưa được thêm vào doc)
-			while bu in weekly_off_dates or bu in holiday_dates or bu in scheduled_holidays:
+			# bỏ qua ngày ngoài lịch tuần + mọi ngày lễ khác (kể cả lễ chưa được thêm vào doc)
+			while not is_scheduled(bu) or bu in holiday_dates or bu in scheduled_holidays:
 				bu = bu + timedelta(days=1)
 			doc.append("holidays", {"holiday_date": bu, "description": bu_label, "weekly_off": 0})
 			holiday_dates.add(bu)
@@ -111,6 +121,8 @@ def create_vn_holiday_list(year, company, weekly_off_days=("Sunday",), name=None
 
 	doc.save()  # validate() sorts, counts, and rejects duplicate dates
 	frappe.msgprint(
-		_("Đã tạo {0}. Nhớ nhập tay Tết Âm lịch + Giỗ Tổ (10/3 âm) cho năm {1}.").format(list_name, year)
+		_("Đã tạo {0}. Nhớ khai Tết Âm lịch + Giỗ Tổ (10/3 âm) của năm {1} ở Cấu hình lịch làm việc.").format(
+			list_name, year
+		)
 	)
 	return doc.name
