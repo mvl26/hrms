@@ -199,3 +199,163 @@ def is_public_holiday(employee: str, date) -> bool:
 def is_working_day(employee: str, date) -> bool:
 	"""PHẢI ĐI LÀM = nằm trong lịch tuần VÀ không phải ngày lễ."""
 	return is_scheduled_day(employee, date) and not is_public_holiday(employee, date)
+
+
+def shift_runs(employees: list[str], start, end) -> dict[str, list[tuple]]:
+	"""{nhân viên: [(từ ngày, tới ngày, ca)]} — mọi Shift Assignment chồng lấn khoảng, MỘT truy vấn.
+
+	Nền của các hàm bulk. Không gộp được thành "ca của cả kỳ": ca đổi giữa kỳ là chuyện thường
+	(Miyano cấp ca theo từng tháng), mà đổi ca là đổi lịch tuần, tức đổi mẫu số lương.
+	"""
+	if not employees:
+		return {}
+	rows = frappe.get_all(
+		"Shift Assignment",
+		filters=[
+			["employee", "in", employees],
+			["docstatus", "=", 1],
+			["status", "=", "Active"],
+			["start_date", "<=", getdate(end)],
+		],
+		or_filters=[["end_date", "is", "not set"], ["end_date", ">=", getdate(start)]],
+		fields=["employee", "shift_type", "start_date", "end_date"],
+		order_by="start_date asc",
+	)
+	runs = {}
+	for r in rows:
+		runs.setdefault(r.employee, []).append(
+			(getdate(r.start_date), getdate(r.end_date) if r.end_date else None, r.shift_type)
+		)
+	return runs
+
+
+def weekdays_by_date(employee: str, start, end) -> dict[date, frozenset[int]]:
+	"""Lịch tuần áp cho TỪNG ngày của khoảng — tôn trọng việc đổi ca giữa kỳ.
+
+	Lấy ca của một ngày rồi áp cho cả kỳ là sai ngay khi có Shift Assignment cắt ngang tháng.
+	Chỉ tra lịch tuần một lần cho mỗi ca khác nhau, nên vẫn là vài truy vấn chứ không phải N.
+	"""
+	runs = shift_runs([employee], start, end).get(employee, [])
+	default_shift = frappe.get_cached_value("Employee", employee, "default_shift")
+	cache: dict[str | None, frozenset[int] | None] = {}
+
+	def days_of(shift):
+		if shift not in cache:
+			cache[shift] = shift_weekdays(shift)
+		return cache[shift]
+
+	fallback = company_default_weekdays()
+	out = {}
+	for d in dates_in_range(start, end):
+		shift = next(
+			(s for (frm, to, s) in runs if frm <= d and (to is None or to >= d)),
+			default_shift,
+		)
+		days = days_of(shift) or fallback
+		if days is None:
+			frappe.throw(
+				_(
+					"Chưa khai ngày làm việc trong tuần cho nhân viên {0} (trên ca hoặc trong Cấu hình lịch làm việc)."
+				).format(employee),
+				exc=WorkScheduleNotConfigured,
+			)
+		out[d] = days
+	return out
+
+
+def scheduled_days_between(employee: str, start, end) -> set[date]:
+	"""MẪU SỐ LƯƠNG: ngày theo lịch tuần trong khoảng, **KỂ CẢ ngày lễ**.
+
+	Ngày lễ hưởng nguyên lương nên nó nằm TRONG mẫu số (HR chốt 2026-08-04). Đừng đổi sang
+	`working_*` — sẽ hụt đúng bằng số ngày lễ của tháng, và chỉ lộ ở tháng có lễ.
+	"""
+	return {d for d, days in weekdays_by_date(employee, start, end).items() if d.weekday() in days}
+
+
+def public_holidays_between(employee: str, start, end) -> set[date]:
+	"""Ngày lễ trong khoảng, ĐÃ giao với lịch tuần (phòng dòng lễ nhập nhầm vào T7/CN)."""
+	holiday_list = holiday_list_for(employee, start)
+	if not holiday_list:
+		return set()
+	rows = frappe.get_all(
+		"Holiday",
+		filters={
+			"parent": holiday_list,
+			"parenttype": "Holiday List",
+			"holiday_date": ["between", [getdate(start), getdate(end)]],
+			"weekly_off": 0,
+		},
+		pluck="holiday_date",
+	)
+	return {getdate(d) for d in rows} & scheduled_days_between(employee, start, end)
+
+
+def non_working_days_between(employee: str, start, end) -> set[date]:
+	"""Ngày KHÔNG phải đi làm = hợp của ngoài lịch tuần và ngày lễ. Đã khử trùng.
+
+	Tập thay thế cho `get_holiday_dates_between` ở mọi nơi tiêu thụ. Trong giai đoạn chuyển tiếp
+	(Holiday List còn dòng nghỉ cuối tuần) tập này bằng ĐÚNG tập cũ — đó là lý do các bước đổi
+	consumer đều bất biến và thứ tự triển khai không quan trọng.
+	"""
+	everything = set(dates_in_range(start, end))
+	return (everything - scheduled_days_between(employee, start, end)) | public_holidays_between(
+		employee, start, end
+	)
+
+
+def scheduled_days_map(employees: list[str], start, end) -> dict[str, dict[date, str]]:
+	"""{nhân viên: {ngày: "scheduled" | "rest" | "holiday"}} — bản đồ gộp cho báo cáo/bảng công.
+
+	Bảng công là 31 ngày x N nhân viên; gọi API lẻ trong vòng lặp là N+1 truy vấn. Ở đây mỗi ca
+	chỉ tra lịch tuần một lần và mỗi Holiday List chỉ quét một lần.
+	"""
+	out: dict[str, dict[date, str]] = {}
+	holidays_by_list: dict[str, set[date]] = {}
+
+	for employee in employees:
+		holiday_list = holiday_list_for(employee, start)
+		if holiday_list and holiday_list not in holidays_by_list:
+			rows = frappe.get_all(
+				"Holiday",
+				filters={
+					"parent": holiday_list,
+					"parenttype": "Holiday List",
+					"holiday_date": ["between", [getdate(start), getdate(end)]],
+					"weekly_off": 0,
+				},
+				pluck="holiday_date",
+			)
+			holidays_by_list[holiday_list] = {getdate(d) for d in rows}
+		holidays = holidays_by_list.get(holiday_list, set())
+
+		days = {}
+		for d, weekdays in weekdays_by_date(employee, start, end).items():
+			if d.weekday() not in weekdays:
+				days[d] = "rest"
+			elif d in holidays:
+				days[d] = "holiday"
+			else:
+				days[d] = "scheduled"
+		out[employee] = days
+	return out
+
+
+def shift_window(employee: str, date) -> tuple[datetime, datetime] | None:
+	"""(giờ vào, giờ ra) của ca trong ngày, hoặc `None` nếu ngày đó ngoài lịch tuần.
+
+	Đây là định nghĩa "trong ca / ngoài ca" mà tính năng OT sẽ dùng — khai một chỗ để OT không
+	phải phát minh lại khái niệm.
+	"""
+	if not is_scheduled_day(employee, date):
+		return None
+	shift = employee_shift(employee, date)
+	if not shift:
+		return None
+	timings = frappe.get_cached_value("Shift Type", shift, ["start_time", "end_time"])
+	if not timings or timings[0] is None or timings[1] is None:
+		return None
+	on = getdate(date)
+	return (
+		datetime.combine(on, time.min) + timings[0],
+		datetime.combine(on, time.min) + timings[1],
+	)

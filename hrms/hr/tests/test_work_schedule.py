@@ -12,6 +12,7 @@ from datetime import date
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from frappe.utils import getdate
 
 from hrms.hr.work_schedule import (
 	WorkScheduleNotConfigured,
@@ -21,7 +22,12 @@ from hrms.hr.work_schedule import (
 	is_rest_day,
 	is_scheduled_day,
 	is_working_day,
+	non_working_days_between,
+	public_holidays_between,
 	scheduled_dates,
+	scheduled_days_between,
+	scheduled_days_map,
+	shift_window,
 	weekday_set,
 )
 from hrms.tests.isolation import PerTestRollback
@@ -208,3 +214,85 @@ class TestWorkScheduleResolution(PerTestRollback, FrappeTestCase):
 		frappe.db.set_value("Employee", self.employee, "holiday_list", newer)
 		self.assertEqual(holiday_list_for(self.employee, "2026-07-17"), older)
 		self.assertTrue(is_public_holiday(self.employee, "2026-07-17"))
+
+	# --- API theo khoảng + bulk ----------------------------------------------
+
+	def test_scheduled_days_between_includes_public_holidays(self):
+		"""MẪU SỐ LƯƠNG: 07/2026 = 23 ngày, và ngày lễ 17/07 NẰM TRONG đó."""
+		self.set_shift_days(MON_TO_FRI_NAMES)
+		hl = self.make_holiday_list(
+			"_Test VN 2026", "2026-01-01", "2026-12-31", [("2026-07-17", "Nghỉ lễ công ty")]
+		)
+		frappe.db.set_value("Employee", self.employee, "holiday_list", hl)
+		got = scheduled_days_between(self.employee, "2026-07-01", "2026-07-31")
+		self.assertEqual(len(got), 23)
+		self.assertIn(getdate("2026-07-17"), got)
+
+	def test_scheduled_days_follow_a_mid_period_shift_change(self):
+		"""Đổi ca giữa kỳ phải đổi mẫu số theo. Lấy ca của MỘT ngày rồi áp cho cả kỳ là sai."""
+		self.set_shift_days(MON_TO_FRI_NAMES)
+		six_day = self.make_shift("_Test Lich Tuan 6 Ngay")
+		self.set_shift_days([*MON_TO_FRI_NAMES, "Saturday"], shift=six_day)
+		frappe.get_doc(
+			{
+				"doctype": "Shift Assignment",
+				"employee": self.employee,
+				"shift_type": six_day,
+				"company": self.company,
+				"start_date": "2026-07-16",
+				"end_date": "2026-07-31",
+			}
+		).insert(ignore_permissions=True).submit()
+		got = scheduled_days_between(self.employee, "2026-07-01", "2026-07-31")
+		self.assertNotIn(getdate("2026-07-11"), got)  # T7 nửa đầu tháng: ca 5 ngày
+		self.assertIn(getdate("2026-07-25"), got)  # T7 nửa sau: ca 6 ngày
+
+	def test_non_working_days_is_the_union_without_double_counting(self):
+		self.set_shift_days(MON_TO_FRI_NAMES)
+		hl = self.make_holiday_list(
+			"_Test VN 2026", "2026-01-01", "2026-12-31", [("2026-07-17", "Nghỉ lễ công ty")]
+		)
+		frappe.db.set_value("Employee", self.employee, "holiday_list", hl)
+		got = non_working_days_between(self.employee, "2026-07-01", "2026-07-31")
+		self.assertEqual(len(got), 31 - 22)  # 8 ngày cuối tuần + 1 ngày lễ
+		self.assertIn(getdate("2026-07-25"), got)
+		self.assertIn(getdate("2026-07-17"), got)
+
+	def test_public_holidays_between_ignores_rows_on_rest_days(self):
+		self.set_shift_days(MON_TO_FRI_NAMES)
+		hl = self.make_holiday_list(
+			"_Test VN 2026",
+			"2026-01-01",
+			"2026-12-31",
+			[("2026-07-17", "Lễ đúng ngày làm việc"), ("2026-07-26", "Lễ nhập nhầm vào CN")],
+		)
+		frappe.db.set_value("Employee", self.employee, "holiday_list", hl)
+		got = public_holidays_between(self.employee, "2026-07-01", "2026-07-31")
+		self.assertEqual(got, {getdate("2026-07-17")})
+
+	def test_scheduled_days_map_agrees_with_the_single_day_api(self):
+		"""Bulk và API lẻ không được nói khác nhau — bẫy N+1 kinh điển là ở đây."""
+		self.set_shift_days(MON_TO_FRI_NAMES)
+		hl = self.make_holiday_list(
+			"_Test VN 2026", "2026-01-01", "2026-12-31", [("2026-07-17", "Nghỉ lễ công ty")]
+		)
+		frappe.db.set_value("Employee", self.employee, "holiday_list", hl)
+		bulk = scheduled_days_map([self.employee], "2026-07-01", "2026-07-31")[self.employee]
+		for d in dates_in_range("2026-07-01", "2026-07-31"):
+			if is_public_holiday(self.employee, d):
+				want = "holiday"
+			elif is_scheduled_day(self.employee, d):
+				want = "scheduled"
+			else:
+				want = "rest"
+			self.assertEqual(bulk[d], want, f"lệch ở ngày {d}")
+
+	def test_shift_window_is_none_on_a_rest_day(self):
+		self.set_shift_days(MON_TO_FRI_NAMES)
+		self.assertIsNone(shift_window(self.employee, "2026-07-25"))
+
+	def test_shift_window_spans_the_shift_on_a_working_day(self):
+		self.set_shift_days(MON_TO_FRI_NAMES)
+		start, end = shift_window(self.employee, "2026-07-21")
+		self.assertEqual(start.hour, 8)
+		self.assertEqual(end.hour, 17)
