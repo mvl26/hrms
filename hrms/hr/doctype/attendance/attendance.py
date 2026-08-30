@@ -95,6 +95,7 @@ class Attendance(Document):
 				self.shift,
 				self.get("custom_attendance_code"),
 				override,
+				self.get("custom_auto_filled"),
 			)
 			else 0
 		)

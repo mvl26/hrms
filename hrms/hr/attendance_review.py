@@ -249,6 +249,7 @@ def apply_correction(attendance: str, code: str, reason: str | None = None) -> d
 				doc.shift,
 				doc.custom_attendance_code,
 				doc.get("custom_lunch_override"),
+				doc.get("custom_auto_filled"),
 			)
 			else 0
 		)

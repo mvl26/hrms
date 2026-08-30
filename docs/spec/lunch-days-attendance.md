@@ -147,3 +147,37 @@ Hai mốc ký riêng: **(a)** duyệt thiết kế để code — *đã có 2026
 - Không đổi cách đếm ở report / Bảng Công Tháng / phiếu lương — vẫn Σ `custom_lunch`.
 - Không thêm cột sửa hàng loạt trên lưới soát công (user chọn ô 3 trạng thái trên phiếu, 2026-08-27).
 - Không đụng `status` / `leave_type` / `half_day_status` → số công không đổi, chỉ phụ cấp ăn đổi.
+
+## 5.8 Người miễn chấm công — ô tick trên hồ sơ (2026-08-27, sau data test)
+
+Data test soát dữ liệu thật phát hiện tình huống §5.4 chưa lường: **20/20 ngày lệch của tháng 8
+thuộc đúng 2 người *miễn chấm công*** (`hieu chu`, `Phạm Thị Dung` — người sau không chấm công lần
+nào cả tháng). Với họ, `attendance_exempt.py` **tự sinh** `X` cho mọi ngày làm việc
+(`Attendance.custom_auto_filled = 1`), nên luật "Present + không dấu chấm → có ăn" sẽ cấp phụ cấp
+**mỗi ngày, tự động, vĩnh viễn**, không một bằng chứng nào là họ có mặt tại công ty.
+
+**Quyết định (user, 2026-08-27):** thêm ô tick **"Tự chấm ăn trưa"**
+(`Employee.custom_auto_lunch_when_exempt`, Check, mặc định TẮT) ngay dưới ô *Miễn chấm công (full
+công)*, chỉ hiện khi ô đó được bật. Bật tick = người này thật sự lên văn phòng ⇒ ngày `X` tự sinh
+được tính ăn trưa; để trống ⇒ ngày tự sinh không được tính.
+
+Đặt quyết định ở **cấp con người** thay vì bắt HR sửa tay 20+ ngày mỗi tháng: tick một lần, data tự
+chạy chuẩn từ đó.
+
+**Vị trí trong luật** — chèn vào đúng nhánh "không đủ dấu chấm", SAU nhánh phủ giờ trưa:
+
+```
+≥ 2 dấu phủ giờ trưa            → 1     # BẰNG CHỨNG có mặt, thắng cả việc chưa bật tick
+ngày tự sinh & chưa bật tick    → 0     # ← MỚI
+< 2 dấu, còn lại                → luật §5.4
+```
+
+Thứ tự đó là cố ý: người miễn chấm công thỉnh thoảng vẫn quẹt thẻ (`hieu chu` có 4 dấu trong tháng
+8); hôm nào có dấu phủ giờ trưa thì đó là bằng chứng thật, không cần tick.
+
+**Ngày HR sửa qua soát công** cho người miễn chấm công vẫn giữ `custom_auto_filled = 1`, nên vẫn
+theo tick. Muốn cấp riêng cho một ngày thì dùng ô **Ăn trưa = Có** của ngày đó — đúng việc mà
+override sinh ra để làm.
+
+**Kết quả sau khi áp:** tháng 8 lệch từ 20 ngày về **0**; tháng 6 còn đúng 1 ngày (ngày `X` chấm tay
+của `hieu chu`, `custom_auto_filled = 0`, có 1 dấu chấm buổi sáng) — đúng luật, không liên quan tick.

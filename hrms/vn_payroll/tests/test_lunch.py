@@ -163,3 +163,46 @@ class TestEffectiveLunchFlag(PerTestRollback, FrappeTestCase):
 	def test_blank_override_means_automatic(self):
 		for auto in (None, "", "Tự động"):
 			self.assertEqual(self.flag(punches=(), override=auto), 1, auto)
+
+
+class TestAutoLunchForExemptEmployees(PerTestRollback, FrappeTestCase):
+	"""Người MIỄN CHẤM CÔNG: ngày `X` tự sinh chỉ được ăn trưa khi hồ sơ có tick "Tự chấm ăn trưa".
+
+	Không có tick thì ngày tự sinh KHÔNG tự cấp phụ cấp: hệ thống sinh `X` cho mọi ngày làm việc mà
+	không ai xác nhận người đó có mặt tại công ty (spec §5.8, user chốt 2026-08-27)."""
+
+	def dt(self, hhmm):
+		return get_datetime(f"2026-08-05 {hhmm}:00")
+
+	def flag(self, punches=(), auto_filled=False, tick=False, override=None):
+		from hrms.vn_payroll.lunch import effective_lunch_flag
+
+		return effective_lunch_flag(
+			"Present",
+			"X",
+			None,
+			[self.dt(p) for p in punches],
+			override,
+			auto_filled=auto_filled,
+			auto_lunch_when_exempt=tick,
+		)
+
+	def test_auto_filled_day_without_tick_gets_no_lunch(self):
+		"""Đúng 20 ngày tháng 8 của 2 người miễn chấm công."""
+		self.assertEqual(self.flag(auto_filled=True, tick=False), 0)
+
+	def test_auto_filled_day_with_tick_gets_lunch(self):
+		"""HR bật tick cho người thật sự lên văn phòng → data tự chạy chuẩn, khỏi sửa tay từng ngày."""
+		self.assertEqual(self.flag(auto_filled=True, tick=True), 1)
+
+	def test_real_punches_win_over_a_missing_tick(self):
+		"""Có dấu chấm phủ giờ trưa là BẰNG CHỨNG có mặt — không cần tick."""
+		self.assertEqual(self.flag(punches=("08:00", "17:30"), auto_filled=True, tick=False), 1)
+
+	def test_manual_day_is_unaffected_by_the_tick(self):
+		"""Ngày chấm tay / sửa qua soát công không phải ngày tự sinh → giữ nguyên luật cũ."""
+		self.assertEqual(self.flag(auto_filled=False, tick=False), 1)
+
+	def test_override_still_wins_on_an_auto_filled_day(self):
+		self.assertEqual(self.flag(auto_filled=True, tick=False, override="Có"), 1)
+		self.assertEqual(self.flag(auto_filled=True, tick=True, override="Không"), 0)
