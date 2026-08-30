@@ -73,6 +73,15 @@ class Attendance(Document):
 		# biết chính xác nó có đổi hay không.
 		self.flags.vn_status_before_leave_record = (self.status, self.leave_type)
 
+	def before_update_after_submit(self):
+		"""Sửa ô "Ăn trưa" trên ngày ĐÃ CHỐT thì cờ kết quả phải theo kịp.
+
+		`run_before_save_methods` chỉ gọi `before_validate` cho `save`/`submit`; đường
+		update-after-submit chỉ chạy đúng method này. Không móc vào đây thì HR đổi ô Ăn trưa mà
+		`custom_lunch` đứng yên — lựa chọn tay không có tác dụng gì. Chấm công vận hành thực tế
+		luôn ở trạng thái đã submit nên đây mới là đường đi chính, không phải ngoại lệ."""
+		self.set_lunch_flag()
+
 	def set_lunch_flag(self):
 		"""Miyano: ghi cờ ăn trưa (custom_lunch) — nguồn duy nhất cho số buổi ăn trưa (report + Bảng
 		Công Tháng + phiếu lương đều đếm từ cờ). Thuần dữ liệu; không đụng status/leave_type/

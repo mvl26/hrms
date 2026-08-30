@@ -616,3 +616,88 @@ class TestLunchDoesNotMovePayrollDays(PerTestRollback, FrappeTestCase):
 		doc.custom_lunch_override = "Có"
 		doc.save(ignore_permissions=True)
 		self.assertEqual(doc.custom_lunch, 1)
+
+
+class TestLunchOverrideAfterSubmit(PerTestRollback, FrappeTestCase):
+	"""L11 — ô "Ăn trưa" phải sửa được TRÊN BẢN GHI ĐÃ SUBMIT.
+
+	Chấm công vận hành thực tế luôn ở trạng thái đã submit (346/346 bản ghi trên site, không có bản
+	nháp nào). Một ô chỉnh tay không sửa được sau submit là ô vô dụng — đúng lỗi HR gặp:
+	"Not allowed to change Ăn trưa after submission from Tự động to Có".
+
+	Hai vế phải cùng đúng: (1) field cho phép sửa sau submit, (2) cờ kết quả được tính lại — vì
+	`before_validate` KHÔNG chạy ở đường update-after-submit, chỉ `before_update_after_submit` chạy."""
+
+	def setUp(self):
+		self.emp = test_employee()
+		self.company = frappe.db.get_value("Employee", self.emp, "company")
+
+	def submitted(self, date, status="Present", code="X"):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": date,
+				"company": self.company,
+				"status": status,
+				"custom_attendance_code": code,
+			}
+		).insert(ignore_permissions=True)
+		doc.submit()
+		return doc
+
+	def test_both_lunch_fields_are_editable_after_submit(self):
+		meta = frappe.get_meta("Attendance")
+		self.assertTrue(
+			meta.get_field("custom_lunch_override").allow_on_submit,
+			"HR phải sửa được ô Ăn trưa trên ngày đã chốt",
+		)
+		self.assertTrue(
+			meta.get_field("custom_lunch").allow_on_submit,
+			"cờ kết quả phải ghi được sau submit, nếu không lựa chọn tay không có tác dụng",
+		)
+
+	def test_switching_to_co_after_submit_grants_lunch(self):
+		doc = self.submitted("2099-12-01", status="On Leave", code="P")
+		self.assertEqual(doc.custom_lunch, 0)
+
+		doc.custom_lunch_override = "Có"
+		doc.save(ignore_permissions=True)
+		self.assertEqual(doc.custom_lunch, 1)
+		self.assertEqual(frappe.db.get_value("Attendance", doc.name, "custom_lunch"), 1)
+
+	def test_switching_to_khong_after_submit_removes_lunch(self):
+		doc = self.submitted("2099-12-02")
+		self.assertEqual(doc.custom_lunch, 1)
+
+		doc.custom_lunch_override = "Không"
+		doc.save(ignore_permissions=True)
+		self.assertEqual(frappe.db.get_value("Attendance", doc.name, "custom_lunch"), 0)
+
+	def test_switching_back_to_tu_dong_restores_the_computed_value(self):
+		doc = self.submitted("2099-12-03")
+		doc.custom_lunch_override = "Không"
+		doc.save(ignore_permissions=True)
+		self.assertEqual(frappe.db.get_value("Attendance", doc.name, "custom_lunch"), 0)
+
+		doc.custom_lunch_override = "Tự động"
+		doc.save(ignore_permissions=True)
+		self.assertEqual(frappe.db.get_value("Attendance", doc.name, "custom_lunch"), 1)
+
+	def test_editing_lunch_after_submit_does_not_move_payroll_fields(self):
+		doc = self.submitted("2099-12-04")
+		before = frappe.db.get_value(
+			"Attendance",
+			doc.name,
+			["status", "leave_type", "half_day_status", "custom_work_credit"],
+			as_dict=True,
+		)
+		doc.custom_lunch_override = "Không"
+		doc.save(ignore_permissions=True)
+		after = frappe.db.get_value(
+			"Attendance",
+			doc.name,
+			["status", "leave_type", "half_day_status", "custom_work_credit"],
+			as_dict=True,
+		)
+		self.assertEqual(dict(after), dict(before))
