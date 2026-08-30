@@ -19,6 +19,25 @@ custom field qua fixtures, patch qua `hrms/patches.txt`.
 
 **Spec:** `docs/spec/work-schedule-and-holiday-separation.md`
 
+> **STATUS 2026-08-30 — Task 1-9 + 11 XONG, Task 10 chờ ký duyệt.**
+>
+> | Task | Commit | Ghi chú |
+> |---|---|---|
+> | 1 | `f5fa293` | lõi luật thuần, 10 test |
+> | 2 | `5e8e789` | chuỗi phân giải + Holiday List theo ngày |
+> | 3 | `7fb6806` | API khoảng + bulk + khung giờ ca |
+> | 4 | `7a6ed5d` | bảng công hai nguồn; đối chiếu 714 ô → 0 lệch |
+> | 5 | `d14ad78` | 5 nơi sinh công đổi nguồn |
+> | 6 | `2090810` | đơn nghỉ |
+> | 7 | `80605d2` | mẫu số lương tuyệt đối — **đã ký duyệt**; 6 phiếu thật 0 lệch |
+> | 8 | `f09484b` | Holiday List chỉ còn lễ + ngoại lệ làm bù + rename doctype |
+> | 9 | `407e3c6` | cờ ngoài lịch trên check-in |
+> | 10 | `025fff9` | patch **CHƯA nối `patches.txt`** — chờ ký duyệt chạy |
+> | 11 | — | E2E + nghiệm thu |
+>
+> Đã làm lên site: `bench migrate`; khai lịch tuần T2-T6 cho `Ca Hành Chính` và cho lịch mặc định
+> công ty; khai ngày lễ công ty 17/07/2026 vào Cấu hình lịch làm việc.
+
 ## Global Constraints
 
 - **Quy ước đặt tên (một phần của spec):** `scheduled_*` = theo lịch tuần, **kể cả ngày lễ** — dùng

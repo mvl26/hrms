@@ -24,6 +24,42 @@ from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms.tests.vn_test_utils import default_company, ensure_short_hours_code, test_employee
 
+ALL_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def work_every_day(employee: str, shift: str = "_Test E2E Ca 7 Ngay") -> str:
+	"""Cho nhân viên một ca làm CẢ TUẦN, để test độc lập hẳn với lịch nghỉ.
+
+	Các test ở đây kiểm "mã công nào trừ lương" và "giờ vào/ra ra mã gì" — lịch tuần chỉ là bối
+	cảnh. Từ khi lịch tuần tách khỏi Holiday List, nhân viên không phân ca rơi về lịch mặc định của
+	công ty (T2-T6), nên ngày test rơi trúng T7/CN sẽ bị bỏ qua và test đỏ vì một lý do chẳng liên
+	quan gì tới thứ nó muốn kiểm. Ca 7 ngày gỡ hẳn biến đó ra khỏi phép đo.
+	"""
+	if not frappe.db.exists("Shift Type", shift):
+		frappe.get_doc(
+			{"doctype": "Shift Type", "__newname": shift, "start_time": "8:0:0", "end_time": "17:0:0"}
+		).insert(ignore_permissions=True)
+	existing = frappe.get_all(
+		"Assignment Rule Day",
+		filters={"parent": shift, "parenttype": "Shift Type", "parentfield": "custom_working_days"},
+		pluck="day",
+	)
+	for idx, day in enumerate(ALL_WEEK, start=1):
+		if day not in existing:
+			frappe.get_doc(
+				{
+					"doctype": "Assignment Rule Day",
+					"parent": shift,
+					"parenttype": "Shift Type",
+					"parentfield": "custom_working_days",
+					"day": day,
+					"idx": idx,
+				}
+			).insert(ignore_permissions=True)
+	frappe.db.set_value("Employee", employee, "default_shift", shift)
+	frappe.clear_cache(doctype="Employee")
+	return shift
+
 
 def mk_attendance(employee, date, submit=True, **codes):
 	att = frappe.get_doc(
@@ -94,7 +130,8 @@ class TestPayrollDaysScenarios(ShortHoursCodeMixin, FrappeTestCase):
 	def test_month_mixed_codes_payment_days(self):
 		emp = make_employee("e2e_payroll@codes.com", company=default_company())
 		company = frappe.db.get_value("Employee", emp, "company")
-		# June 2099, no holiday list covers it -> a clean 30 working days.
+		# Ca 7 ngày: test này đo cách payroll đọc MÃ CÔNG, không đo lịch nghỉ.
+		work_every_day(emp)
 		plan = {
 			1: "X",  # present        -> 0
 			2: "P",  # annual leave   -> 0 (paid, not in LWP map)
@@ -261,6 +298,7 @@ class TestCheckinAutoAttendanceE2E(FrappeTestCase):
 		st = self._shift("E2E Full Day Shift")
 		emp = make_employee("e2e_checkin_full@codes.com", company=default_company())
 		date = getdate()  # setup_shift_type's process window is anchored on today
+		work_every_day(emp, shift=st.name)  # 'hôm nay' có thể rơi vào T7/CN -> ca phải làm cả tuần
 		self._assign(st.name, emp, date)
 		make_checkin(emp, datetime.combine(date, get_time("08:00:00")))
 		make_checkin(emp, datetime.combine(date, get_time("17:05:00")))
@@ -284,6 +322,7 @@ class TestCheckinAutoAttendanceE2E(FrappeTestCase):
 		st = self._shift("E2E Split Shift", split=True)
 		emp = make_employee("e2e_checkin_half@codes.com", company=default_company())
 		date = getdate()  # setup_shift_type's process window is anchored on today
+		work_every_day(emp, shift=st.name)  # 'hôm nay' có thể rơi vào T7/CN -> ca phải làm cả tuần
 		self._assign(st.name, emp, date)
 		# chỉ làm buổi sáng = 4h < 8h tối thiểu -> mã 1/2X (đi làm nhưng thiếu giờ) -> Half Day
 		make_checkin(emp, datetime.combine(date, get_time("08:00:00")))

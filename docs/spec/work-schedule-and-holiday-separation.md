@@ -1,6 +1,8 @@
 # Spec: Tách lịch làm việc khỏi lịch nghỉ lễ
 
-> Status: **DRAFT for approval (Phase 1 / SPECIFY).** Chốt trong phiên brainstorm 2026-08-28.
+> Status: **ĐÃ BUILD (2026-08-30)** — Task 1-9 + 11 xong và đã commit; Task 10 (patch di trú)
+> đã viết + diễn tập trên dữ liệu thật nhưng **chưa nối vào `patches.txt`**, chờ ký duyệt chạy.
+> Chốt trong phiên brainstorm 2026-08-28.
 > Nối tiếp `docs/spec/vn-holiday-and-symbol-standardization.md` (đợt trước dựng Holiday List VN) và
 > mở đường cho `docs/spec/overtime-registration.md` (đã duyệt 2026-07-22, chưa build).
 > **Không plan/implement tới khi được duyệt.**
@@ -444,19 +446,34 @@ tuần* và *đã gỡ* → **giống hệt**.
 
 ## Success Criteria
 
-- [ ] `hrms/hr/work_schedule.py` là cửa duy nhất; không còn lời gọi `is_holiday()` nào trong code
+- [x] `hrms/hr/work_schedule.py` là cửa duy nhất; không còn lời gọi `is_holiday()` nào trong code
       Miyano ngoài chính module đó.
-- [ ] `Shift Type` khai được ngày làm việc trong tuần; chuỗi phân giải 4 tầng có test, tầng cuối nổ
+- [x] `Shift Type` khai được ngày làm việc trong tuần; chuỗi phân giải 4 tầng có test, tầng cuối nổ
       lỗi cấu hình rõ ràng.
-- [ ] `Holiday List` không còn dòng `weekly_off`; mọi ngày lễ (kể cả lễ riêng công ty) khai ở Work
+- [~] `Holiday List` không còn dòng `weekly_off`; mọi ngày lễ (kể cả lễ riêng công ty) khai ở Work
       Calendar Settings và sinh tự động.
-- [ ] **Cổng bất biến lương xanh** ở cả hai trạng thái lịch, đủ 8 ca biên.
-- [ ] Số ngày phép của đơn bắc qua cuối tuần không đổi; không `V` nào rơi vào T7/CN.
-- [ ] Bảng công giữ nguyên `-` / `NL` / màu / cột tổng, nay từ hai nguồn tách bạch.
-- [ ] Khai được **ngày làm bù** (T7/CN thành ngày công) và **nghỉ ghép**; ngoại lệ lan đúng tới cả
+- [x] **Cổng bất biến lương xanh** ở cả hai trạng thái lịch, đủ 8 ca biên.
+- [x] Số ngày phép của đơn bắc qua cuối tuần không đổi; không `V` nào rơi vào T7/CN.
+- [x] Bảng công giữ nguyên `-` / `NL` / màu / cột tổng, nay từ hai nguồn tách bạch.
+- [x] Khai được **ngày làm bù** (T7/CN thành ngày công) và **nghỉ ghép**; ngoại lệ lan đúng tới cả
       6 nơi tiêu thụ; trùng ngày và kỳ đã khoá bị chặn.
-- [ ] Check-in ngoài lịch được đánh dấu; test chứng minh cờ không làm lệch mã công.
-- [ ] Patch di trú có bước chặn trước, chụp–so–abort, và đã được ký duyệt trước khi chạy.
+- [x] Check-in ngoài lịch được đánh dấu; test chứng minh cờ không làm lệch mã công.
+- [~] Patch di trú có bước chặn trước, chụp–so–abort, và đã được ký duyệt trước khi chạy.
+
+## Đã phát hiện thêm khi build (2026-08-30)
+
+- **`get_employee_shift` phân giải theo KHUNG GIỜ**, không theo ngày — hỏi bằng mốc 00:00 thì ca hành
+  chính 8h-17h không khớp và nó tụt về `default_shift`, bỏ qua ca gán theo tháng trong im lặng.
+- **`actual_start_date` / `actual_end_date` là `@property`, không phải field** — `doc.get()` trả
+  `None` và phần chặn theo ngày vào làm / nghỉ việc im lặng không chạy. Cổng bất biến bắt được.
+- **`Salary Slip Test Holiday List` phủ trùng y hệt khoảng của lịch thật** — quét "list nào phủ ngày
+  này" một cách tuỳ ý là bốc trúng danh sách rác của test.
+- **`get_holidays_for_employee` còn nuôi ba nhánh khác của payroll** (`get_unmarked_days`,
+  `get_half_absent_days`, nhánh đếm vắng theo Attendance). Đổi ngữ nghĩa ngay tại đó thay vì sửa
+  từng nhánh — sửa lẻ là chắc chắn sót.
+- **Ngữ nghĩa đổi có chủ ý:** trước đây "không có Holiday List phủ kỳ" nghĩa là làm 7 ngày/tuần; nay
+  lịch tuần luôn áp (ca → mặc định công ty). Vài test cũ dựa vào giả định cũ đã được sửa sang ca 7
+  ngày hoặc sang ngày làm việc thật.
 
 ## Out of scope (spec/đợt sau)
 
