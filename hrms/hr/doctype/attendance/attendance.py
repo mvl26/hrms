@@ -16,9 +16,6 @@ from frappe.utils import (
 	nowdate,
 )
 
-from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
-from erpnext.setup.doctype.holiday_list.holiday_list import is_holiday
-
 import hrms
 from hrms.hr.doctype.attendance.vn_day_classifier import (
 	DEFAULT_FLEX_BAND_MINUTES,
@@ -157,10 +154,15 @@ class Attendance(Document):
 			return None
 		return cfg
 
-	def falls_on_holiday(self) -> bool:
-		"""Ngày chấm công có nằm trong Holiday List của nhân viên không (T7/CN/lễ)."""
-		holiday_list = get_holiday_list_for_employee(self.employee, raise_exception=False)
-		return bool(holiday_list) and is_holiday(holiday_list, getdate(self.attendance_date))
+	def falls_on_non_working_day(self) -> bool:
+		"""Ngày chấm công có phải ngày KHÔNG đi làm không (ngoài lịch tuần, hoặc ngày lễ).
+
+		Hỏi lịch tuần của ca chứ không hỏi Holiday List: sau khi tách, danh sách đó chỉ còn ngày lễ
+		nên hỏi nó về thứ Bảy sẽ ra "ngày làm việc".
+		"""
+		from hrms.hr.work_schedule import is_working_day
+
+		return not is_working_day(self.employee, getdate(self.attendance_date))
 
 	def apply_vn_half_day_classifier(self):
 		"""Chấm mã công + giờ net từ giờ vào/ra theo luật ca trượt & đủ giờ (`vn_day_classifier`).
@@ -185,7 +187,7 @@ class Attendance(Document):
 		cfg = self.get_split_shift_config()
 		if not cfg:
 			return
-		if not cint(cfg.get("mark_auto_attendance_on_holidays")) and self.falls_on_holiday():
+		if not cint(cfg.get("mark_auto_attendance_on_holidays")) and self.falls_on_non_working_day():
 			# Ngày nghỉ (T7/CN/lễ) mà ca KHÔNG bật chấm công ngày nghỉ: không tự chấm mã. Bản ghi vẫn
 			# có thể sinh ra từ nhập tay / Yêu cầu chấm công; đem khung ca ngày thường ra chấm thì
 			# người đi làm ngày nghỉ bị quy thành V hoặc nửa công.

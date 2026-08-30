@@ -18,7 +18,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, cint, get_last_day, getdate
 
-from erpnext.setup.doctype.employee.employee import is_holiday
+from hrms.hr.work_schedule import is_working_day
 
 EXEMPT_CODE = "X"
 # Cửa sổ lùi tối đa của lượt quét tự động — CHỐT CHẶN CHI PHÍ, không phải luật nghiệp vụ: bật cờ cho
@@ -66,7 +66,7 @@ def is_exempt_working_day(employee: str, date) -> bool:
 	Ngày nghỉ (T7/CN/lễ) KHÔNG thuộc "full công hàng tháng" — cả công ty đều nghỉ. Ca có bật
 	`mark_auto_attendance_on_holidays` mà ép X ở đây thì chấm 10 phút ngày lễ cũng thành đủ công,
 	và trên cấu hình trả lương ngày lễ là cộng dư. Ngày nghỉ đi đúng luật chung như mọi người."""
-	return is_exempt(employee, date) and not is_holiday(employee, date, raise_exception=False)
+	return is_exempt(employee, date) and is_working_day(employee, date)
 
 
 def exempt_employees() -> list:
@@ -151,7 +151,7 @@ def plan_day(employee: str, date) -> frappe._dict:
 	if not is_exempt(employee, date):
 		out.reason = "not_exempt"
 		return out
-	if is_holiday(employee, date, raise_exception=False):
+	if not is_working_day(employee, date):
 		out.reason = "rest_day"  # T7/CN/lễ: không ai có công, kể cả người miễn chấm công
 		return out
 	if is_period_locked(employee, date):

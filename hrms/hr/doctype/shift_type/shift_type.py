@@ -6,17 +6,14 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import add_days, cint, create_batch, get_datetime, get_time, getdate, time_diff
 
-from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
-from erpnext.setup.doctype.holiday_list.holiday_list import is_holiday
-
 from hrms.hr.doctype.attendance.attendance import mark_attendance
 from hrms.hr.doctype.employee_checkin.employee_checkin import (
 	calculate_working_hours,
 	mark_attendance_and_link_log,
 )
 from hrms.hr.doctype.shift_assignment.shift_assignment import get_employee_shift, get_shift_details
+from hrms.hr.work_schedule import is_working_day, non_working_days_between
 from hrms.utils import get_date_range
-from hrms.utils.holiday_list import get_holiday_dates_between
 
 EMPLOYEE_CHUNK_SIZE = 50
 
@@ -278,9 +275,10 @@ class ShiftType(Document):
 
 		date_range = get_date_range(start_date, end_date)
 
-		# skip marking absent on holidays
-		holiday_list = self.get_holiday_list(employee)
-		holiday_dates = get_holiday_dates_between(holiday_list, start_date, end_date)
+		# Ngày không phải đi làm (ngoài lịch tuần + ngày lễ) thì không chấm vắng. Nguồn là
+		# lịch tuần của ca, KHÔNG phải Holiday List: sau khi tách, danh sách đó chỉ còn ngày lễ
+		# và hỏi nó về thứ Bảy sẽ ra 'ngày làm việc' -> chấm V cho cả công ty mỗi cuối tuần.
+		holiday_dates = non_working_days_between(employee, start_date, end_date)
 		# skip dates with attendance
 		marked_attendance_dates = self.get_marked_attendance_dates_between(employee, start_date, end_date)
 
@@ -365,10 +363,6 @@ class ShiftType(Document):
 
 		return list(set(assigned_employees) - set(not_working))
 
-	def get_holiday_list(self, employee: str) -> str:
-		holiday_list_name = self.holiday_list or get_holiday_list_for_employee(employee, False)
-		return holiday_list_name
-
 	def should_mark_attendance(self, employee: str, attendance_date: str) -> bool:
 		"""Determines whether attendance should be marked on holidays or not"""
 		from hrms.hr.period_lock import is_period_locked
@@ -384,10 +378,8 @@ class ShiftType(Document):
 			# since attendance should be marked on all days
 			return True
 
-		holiday_list = self.get_holiday_list(employee)
-		if is_holiday(holiday_list, attendance_date):
-			return False
-		return True
+		# Hỏi LỊCH TUẦN của ca, không hỏi Holiday List: sau khi tách, danh sách đó chỉ còn ngày lễ.
+		return is_working_day(employee, attendance_date)
 
 	def mark_absent_for_half_day_dates(self, employee):
 		from hrms.hr.attendance_exempt import is_exempt_working_day
