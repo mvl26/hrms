@@ -66,3 +66,84 @@ việc khác). Idempotent, mặc định dry_run. Chỉ chạy trên `miyano` sa
 - Test qua **rollback harness** (KHÔNG run-tests trên miyano); cờ test in-memory (bẫy DDL Custom Field).
 - **Không tự deploy**: migrate fixture + `bench build` + restart + backfill = ask-first. Build+test trên nhánh.
 - Không đánh dấu từng ô ngày trên lưới (user không chọn); chỉ tổng ở report + Bảng Công Tháng.
+
+---
+
+# Sửa đổi 2026-08-27 — tự chấm ăn trưa cho ngày không có checkin + chọn tay per-ngày
+
+Trạng thái: **Approved** 2026-08-27. **Thay thế một phần §2** của bản gốc.
+
+## 5.1 Vì sao đảo quyết định cũ
+
+§2 chốt: "quên chấm công (không có checkin phủ giờ trưa) → **không tính ăn**". Vận hành thực tế cho
+thấy luật đó phạt nhầm người: chấm công **tạo tay** và ngày **sửa qua soát công** đều không có
+checkin, nên rơi hết về 0 — trong khi đó là những ngày HR đã xác nhận là ngày công đủ. Người có đi
+làm, có ăn, nhưng không được phụ cấp.
+
+Đo trên dữ liệu thật 7/2026 (108 ngày công): 2 ngày `X` Present bị mất suất ăn vì 0 và 1 lần chấm.
+
+## 5.2 Hai lỗ hổng (một trong hai là bug thật)
+
+1. **Chấm tay** — `set_lunch_flag()` chỉ suy từ checkin ⇒ không checkin thì luôn 0. *(Đúng spec cũ,
+   nay đổi.)*
+2. **Soát công** — `apply_correction` ghi bằng `frappe.db.set_value` với danh sách field cố định
+   **không có `custom_lunch`**, và `db_set` không chạy `before_validate` ⇒ cờ **kẹt giá trị cũ**.
+   *(Bug thật, spec cũ không lường.)* Đã thấy trên dữ liệu thật: 1 ngày `P` (On Leave) mang cờ
+   `custom_lunch = 1` vì trước đó là `X` có checkin — **đang trả thừa** 35.000đ.
+
+Và **không sửa tay được**: `custom_lunch` là `read_only`, mà kể cả bỏ read-only thì mỗi lần lưu
+`before_validate` lại đè lại giá trị suy từ checkin.
+
+## 5.3 Thiết kế — tách "ý muốn của người" khỏi "kết quả máy"
+
+`custom_lunch` (Check, read-only) **giữ nguyên vai trò kết quả cuối** — mọi nơi đang đếm
+(`lunch_days_for_period`, `lunch_days_map`, report, Bảng Công Tháng, phiếu lương) không sửa dòng nào.
+
+Thêm **`Attendance-custom_lunch_override`** (Select `Tự động` | `Có` | `Không`, mặc định `Tự động`,
+nhãn "Ăn trưa"). Chọn `Có`/`Không` là **quyết định của người, máy không bao giờ đè lại** — kể cả khi
+lưu lại nhiều lần hay chạy `recompute_lunch_flags`.
+
+## 5.4 Luật tự động mới — một hàm duy nhất trong `lunch.py`
+
+```
+override = "Có"    → 1
+override = "Không" → 0
+"Tự động":
+    status ∉ (Present, Half Day)          → 0
+    mã CT (công tác) / W (làm tại nhà)    → 0     # ăn ngoài / ở nhà
+    ≥ 2 lần chấm  → luật cũ: vào < lunch_start VÀ ra ≥ lunch_end
+    < 2 lần chấm  → Present → 1 ; Half Day → 0
+```
+
+Hai dòng cuối là toàn bộ phần mới:
+
+- **0 lần chấm** (chấm tay, sửa soát công): đã công nhận Present thì mặc định có ăn.
+- **1 lần chấm** (quên chấm ra): dữ liệu không đủ để kết luận; người vào từ sáng gần như chắc chắn
+  ở lại ăn ⇒ theo mặc định của status, không phạt vì lỗi thao tác.
+- **Half Day không checkin → 0**: giữ đúng nguyên tắc "theo checkin" — không có dấu thì không chứng
+  minh được là ở lại qua trưa. (User chốt 2026-08-27.)
+- **CT/W không bao giờ tính**: giữ nguyên tinh thần §2 — ăn ngoài, và công tác đã có Expense Claim.
+
+## 5.5 Ba đường ghi phải cùng dùng luật đó
+
+| Đường | Sửa gì |
+|---|---|
+| `Attendance.before_validate → set_lunch_flag()` | dùng luật mới, tôn trọng override |
+| `attendance_review.apply_correction` | **thêm `custom_lunch` vào `db_set`**, tính lại theo mã mới — vá bug §5.2(2) |
+| `lunch.recompute_lunch_flags` | tôn trọng override, để lượt tính lại trước khi chốt lương không xoá lựa chọn tay |
+
+## 5.6 Cổng ký duyệt *(chạm lương)*
+
+Ăn trưa vào thẳng phụ cấp **J** (35.000đ/buổi) → **đổi thực lĩnh**. Không phải field hiển thị.
+
+Tác động đo được trên 7/2026: `+1` (X, 0 chấm) `+1` (X, 1 chấm) `−1` (P hết kẹt cờ sai) = **ròng +1
+buổi = +35.000đ**, phần lớn là sửa sai.
+
+Hai mốc ký riêng: **(a)** duyệt thiết kế để code — *đã có 2026-08-27*; **(b)** duyệt riêng lúc chạy
+`recompute_lunch_flags` trên dữ liệu thật sau migrate.
+
+## 5.7 Phi mục tiêu
+
+- Không đổi cách đếm ở report / Bảng Công Tháng / phiếu lương — vẫn Σ `custom_lunch`.
+- Không thêm cột sửa hàng loạt trên lưới soát công (user chọn ô 3 trạng thái trên phiếu, 2026-08-27).
+- Không đụng `status` / `leave_type` / `half_day_status` → số công không đổi, chỉ phụ cấp ăn đổi.
