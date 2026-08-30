@@ -17,6 +17,7 @@ Spec này tách hẳn hai khái niệm:
 - **Lịch làm việc** (ngày nào trong tuần đi làm + khung giờ hành chính) → khai trên **`Shift Type`**.
 - **Ngày nghỉ lễ** → khai trên **`Work Calendar Settings`**, sinh tự động xuống **`Holiday List`**,
   và Holiday List từ nay **chỉ chứa ngày lễ**.
+- **Ngoại lệ của lịch tuần** (nghỉ ghép, ngày làm bù) → khai chung một bảng ở Work Calendar Settings.
 - **Ngoài lịch làm việc** (T7/CN, hoặc ngoài giờ hành chính) → *suy ra*, không lưu, không sinh công.
   Log chấm công rơi vào đó được **giữ và đánh dấu** — đó chính là nguyên liệu OT sau này đọc.
 
@@ -46,6 +47,15 @@ Spec này tách hẳn hai khái niệm:
    không nhánh nào của đường sinh công đọc tới nó.
 6. **Sinh lại toàn bộ lịch 2026** (không chỉ áp từ 2027). Là data migration → **cổng ký duyệt**.
 7. **Gỡ ghim `Employee.holiday_list`** để mỗi năm chỉ còn một chỗ phải trỏ lại (Company default).
+8. **Ngoại lệ của lịch tuần khai chung một bảng có cột loại** trong Work Calendar Settings —
+   *Nghỉ lễ* (gồm cả nghỉ ghép) và *Làm bù*. Một lưới cho cả năm thì HR thấy được thế cân bằng
+   "nghỉ ghép 2 ngày ↔ làm bù 2 ngày"; hai bảng riêng thì phải tự nhớ đối chiếu.
+9. **Đổi tên child doctype `Lunar Holiday` → `Work Calendar Day`.** Tên cũ đã sai từ lúc bảng đó
+   nhận thêm ngày lễ riêng công ty, và sẽ sai nặng hơn khi nhận cả ngày làm bù. Chỉ được tham chiếu
+   ở Work Calendar Settings + test của nó, dữ liệu 6 dòng trên một Single → rename gọn.
+10. **Nghỉ ghép = có lương** (loại *Nghỉ lễ*, thành `NL`, vào Tổng công). Đây đúng bằng hành vi của
+    ngày 17/07/2026 hôm nay nên **không đổi gì**. Nếu HR xác nhận Miyano có kiểu nghỉ ghép *trừ phép
+    năm* hoặc *không lương* thì cần thêm loại — xem Open Questions.
 
 ## Bối cảnh kỹ thuật (đã kiểm chứng phiên này — không giả định)
 
@@ -122,7 +132,8 @@ một dòng lễ bị nhập nhầm vào Chủ nhật không được phép cộ
 Mọi code Miyano hỏi lịch qua đây. Không nơi nào gọi thẳng `is_holiday()` nữa.
 
 ```python
-is_scheduled_day(employee, date) -> bool        # nằm trong lịch tuần (T2–T6). KHÔNG xét ngày lễ
+calendar_exceptions(year) -> dict[date, str]     # {ngày: day_type} từ Work Calendar Settings
+is_scheduled_day(employee, date) -> bool        # (mẫu tuần XOR ngoại lệ "Làm bù"). KHÔNG xét ngày lễ
 is_rest_day(employee, date) -> bool             # ngoài lịch tuần            → bảng công "-"
 is_public_holiday(employee, date) -> bool       # dòng lễ, đã giao với ngày trong lịch tuần → "NL"
 is_working_day(employee, date) -> bool          # PHẢI ĐI LÀM = scheduled AND không phải lễ
@@ -167,11 +178,67 @@ lại khái niệm nào.
   ba của chuỗi phân giải.
 - **Bỏ** `weekly_off_days` — chính sách nghỉ tuần chuyển hẳn sang lịch làm việc. (Bỏ field, không đổi
   ý nghĩa field cũ: tránh cảnh một field vẫn còn đó mà không ai đọc.)
-- **Dùng lại** bảng `lunar_holidays` (`Lunar Holiday`: năm / ngày / tên) cho **mọi ngày lễ nhập tay**
-  — Tết Âm, Giỗ Tổ, **và ngày nghỉ riêng của công ty**. Đổi nhãn section thành *"Ngày lễ nhập tay
-  (theo từng năm)"*; không thêm doctype con mới cho một bảng cùng hình dạng.
+- **Đổi** bảng `lunar_holidays` thành `calendar_days` (child doctype `Lunar Holiday` →
+  `Work Calendar Day`, **thêm cột `day_type`**) — giữ mọi ngày khác thường của năm ở một chỗ: lễ âm,
+  lễ riêng công ty, nghỉ ghép, và ngày làm bù. Xem §3b. Nhãn section: *"Ngày đặc biệt trong năm"*.
 - Lễ **dương lịch** (1/1, 30/4, 1/5, 1/9, 2/9) vẫn tự sinh, không phải nhập.
 - Dòng chữ *"đừng sửa tay Holiday List"* trên form nay **đúng thật**: đã có đủ đường khai chính thức.
+
+### 3b. Ngoại lệ của lịch tuần (nghỉ ghép / làm bù)
+
+`custom_working_days` là **mẫu tuần lặp lại vô hạn** — nó không nói được "riêng thứ Bảy 29/08/2026
+thì đi làm". Mô hình cũ nói được (HR xoá dòng `weekly_off` của đúng ngày đó), nên nếu bỏ qua thì
+spec này là một **bước lùi về khả năng biểu đạt**. Làm bù là thông lệ phổ biến ở Việt Nam.
+
+Bảng ngoại lệ trong Work Calendar Settings, mỗi dòng là một ngày **khác với mẫu tuần**:
+
+| Cột | Kiểu | Ghi chú |
+|---|---|---|
+| `year` | Int | năm, để lọc khi sinh lịch |
+| `holiday_date` | Date | ngày dương lịch |
+| `day_type` | Select | **`Nghỉ lễ`** (mặc định) hoặc **`Làm bù`** |
+| `description` | Data | tên hiển thị |
+
+- **`Nghỉ lễ`** → xuống Holiday List như dòng lễ (`weekly_off = 0`) → `NL`, có lương, vào Tổng công.
+  Dùng cho cả lễ âm (Tết, Giỗ Tổ), lễ riêng công ty (17/07), và **nghỉ ghép**.
+- **`Làm bù`** → **KHÔNG** xuống Holiday List (nó là ngày *làm việc*, không phải ngày nghỉ). Nó sống
+  ở Work Calendar Settings và được `is_scheduled_day` đọc trực tiếp.
+
+Luật hợp nhất: `is_scheduled_day(nv, ngày)` = *(thứ nằm trong mẫu tuần)* **XOR** *(ngày có dòng
+`Làm bù`)*, rồi `is_working_day` trừ tiếp ngày lễ.
+
+**Ngoại lệ tự lan ra mọi nơi** — đây là lợi tức của thiết kế một cửa. Chỉ `is_scheduled_day` biết về
+nó, sáu nơi còn lại đúng theo mà không phải sửa dòng nào:
+
+| Nơi | Ngày T7 làm bù |
+|---|---|
+| Bảng công | hiện mã công thay vì `-` |
+| Chấm vắng tự động | ai không đi làm hôm đó → `V` |
+| Phân loại giờ vào/ra | chạy như ngày thường |
+| Đơn nghỉ | nghỉ đúng hôm đó → trừ phép |
+| Mẫu số lương | +1 ngày |
+| Cờ check-in ngoài lịch | **không** gắn cờ |
+
+#### Quy tắc vận hành: làm bù phải cùng tháng với ngày nghỉ ghép
+
+Ví dụ thật, Quốc khánh 2026 (01/09 T3, 02/09 T4). Công ty nghỉ thêm 03/09 (T5) + 04/09 (T6) để nghỉ
+liền tới hết tuần, và làm bù hai thứ Bảy:
+
+- bù **cùng tháng** (05/09 và 12/09): tháng 9 vẫn **22** ngày công → lương một ngày không đổi. ✔
+- bù **khác tháng** (29/08 và 05/09): tháng 8 lên **22** (từ 21), tháng 9 xuống **21** (từ 22) →
+  **lương một ngày công của hai tháng lệch nhau**, dù tổng cả năm không đổi.
+
+Không phải ràng buộc kỹ thuật — là điều HR phải biết trước khi ký. Ghi vào mô tả field.
+
+#### Ba chốt an toàn
+
+1. **Xem trước tác động lên mẫu số.** Lưu Work Calendar Settings thì hiện bảng *số ngày công từng
+   tháng — trước / sau*. Bắt đúng lỗi "khai làm bù mà quên khai nghỉ ghép", vốn im lặng đổi lương.
+2. **Chặn sửa lịch của kỳ đã chốt công.** Bảng Công Tháng đã ký mà đổi lịch quá khứ thì bảng và
+   phiếu lương lệch nhau trong im lặng. Dùng `period_lock.is_period_locked`, nhất quán với
+   `guard_period_not_locked` đang áp cho Attendance.
+3. **Validate trùng và vô nghĩa.** Một ngày không được vừa `Nghỉ lễ` vừa `Làm bù` → chặn. Dòng
+   `Làm bù` rơi vào ngày vốn đã trong mẫu tuần → cảnh báo, không im lặng nuốt.
 
 ### 4. `setup_vn_holiday.create_vn_holiday_list`: thôi sinh cuối tuần
 
@@ -308,7 +375,9 @@ bench build --app hrms                         # nếu chạm .js của Work Cal
 hrms/hr/work_schedule.py                                     (MỚI — API miền, cửa duy nhất)
 hrms/hr/tests/test_work_schedule.py                          (MỚI — luật lịch + chuỗi phân giải)
 hrms/hr/doctype/work_calendar_settings/work_calendar_settings.py   (sửa — bỏ weekly_off, thêm default_working_days)
-hrms/hr/doctype/work_calendar_settings/work_calendar_settings.json (sửa — field + nhãn section lễ)
+hrms/hr/doctype/work_calendar_settings/work_calendar_settings.json (sửa — field + bảng ngoại lệ)
+hrms/hr/doctype/work_calendar_day/                           (ĐỔI TÊN từ lunar_holiday/ + cột day_type)
+hrms/patches/v15_0/rename_lunar_holiday_doctype.py           (MỚI — pre_model_sync)
 hrms/setup_vn_holiday.py                                     (sửa — thôi sinh cuối tuần; nghỉ bù hỏi lịch tuần)
 hrms/setup_vn_defaults.py                                    (sửa — self-heal T2–T6 cho Ca Hành Chính)
 hrms/vn_payroll/salary_slip_hook.py                          (sửa — set_working_days thay add_paid_holidays)
@@ -384,6 +453,8 @@ tuần* và *đã gỡ* → **giống hệt**.
 - [ ] **Cổng bất biến lương xanh** ở cả hai trạng thái lịch, đủ 8 ca biên.
 - [ ] Số ngày phép của đơn bắc qua cuối tuần không đổi; không `V` nào rơi vào T7/CN.
 - [ ] Bảng công giữ nguyên `-` / `NL` / màu / cột tổng, nay từ hai nguồn tách bạch.
+- [ ] Khai được **ngày làm bù** (T7/CN thành ngày công) và **nghỉ ghép**; ngoại lệ lan đúng tới cả
+      6 nơi tiêu thụ; trùng ngày và kỳ đã khoá bị chặn.
 - [ ] Check-in ngoài lịch được đánh dấu; test chứng minh cờ không làm lệch mã công.
 - [ ] Patch di trú có bước chặn trước, chụp–so–abort, và đã được ký duyệt trước khi chạy.
 
@@ -400,10 +471,13 @@ tuần* và *đã gỡ* → **giống hệt**.
 
 ## Open Questions
 
-1. **Lịch tuần mặc định công ty đặt là gì?** Đề xuất T2–T6 (khớp thực tế đang chạy: nghỉ T7 + CN).
-2. **Ngày lễ 17/07/2026 *"Nghỉ lễ công ty"*** — sau khi dọn HTML, có giữ nguyên tên đó không, và có
+1. **Nghỉ ghép ở Miyano có trừ phép năm hay không lương không?** Spec đang mặc định **có lương**
+   (loại *Nghỉ lễ*) — đúng bằng hành vi của 17/07 hôm nay. Nếu HR xác nhận có kiểu *trừ phép năm*,
+   cần thêm một loại **và** một cơ chế sinh đơn nghỉ, tức một mảng việc lớn hơn hẳn — spec riêng.
+2. **Lịch tuần mặc định công ty đặt là gì?** Đề xuất T2–T6 (khớp thực tế đang chạy: nghỉ T7 + CN).
+3. **Ngày lễ 17/07/2026 *"Nghỉ lễ công ty"*** — sau khi dọn HTML, có giữ nguyên tên đó không, và có
    khai ngược vào Work Calendar Settings để lần sinh sau không mất?
-3. **Ai được sửa `Shift Type.custom_working_days`?** Hiện Shift Type mở cho HR Manager. Lịch tuần nay
+4. **Ai được sửa `Shift Type.custom_working_days`?** Hiện Shift Type mở cho HR Manager. Lịch tuần nay
    là đầu vào của mẫu số lương → có nên siết quyền, hoặc chặn sửa khi kỳ công đã chốt?
 
 > Đã chốt (2026-08-28): tách thật · lịch tuần trên Shift Type · Holiday List chỉ lễ, mỗi năm một list
