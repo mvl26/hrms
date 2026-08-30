@@ -77,16 +77,28 @@ class Attendance(Document):
 		self.flags.vn_status_before_leave_record = (self.status, self.leave_type)
 
 	def set_lunch_flag(self):
-		"""Miyano: ghi cờ ăn trưa (custom_lunch) từ checkin của ngày này — nguồn duy nhất cho số buổi
-		ăn trưa (report + Bảng Công Tháng + phiếu lương đều đếm từ cờ). Thuần dữ liệu, payroll đọc
-		riêng cho phụ cấp ăn trưa; không đụng status/leave_type/half_day_status."""
-		if not frappe.get_meta("Attendance").has_field("custom_lunch"):
+		"""Miyano: ghi cờ ăn trưa (custom_lunch) — nguồn duy nhất cho số buổi ăn trưa (report + Bảng
+		Công Tháng + phiếu lương đều đếm từ cờ). Thuần dữ liệu; không đụng status/leave_type/
+		half_day_status → số công không đổi, chỉ phụ cấp ăn đổi.
+
+		Ô "Ăn trưa" (`custom_lunch_override`) do người chọn thì THẮNG: chạy lại bao nhiêu lần cũng
+		không đè lên lựa chọn tay (spec §5.3)."""
+		meta = frappe.get_meta("Attendance")
+		if not meta.has_field("custom_lunch"):
 			return  # field chưa migrate
 		from hrms.vn_payroll.lunch import lunch_flag_for_attendance
 
+		override = self.get("custom_lunch_override") if meta.has_field("custom_lunch_override") else None
 		self.custom_lunch = (
 			1
-			if lunch_flag_for_attendance(self.employee, self.attendance_date, self.status, self.shift)
+			if lunch_flag_for_attendance(
+				self.employee,
+				self.attendance_date,
+				self.status,
+				self.shift,
+				self.get("custom_attendance_code"),
+				override,
+			)
 			else 0
 		)
 

@@ -225,19 +225,35 @@ def apply_correction(attendance: str, code: str, reason: str | None = None) -> d
 	after = payroll_snapshot(doc)
 	after["custom_work_credit"] = flt(doc.get("custom_work_credit"))
 
-	frappe.db.set_value(
-		"Attendance",
-		doc.name,
-		{
-			"custom_attendance_code": doc.custom_attendance_code,
-			"custom_morning_code": None,
-			"custom_afternoon_code": None,
-			"custom_work_credit": doc.get("custom_work_credit"),
-			"status": doc.status,
-			"leave_type": doc.leave_type,
-			"half_day_status": doc.half_day_status,
-		},
-	)
+	updates = {
+		"custom_attendance_code": doc.custom_attendance_code,
+		"custom_morning_code": None,
+		"custom_afternoon_code": None,
+		"custom_work_credit": doc.get("custom_work_credit"),
+		"status": doc.status,
+		"leave_type": doc.leave_type,
+		"half_day_status": doc.half_day_status,
+	}
+	# `db_set` KHÔNG chạy `before_validate`, nên cờ ăn trưa không tự tính lại như khi lưu thường —
+	# phải tính và ghi tường minh ở đây. Thiếu dòng này thì cờ kẹt giá trị của mã CŨ: đã gặp trên
+	# dữ liệu thật 7/2026 (một ngày `P` mang cờ 1 vì trước đó là `X` có checkin → trả thừa 35.000đ).
+	if frappe.get_meta("Attendance").has_field("custom_lunch"):
+		from hrms.vn_payroll.lunch import lunch_flag_for_attendance
+
+		updates["custom_lunch"] = (
+			1
+			if lunch_flag_for_attendance(
+				doc.employee,
+				doc.attendance_date,
+				doc.status,
+				doc.shift,
+				doc.custom_attendance_code,
+				doc.get("custom_lunch_override"),
+			)
+			else 0
+		)
+
+	frappe.db.set_value("Attendance", doc.name, updates)
 
 	from hrms.hr.doctype.attendance_correction_log.attendance_correction_log import log_correction
 

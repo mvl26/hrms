@@ -20,6 +20,20 @@ LUNCH_EARLIEST = 10 * 60  # 10:00
 LUNCH_LATEST = 16 * 60  # 16:00
 LUNCH_ELIGIBLE_STATUS = ("Present", "Half Day")
 
+# Mã công KHÔNG bao giờ tính ăn tại công ty: đi công tác ăn ngoài (và đã có Expense Claim riêng),
+# làm tại nhà thì ăn ở nhà. Loại theo MÃ chứ không theo status vì cả hai mã này đều có thể mang
+# status Present (công tác nội thành chấm Present, WFH chấm Work From Home tuỳ cấu hình).
+NO_LUNCH_CODES = ("CT", "W")
+
+# Ô "Ăn trưa" trên phiếu chấm công: người chọn thì máy không đè lại nữa (spec §5.3).
+LUNCH_OVERRIDE_AUTO = "Tự động"
+LUNCH_OVERRIDE_YES = "Có"
+LUNCH_OVERRIDE_NO = "Không"
+
+# Dưới ngưỡng này thì dấu chấm KHÔNG đủ để kết luận có ở lại qua trưa hay không (0 dấu = chấm tay
+# hoặc sửa qua soát công; 1 dấu = quên chấm ra) → rơi về mặc định theo status thay vì phạt về 0.
+MIN_PUNCHES_TO_DECIDE = 2
+
 
 def _minutes(dt) -> int:
 	return dt.hour * 60 + dt.minute
@@ -71,12 +85,46 @@ def is_lunch_day(status: str | None, shift: str | None, day_datetimes) -> bool:
 	return checkins_cover_lunch(day_datetimes, shift_lunch_window(shift))
 
 
-def lunch_flag_for_attendance(employee: str, attendance_date, status: str | None, shift: str | None) -> bool:
-	"""Cờ ăn trưa của MỘT Attendance — đọc checkin của đúng ngày đó rồi áp luật ``is_lunch_day``."""
+def effective_lunch_flag(
+	status: str | None,
+	code: str | None,
+	shift: str | None,
+	day_datetimes,
+	override: str | None = None,
+) -> int:
+	"""Cờ ăn trưa cuối cùng của MỘT ngày — nguồn luật duy nhất cho cả ba đường ghi (spec §5.4).
+
+	Người chọn tay thì thắng tuyệt đối; còn lại suy từ trạng thái + mã công + dấu chấm."""
+	if override == LUNCH_OVERRIDE_YES:
+		return 1
+	if override == LUNCH_OVERRIDE_NO:
+		return 0
+
 	if status not in LUNCH_ELIGIBLE_STATUS:
-		return False
+		return 0
+	if (code or "") in NO_LUNCH_CODES:
+		return 0
+
+	punches = list(day_datetimes or [])
+	lunch_start, lunch_end = shift_lunch_window(shift)
+	if len(punches) >= MIN_PUNCHES_TO_DECIDE:
+		return 1 if checkins_cover_lunch(punches, (lunch_start, lunch_end)) else 0
+
+	# Dưới 2 dấu thì luật "phủ giờ nghỉ trưa" không kết luận được. KHÔNG mặc định có ăn cho mọi
+	# trường hợp: một dấu duy nhất lúc 14:00 nghĩa là chiều mới tới, chắc chắn không ăn tại công ty.
+	if status != "Present":
+		return 0  # nửa ngày: không đủ bằng chứng đã ở lại qua trưa
+	if not punches:
+		return 1  # chấm tay / sửa qua soát công: đã công nhận ngày công đủ thì mặc định có ăn
+	# Đúng một dấu: chỉ biết người đó CÓ MẶT lúc đó. Có mặt trước giờ nghỉ trưa → coi như ở lại ăn
+	# (quên chấm ra); dấu duy nhất từ giờ trưa trở đi → đến muộn, không ăn.
+	return 1 if _minutes(min(punches)) < lunch_start else 0
+
+
+def day_punches(employee: str, attendance_date) -> list:
+	"""Mọi dấu chấm công của NV trong đúng ngày đó, dạng datetime."""
 	day = getdate(attendance_date)
-	times = [
+	return [
 		get_datetime(c.time)
 		for c in frappe.get_all(
 			"Employee Checkin",
@@ -84,7 +132,25 @@ def lunch_flag_for_attendance(employee: str, attendance_date, status: str | None
 			fields=["time"],
 		)
 	]
-	return is_lunch_day(status, shift, times)
+
+
+def lunch_flag_for_attendance(
+	employee: str,
+	attendance_date,
+	status: str | None,
+	shift: str | None,
+	code: str | None = None,
+	override: str | None = None,
+) -> bool:
+	"""Cờ ăn trưa của MỘT Attendance — đọc dấu chấm của đúng ngày rồi áp ``effective_lunch_flag``.
+
+	`code`/`override` mặc định None để mọi lời gọi cũ vẫn chạy: không mã thì không rơi vào loại trừ
+	CT/W, không override thì đi nhánh tự động."""
+	if override in (LUNCH_OVERRIDE_YES, LUNCH_OVERRIDE_NO):
+		return override == LUNCH_OVERRIDE_YES  # khỏi truy vấn checkin: người đã quyết
+	if status not in LUNCH_ELIGIBLE_STATUS:
+		return False
+	return bool(effective_lunch_flag(status, code, shift, day_punches(employee, attendance_date), override))
 
 
 def compute_lunch_flags_for_period(month, year, company: str | None = None) -> dict:
@@ -95,12 +161,26 @@ def compute_lunch_flags_for_period(month, year, company: str | None = None) -> d
 	filters = {"attendance_date": ["between", [start, end]], "docstatus": 1}
 	if company:
 		filters["company"] = company
+	meta = frappe.get_meta("Attendance")
+	fields = ["name", "employee", "attendance_date", "status", "shift"]
+	# Mã công quyết định loại trừ CT/W; ô "Ăn trưa" là lựa chọn tay mà lượt tính lại KHÔNG được xoá.
+	for optional in ("custom_attendance_code", "custom_lunch_override"):
+		if meta.has_field(optional):
+			fields.append(optional)
+
 	flags = {}
-	for a in frappe.get_all(
-		"Attendance", filters=filters, fields=["name", "employee", "attendance_date", "status", "shift"]
-	):
+	for a in frappe.get_all("Attendance", filters=filters, fields=fields):
 		flags[a.name] = (
-			1 if lunch_flag_for_attendance(a.employee, a.attendance_date, a.status, a.shift) else 0
+			1
+			if lunch_flag_for_attendance(
+				a.employee,
+				a.attendance_date,
+				a.status,
+				a.shift,
+				a.get("custom_attendance_code"),
+				a.get("custom_lunch_override"),
+			)
+			else 0
 		)
 	return flags
 
@@ -128,14 +208,26 @@ def backfill_lunch_flags(dry_run: int = 1) -> dict:
 	if not frappe.get_meta("Attendance").has_field("custom_lunch"):
 		return {"error": "field custom_lunch chưa migrate", "changed": 0}
 	dry = cint(dry_run)
-	atts = frappe.get_all(
-		"Attendance",
-		filters={"docstatus": 1},
-		fields=["name", "employee", "attendance_date", "status", "shift", "custom_lunch"],
-	)
+	meta = frappe.get_meta("Attendance")
+	fields = ["name", "employee", "attendance_date", "status", "shift", "custom_lunch"]
+	for optional in ("custom_attendance_code", "custom_lunch_override"):
+		if meta.has_field(optional):
+			fields.append(optional)
+	atts = frappe.get_all("Attendance", filters={"docstatus": 1}, fields=fields)
 	to_change = 0
 	for a in atts:
-		flag = 1 if lunch_flag_for_attendance(a.employee, a.attendance_date, a.status, a.shift) else 0
+		flag = (
+			1
+			if lunch_flag_for_attendance(
+				a.employee,
+				a.attendance_date,
+				a.status,
+				a.shift,
+				a.get("custom_attendance_code"),
+				a.get("custom_lunch_override"),
+			)
+			else 0
+		)
 		if cint(a.custom_lunch) != flag:
 			to_change += 1
 			if not dry:

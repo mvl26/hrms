@@ -198,3 +198,78 @@ class TestApplyCorrection(PerTestRollback, FrappeTestCase):
 			apply_correction(att.name, "X", "")
 		self.assertEqual(frappe.db.get_value("Attendance", att.name, "status"), "Absent")
 		self.assertEqual(frappe.db.count("Attendance Correction Log", {"attendance": att.name}), 0)
+
+
+class TestApplyCorrectionLunchFlag(PerTestRollback, FrappeTestCase):
+	"""Cờ ăn trưa phải theo kịp mã công mới (spec §5.5).
+
+	`apply_correction` ghi bằng `frappe.db.set_value` nên KHÔNG chạy `before_validate` — mọi field
+	cần cập nhật phải được liệt kê tường minh. Thiếu `custom_lunch` thì cờ kẹt giá trị cũ: đã gặp
+	trên dữ liệu thật 7/2026 (một ngày `P` mang cờ 1 vì trước đó là `X` có checkin → trả thừa)."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		ensure_short_hours_code()
+		cls.emp = test_employee()
+		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
+
+	def mk(self, day, **kw):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": f"2099-11-{day:02d}",
+				"company": self.company,
+				**kw,
+			}
+		).insert()
+		doc.submit()
+		return doc
+
+	def checkin(self, day, hhmm):
+		frappe.get_doc(
+			{
+				"doctype": "Employee Checkin",
+				"employee": self.emp,
+				"time": f"2099-11-{day:02d} {hhmm}:00",
+			}
+		).insert(ignore_permissions=True)
+
+	def lunch(self, att):
+		return frappe.db.get_value("Attendance", att.name, "custom_lunch")
+
+	def test_correcting_a_work_day_to_leave_clears_the_lunch_flag(self):
+		"""Đúng ca đang sai tiền trên dữ liệu thật: X (có ăn) → P thì phải hết ăn trưa."""
+		self.checkin(1, "08:00")
+		self.checkin(1, "17:30")
+		att = self.mk(1, status="Present", custom_attendance_code="X")
+		self.assertEqual(self.lunch(att), 1)
+
+		apply_correction(att.name, "P", "có đơn nghỉ phép đã duyệt")
+		self.assertEqual(self.lunch(att), 0)
+
+	def test_correcting_absent_to_a_full_day_grants_lunch(self):
+		"""Chiều ngược lại: vắng → X chấm tay (không checkin) thì được tính ăn."""
+		att = self.mk(2, status="Absent")
+		self.assertEqual(self.lunch(att), 0)
+
+		apply_correction(att.name, "X", "quên chấm công, quản lý xác nhận")
+		self.assertEqual(self.lunch(att), 1)
+
+	def test_correcting_to_business_trip_gives_no_lunch(self):
+		self.checkin(3, "08:00")
+		self.checkin(3, "17:30")
+		att = self.mk(3, status="Present", custom_attendance_code="X")
+		self.assertEqual(self.lunch(att), 1)
+
+		apply_correction(att.name, "CT", "đi công tác theo quyết định")
+		self.assertEqual(self.lunch(att), 0)
+
+	def test_a_manual_override_is_not_overwritten_by_a_correction(self):
+		"""Người đã quyết thì soát công cũng không đè."""
+		att = self.mk(4, status="Absent")
+		frappe.db.set_value("Attendance", att.name, "custom_lunch_override", "Không")
+
+		apply_correction(att.name, "X", "bổ sung theo biên bản")
+		self.assertEqual(self.lunch(att), 0)

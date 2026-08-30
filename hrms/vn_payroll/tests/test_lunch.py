@@ -92,3 +92,74 @@ class TestCountLunchDays(PerTestRollback, FrappeTestCase):
 		self.day(8, "Present", ("08:00:00", "11:00:00"))  # sáng, 0
 		self.day(9, "Half Day", ("08:00:00", "17:30:00"))  # +1 (Half Day cũng là ngày công)
 		self.assertEqual(self.count(), 2)
+
+
+class TestEffectiveLunchFlag(PerTestRollback, FrappeTestCase):
+	"""Luật ăn trưa per-ngày (spec §5.4, 2026-08-27) — thuần hàm, không đụng DB.
+
+	Điểm mới so với bản 2026-07-25: ngày công KHÔNG có đủ dấu chấm (chấm tay, sửa qua soát công,
+	quên chấm ra) không còn bị mất suất ăn; và người có thể ép có/không, máy không đè lại."""
+
+	def dt(self, hhmm):
+		return get_datetime(f"2026-07-06 {hhmm}:00")
+
+	def flag(self, status="Present", code="X", punches=(), override=None):
+		from hrms.vn_payroll.lunch import effective_lunch_flag
+
+		return effective_lunch_flag(status, code, None, [self.dt(p) for p in punches], override)
+
+	# --- không đủ dấu chấm: theo mặc định của status (PHẦN MỚI) ---
+	def test_present_without_any_punch_counts(self):
+		"""Chấm tay / sửa qua soát công: đã công nhận ngày công đủ thì mặc định có ăn."""
+		self.assertEqual(self.flag(punches=()), 1)
+
+	def test_present_with_one_morning_punch_counts(self):
+		"""Quên chấm ra — có mặt từ sáng thì coi như ở lại ăn, không phạt vì lỗi thao tác."""
+		self.assertEqual(self.flag(punches=("08:00",)), 1)
+
+	def test_present_with_one_afternoon_punch_does_not_count(self):
+		"""Một dấu duy nhất lúc 14:00 = chiều mới tới ⇒ KHÔNG ăn tại công ty.
+
+		Đếm số dấu thôi thì ca này ra sai — phải xét cả giờ."""
+		self.assertEqual(self.flag(punches=("14:00",)), 0)
+
+	def test_half_day_with_one_morning_punch_does_not_count(self):
+		"""Nửa ngày một dấu: vẫn không đủ bằng chứng ở lại qua trưa."""
+		self.assertEqual(self.flag(status="Half Day", code="1/2X", punches=("08:00",)), 0)
+
+	def test_half_day_without_punch_does_not_count(self):
+		"""Không có dấu thì không chứng minh được là ở lại qua trưa."""
+		self.assertEqual(self.flag(status="Half Day", code="1/2X", punches=()), 0)
+
+	# --- đủ dấu chấm: giữ nguyên luật cũ (phủ giờ nghỉ trưa) ---
+	def test_two_punches_covering_lunch_counts(self):
+		self.assertEqual(self.flag(punches=("08:00", "17:30")), 1)
+
+	def test_two_punches_leaving_before_lunch_does_not_count(self):
+		self.assertEqual(self.flag(punches=("08:00", "11:00")), 0)
+
+	def test_half_day_covering_lunch_still_counts(self):
+		self.assertEqual(self.flag(status="Half Day", code="1/2X", punches=("08:00", "17:30")), 1)
+
+	# --- loại trừ theo mã / trạng thái ---
+	def test_business_trip_never_counts(self):
+		"""Đi công tác ăn ngoài, đã có Expense Claim riêng."""
+		self.assertEqual(self.flag(code="CT", punches=("08:00", "17:30")), 0)
+
+	def test_work_from_home_never_counts(self):
+		self.assertEqual(self.flag(code="W", punches=("08:00", "17:30")), 0)
+
+	def test_leave_day_does_not_count(self):
+		self.assertEqual(self.flag(status="On Leave", code="P", punches=("08:00", "17:30")), 0)
+
+	# --- override: quyết định của người, máy không đè ---
+	def test_override_yes_wins_over_every_rule(self):
+		self.assertEqual(self.flag(status="On Leave", code="P", punches=(), override="Có"), 1)
+		self.assertEqual(self.flag(code="CT", punches=(), override="Có"), 1)
+
+	def test_override_no_wins_over_covering_punches(self):
+		self.assertEqual(self.flag(punches=("08:00", "17:30"), override="Không"), 0)
+
+	def test_blank_override_means_automatic(self):
+		for auto in (None, "", "Tự động"):
+			self.assertEqual(self.flag(punches=(), override=auto), 1, auto)

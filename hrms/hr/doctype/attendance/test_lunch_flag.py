@@ -98,10 +98,37 @@ class TestLunchFlagForAttendance(PerTestRollback, FrappeTestCase):
 		self._checkin("2098-12-02 17:30:00")
 		self.assertTrue(lunch_flag_for_attendance(self.emp, "2098-12-02", "Present", None))
 
-	def test_no_checkins_false(self):
+	def test_no_checkins_now_counts_for_a_full_work_day(self):
+		"""ĐẢO quyết định §2 của spec cũ (2026-08-27).
+
+		Bản 2026-07-25 chốt "không checkin phủ giờ trưa → không tính ăn". Vận hành cho thấy luật đó
+		phạt nhầm chấm công tạo tay và ngày sửa qua soát công — đều không có checkin nhưng HR đã
+		xác nhận là ngày công đủ. Nay ngày công đủ không đủ dấu chấm vẫn được tính ăn."""
 		from hrms.vn_payroll.lunch import lunch_flag_for_attendance
 
-		self.assertFalse(lunch_flag_for_attendance(self.emp, "2098-12-03", "Present", None))
+		self.assertTrue(lunch_flag_for_attendance(self.emp, "2098-12-03", "Present", None))
+
+	def test_no_checkins_half_day_still_does_not_count(self):
+		"""Nửa ngày thì giữ nguyên: không có dấu thì không chứng minh được là ở lại qua trưa."""
+		from hrms.vn_payroll.lunch import lunch_flag_for_attendance
+
+		self.assertFalse(lunch_flag_for_attendance(self.emp, "2098-12-03", "Half Day", None))
+
+	def test_business_trip_code_never_counts(self):
+		from hrms.vn_payroll.lunch import lunch_flag_for_attendance
+
+		self._checkin("2098-12-05 08:00:00")
+		self._checkin("2098-12-05 17:30:00")
+		self.assertFalse(lunch_flag_for_attendance(self.emp, "2098-12-05", "Present", None, "CT"))
+
+	def test_manual_override_wins_both_ways(self):
+		"""Người chọn thì máy không đè — kể cả khi dấu chấm nói ngược lại."""
+		from hrms.vn_payroll.lunch import lunch_flag_for_attendance
+
+		self._checkin("2098-12-06 08:00:00")
+		self._checkin("2098-12-06 17:30:00")
+		self.assertFalse(lunch_flag_for_attendance(self.emp, "2098-12-06", "Present", None, "X", "Không"))
+		self.assertTrue(lunch_flag_for_attendance(self.emp, "2098-12-07", "On Leave", None, "P", "Có"))
 
 	def test_leave_short_circuits_false(self):
 		from hrms.vn_payroll.lunch import lunch_flag_for_attendance
@@ -112,7 +139,12 @@ class TestLunchFlagForAttendance(PerTestRollback, FrappeTestCase):
 
 
 class TestLunchPayrollInvariance(PerTestRollback, FrappeTestCase):
-	"""L3 — GATE: Σ cờ per-Attendance == count_lunch_days cũ → phụ cấp ăn trưa (J) bất biến."""
+	"""L3 — Σ cờ per-Attendance == ``count_lunch_days`` cũ, **với dữ liệu đủ dấu chấm**.
+
+	Từ 2026-08-27 đây KHÔNG còn là bất biến phổ quát: luật mới tính ăn cho ngày công không đủ dấu
+	chấm, còn ``count_lunch_days`` chỉ quét checkin nên không thấy những ngày đó. Hai đường chỉ còn
+	trùng nhau khi mọi ngày công có ≥2 dấu — đúng bộ dữ liệu dưới đây. Xem
+	``test_manual_day_is_where_the_two_paths_diverge`` cho chỗ chúng cố ý lệch."""
 
 	def setUp(self):
 		self.emp = test_employee()
@@ -158,6 +190,21 @@ class TestLunchPayrollInvariance(PerTestRollback, FrappeTestCase):
 		)
 		self.assertEqual(summed, old, "Σ cờ per-Attendance phải bằng count_lunch_days cũ")
 		self.assertEqual(old, 2)  # đúng 2 ngày ăn
+
+	def test_manual_day_is_where_the_two_paths_diverge(self):
+		"""Ghi rõ chỗ hai đường CỐ Ý lệch nhau, để không ai tưởng L3 còn là bất biến phổ quát."""
+		from hrms.vn_payroll.lunch import count_lunch_days, lunch_flag_for_attendance
+
+		a = self._att("2099-01-20", "Present")  # chấm tay, không một dấu chấm nào
+		self.assertTrue(
+			lunch_flag_for_attendance(self.emp, a.attendance_date, a.status, a.shift),
+			"luật mới: ngày công đủ chấm tay vẫn được tính ăn",
+		)
+		self.assertEqual(
+			count_lunch_days(self.emp, "2099-01-20", "2099-01-20"),
+			0,
+			"count_lunch_days chỉ quét checkin nên không thấy ngày chấm tay",
+		)
 
 	def test_period_source_matches_old_before_migrate(self):
 		# field custom_lunch chưa có trên site → lunch_days_for_period fallback = count_lunch_days
@@ -432,3 +479,140 @@ class TestWFHCodeOnSheet(PerTestRollback, FrappeTestCase):
 		)
 		att.insert(ignore_permissions=True)
 		self.assertEqual(att.custom_attendance_code, "CT")  # không phải W
+
+
+class TestLunchFlagOnSave(PerTestRollback, FrappeTestCase):
+	"""L8 — cờ được đặt khi LƯU Attendance, và lựa chọn tay sống sót qua nhiều lần lưu."""
+
+	def setUp(self):
+		self.emp = test_employee()
+
+	def attendance(self, date, status="Present", code="X", override=None):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": date,
+				"status": status,
+				"custom_attendance_code": code,
+				"company": frappe.db.get_value("Employee", self.emp, "company"),
+			}
+		)
+		if override:
+			doc.custom_lunch_override = override
+		doc.insert(ignore_permissions=True)
+		return doc
+
+	def test_manual_full_day_without_checkin_gets_lunch(self):
+		"""Đúng thứ user phản ánh: chấm tay không làm tăng số buổi ăn trưa."""
+		doc = self.attendance("2098-11-02")
+		self.assertEqual(doc.custom_lunch, 1)
+
+	def test_override_no_survives_repeated_saves(self):
+		"""Regression: trước đây before_validate tính đè mỗi lần lưu nên không sửa tay được."""
+		doc = self.attendance("2098-11-03", override="Không")
+		self.assertEqual(doc.custom_lunch, 0)
+		for _ in range(2):
+			doc.save(ignore_permissions=True)
+			self.assertEqual(doc.custom_lunch, 0)
+
+	def test_override_yes_survives_repeated_saves(self):
+		doc = self.attendance("2098-11-04", status="On Leave", code="P", override="Có")
+		self.assertEqual(doc.custom_lunch, 1)
+		doc.save(ignore_permissions=True)
+		self.assertEqual(doc.custom_lunch, 1)
+
+	def test_business_trip_day_gets_no_lunch(self):
+		doc = self.attendance("2098-11-05", code="CT")
+		self.assertEqual(doc.custom_lunch, 0)
+
+
+class TestRecomputeRespectsOverride(PerTestRollback, FrappeTestCase):
+	"""L9 — lượt tính lại trước khi chốt lương KHÔNG được xoá lựa chọn tay của HR (spec §5.5)."""
+
+	def setUp(self):
+		self.emp = test_employee()
+		self.company = frappe.db.get_value("Employee", self.emp, "company")
+
+	def att(self, date, status="Present", code="X", override=None):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": date,
+				"company": self.company,
+				"status": status,
+				"custom_attendance_code": code,
+			}
+		)
+		if override:
+			doc.custom_lunch_override = override
+		doc.insert(ignore_permissions=True)
+		doc.submit()
+		return doc
+
+	def test_override_no_survives_recompute(self):
+		from hrms.vn_payroll.lunch import compute_lunch_flags_for_period
+
+		a = self.att("2099-07-06", override="Không")
+		flags = compute_lunch_flags_for_period(7, 2099, self.company)
+		self.assertEqual(flags[a.name], 0)
+
+	def test_override_yes_survives_recompute_on_a_leave_day(self):
+		from hrms.vn_payroll.lunch import compute_lunch_flags_for_period
+
+		a = self.att("2099-07-07", status="On Leave", code="P", override="Có")
+		flags = compute_lunch_flags_for_period(7, 2099, self.company)
+		self.assertEqual(flags[a.name], 1)
+
+	def test_business_trip_excluded_by_recompute(self):
+		from hrms.vn_payroll.lunch import compute_lunch_flags_for_period
+
+		a = self.att("2099-07-08", code="CT")
+		flags = compute_lunch_flags_for_period(7, 2099, self.company)
+		self.assertEqual(flags[a.name], 0)
+
+
+class TestLunchDoesNotMovePayrollDays(PerTestRollback, FrappeTestCase):
+	"""L10 — CỔNG: đổi ăn trưa KHÔNG được xê dịch số công.
+
+	Ăn trưa vào phụ cấp J, còn số ngày được trả lương đọc `status`/`leave_type`/`half_day_status`.
+	Hai thứ phải độc lập: bật/tắt ăn trưa mà số công đổi là hỏng payroll."""
+
+	def setUp(self):
+		self.emp = test_employee()
+		self.company = frappe.db.get_value("Employee", self.emp, "company")
+
+	def payroll_fields(self, name):
+		return frappe.db.get_value(
+			"Attendance",
+			name,
+			["status", "leave_type", "half_day_status", "custom_work_credit"],
+			as_dict=True,
+		)
+
+	def test_toggling_lunch_leaves_every_payroll_field_untouched(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": "2099-08-03",
+				"company": self.company,
+				"status": "Present",
+				"custom_attendance_code": "X",
+			}
+		).insert(ignore_permissions=True)
+		before = self.payroll_fields(doc.name)
+
+		for override in ("Có", "Không", "Tự động"):
+			doc.custom_lunch_override = override
+			doc.save(ignore_permissions=True)
+			self.assertEqual(self.payroll_fields(doc.name), before, f"số công đổi khi chọn {override}")
+
+		# và cờ ăn trưa thì đúng là có đổi — nếu không thì test trên vô nghĩa
+		doc.custom_lunch_override = "Không"
+		doc.save(ignore_permissions=True)
+		self.assertEqual(doc.custom_lunch, 0)
+		doc.custom_lunch_override = "Có"
+		doc.save(ignore_permissions=True)
+		self.assertEqual(doc.custom_lunch, 1)
