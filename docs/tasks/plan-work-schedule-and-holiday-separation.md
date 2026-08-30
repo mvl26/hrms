@@ -247,6 +247,7 @@ git commit -m "feat(hr): khai bao lich tuan tren Shift Type + loi luat thuan"
   - `shift_weekdays(shift: str | None) -> frozenset[int] | None` — `None` = ca chưa khai
   - `employee_weekdays(employee: str, date) -> frozenset[int]` — nổ `WorkScheduleNotConfigured`
     nếu cả 3 tầng đều trống
+  - `calendar_exceptions(year: int) -> dict[date, str]` — `{ngày: day_type}` từ Work Calendar Settings
   - `holiday_list_for(employee: str, date) -> str | None`
   - `is_scheduled_day(employee, date) -> bool`
   - `is_rest_day(employee, date) -> bool`
@@ -284,6 +285,20 @@ def test_holiday_row_on_a_rest_day_is_not_a_public_holiday(self):
 
 def test_holiday_list_resolved_by_date_not_by_employee_link(self):
 	"""Mỗi năm một list: đứng ở 2027 hỏi ngày 12/2026 vẫn phải ra lịch 2026."""
+
+def test_make_up_workday_turns_a_saturday_into_a_scheduled_day(self):
+	"""Làm bù: T7 29/08/2026 thành ngày công. Thiếu bảng ngoại lệ thì spec này là bước lùi
+	so với mô hình cũ (xoá dòng weekly_off của đúng ngày đó là làm được)."""
+	self.add_calendar_day(2026, "2026-08-29", "Làm bù", "Làm bù Quốc khánh")
+	self.assertTrue(is_scheduled_day(self.employee, "2026-08-29"))
+	self.assertFalse(is_rest_day(self.employee, "2026-08-29"))
+	self.assertTrue(is_working_day(self.employee, "2026-08-29"))
+
+def test_bridge_day_off_is_a_public_holiday(self):
+	"""Nghỉ ghép khai loại "Nghỉ lễ" -> xuống Holiday List -> NL, có lương."""
+
+def test_exception_of_another_year_is_ignored(self):
+	"""Lọc theo năm: dòng 2027 không được ảnh hưởng ngày của 2026."""
 ```
 
 - [ ] **Step 2: Chạy harness → FAIL** (`ImportError: cannot import name 'is_working_day'`)
@@ -360,9 +375,31 @@ def holiday_list_for(employee: str, date) -> str | None:
 	return get_holiday_list_for_employee(employee, raise_exception=False)
 
 
+def calendar_exceptions(year: int) -> dict:
+	"""{ngày: day_type} của một năm — ngày KHÁC với mẫu tuần (nghỉ ghép / làm bù).
+
+	`custom_working_days` là mẫu tuần lặp lại vô hạn, không nói được "riêng thứ Bảy 29/08 thì đi
+	làm". Mô hình cũ nói được (xoá dòng weekly_off của đúng ngày đó) nên thiếu bảng này là một
+	bước lùi về khả năng biểu đạt. Xem spec §3b.
+	"""
+	settings = frappe.get_cached_doc("Work Calendar Settings")
+	return {
+		getdate(row.holiday_date): row.day_type
+		for row in settings.calendar_days
+		if row.holiday_date and int(row.year or 0) == int(year)
+	}
+
+
 def is_scheduled_day(employee: str, date) -> bool:
-	"""Nằm trong lịch tuần. KHÔNG xét ngày lễ."""
-	return getdate(date).weekday() in employee_weekdays(employee, date)
+	"""Nằm trong lịch tuần. KHÔNG xét ngày lễ.
+
+	= (thứ có trong mẫu tuần) XOR (ngày có dòng "Làm bù"). Ngoại lệ chỉ cần biết ở ĐÂY; sáu nơi
+	tiêu thụ đúng theo mà không phải sửa dòng nào — đó là lợi tức của thiết kế một cửa.
+	"""
+	date = getdate(date)
+	if calendar_exceptions(date.year).get(date) == "Làm bù":
+		return True
+	return date.weekday() in employee_weekdays(employee, date)
 
 
 def is_rest_day(employee: str, date) -> bool:
@@ -755,10 +792,16 @@ git commit -m "feat(hr): dat mau so luong tu lich tuan thay vi tru theo Holiday 
 ### Task 8: Generator + Work Calendar Settings — mọi ngày lễ khai một cửa
 
 **Files:**
+- Rename: `hrms/hr/doctype/lunar_holiday/` → `hrms/hr/doctype/work_calendar_day/` (+ cột `day_type`)
+- Create: `hrms/patches/v15_0/rename_lunar_holiday_doctype.py` (**pre_model_sync**)
+- Modify: `hrms/patches.txt` (+1 dòng ở `[pre_model_sync]`)
 - Modify: `hrms/setup_vn_holiday.py` (bỏ sinh cuối tuần, bỏ tham số `weekly_off_days`)
-- Modify: `hrms/hr/doctype/work_calendar_settings/work_calendar_settings.py` (bỏ `get_weekly_off_days`)
-- Modify: `hrms/hr/doctype/work_calendar_settings/work_calendar_settings.json` (bỏ `weekly_off_days`,
-  đổi nhãn section lễ thành *"Ngày lễ nhập tay (theo từng năm)"*)
+- Modify: `hrms/hr/doctype/work_calendar_settings/work_calendar_settings.py`
+  (bỏ `get_weekly_off_days`; `lunar_holidays` → `calendar_days`; validate trùng ngày + kỳ đã khoá;
+  `working_days_preview` cho bảng xem trước)
+- Modify: `hrms/hr/doctype/work_calendar_settings/work_calendar_settings.json`
+  (bỏ `weekly_off_days`, bảng ngoại lệ *"Ngày đặc biệt trong năm"*)
+- Modify: `hrms/hr/doctype/work_calendar_settings/work_calendar_settings.js` (bảng xem trước)
 - Modify: `hrms/setup_vn_defaults.py` (self-heal `Ca Hành Chính` = T2–T6)
 - Test: `hrms/tests/test_setup_vn_holiday.py`, `.../test_work_calendar_settings.py` (mở rộng)
 
@@ -782,17 +825,65 @@ def test_compensatory_day_never_swallows_another_holiday(self):
 	"""Giữ mẹo `scheduled_holidays`: 30/4/2028 rơi CN, ngày bù không được nuốt 1/5."""
 
 def test_manual_holidays_from_settings_are_generated(self):
-	"""Lễ âm VÀ ngày nghỉ riêng của công ty đều khai ở Work Calendar Settings."""
+	"""Lễ âm, lễ riêng công ty VÀ nghỉ ghép đều khai ở Work Calendar Settings."""
+
+def test_make_up_workdays_never_reach_the_holiday_list(self):
+	"""Ngày "Làm bù" là ngày LÀM VIỆC — nhét vào bảng ngày nghỉ là sai từ tên gọi."""
+	self.set_policy(calendar_days=((2026, "2026-08-29", "Làm bù", "Bù QK"),))
+	name = generate_holiday_list(year=2026, company=self.company)
+	self.assertFalse(frappe.db.exists("Holiday", {"parent": name, "holiday_date": "2026-08-29"}))
+
+def test_same_date_cannot_be_both_types(self):
+	with self.assertRaises(frappe.ValidationError):
+		self.set_policy(calendar_days=(
+			(2026, "2026-08-29", "Làm bù", "Bù"), (2026, "2026-08-29", "Nghỉ lễ", "Nghỉ"),
+		))
+
+def test_cannot_edit_calendar_for_a_locked_period(self):
+	"""Bảng Công Tháng đã ký mà đổi lịch quá khứ thì bảng và phiếu lương lệch trong im lặng."""
+
+def test_working_days_preview_shows_before_and_after(self):
+	"""Bắt lỗi "khai làm bù mà quên khai nghỉ ghép" — vốn im lặng đổi lương."""
+	preview = frappe.get_single("Work Calendar Settings").working_days_preview(2026)
+	self.assertEqual(preview[7]["before"], 23)
 
 def test_existing_manual_rows_survive_regeneration(self):
 	...
 ```
 
 - [ ] **Step 2: Chạy harness → FAIL**
-- [ ] **Step 3: Bỏ vòng `for day in weekly_off_days: doc.get_weekly_off_dates()`; thay tập
-      `weekly_off_dates` bằng `not is_scheduled_day(...)`; bỏ tham số khỏi chữ ký và khỏi
-      `generate_holiday_list`.** Đổi nhãn/`description` của bảng lễ để nói rõ nó nhận **cả** lễ âm
-      lẫn ngày nghỉ riêng của công ty.
+- [ ] **Step 3a: Đổi tên child doctype** — `git mv` thư mục + đổi `name`/class, thêm cột
+      `day_type` (Select `Nghỉ lễ` / `Làm bù`, mặc định `Nghỉ lễ`), rồi patch **pre_model_sync**:
+
+```python
+# hrms/patches/v15_0/rename_lunar_holiday_doctype.py
+import frappe
+
+
+def execute():
+	"""Lunar Holiday -> Work Calendar Day. pre_model_sync để bảng đổi tên TRƯỚC khi JSON mới
+	sync. Tên cũ đã sai từ lúc bảng nhận thêm lễ riêng công ty, sai nặng hơn khi nhận cả ngày làm bù."""
+	if frappe.db.exists("DocType", "Lunar Holiday") and not frappe.db.exists(
+		"DocType", "Work Calendar Day"
+	):
+		frappe.rename_doc("DocType", "Lunar Holiday", "Work Calendar Day", force=True)
+
+	if frappe.db.table_exists("Work Calendar Day"):
+		frappe.db.sql(
+			"UPDATE `tabWork Calendar Day` SET parenttype = 'Work Calendar Settings', "
+			"parentfield = 'calendar_days' WHERE parentfield = 'lunar_holidays'"
+		)
+```
+
+- [ ] **Step 3b: Generator thôi sinh cuối tuần** — bỏ vòng
+      `for day in weekly_off_days: doc.get_weekly_off_dates()`; thay tập `weekly_off_dates` bằng
+      `not is_scheduled_day(...)`; bỏ tham số `weekly_off_days` khỏi chữ ký và khỏi
+      `generate_holiday_list`. **Chỉ dòng loại `Nghỉ lễ` mới xuống Holiday List** — dòng `Làm bù`
+      là ngày làm việc, không phải ngày nghỉ.
+
+- [ ] **Step 3c: Validate + xem trước** — chặn trùng ngày giữa hai loại; chặn sửa ngày thuộc kỳ đã
+      khoá (`period_lock.is_period_locked`); cảnh báo khi `Làm bù` rơi vào ngày vốn đã trong mẫu
+      tuần; `working_days_preview(year) -> {tháng: {"before": n, "after": n}}` hiện trên form.
 - [ ] **Step 4: Chạy harness → PASS**
 - [ ] **Step 5: Khai ngược ngày lễ đang có vào Work Calendar Settings** — 6 dòng lễ âm 2026 đã có,
       **thêm** `2026-07-17 "Nghỉ lễ công ty"` để lần sinh sau không mất nó.
@@ -800,7 +891,8 @@ def test_existing_manual_rows_survive_regeneration(self):
 
 ```bash
 git add hrms/setup_vn_holiday.py hrms/hr/doctype/work_calendar_settings/ \
-        hrms/setup_vn_defaults.py hrms/tests/test_setup_vn_holiday.py
+        hrms/hr/doctype/work_calendar_day/ hrms/patches/v15_0/rename_lunar_holiday_doctype.py \
+        hrms/patches.txt hrms/setup_vn_defaults.py hrms/tests/test_setup_vn_holiday.py
 git commit -m "feat(hr): Holiday List chi con ngay le, moi ngay le khai o Work Calendar Settings"
 ```
 
