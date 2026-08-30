@@ -134,7 +134,7 @@ doc_events = {
 	"Timesheet": {"validate": "hrms.hr.utils.validate_active_employee"},
 	# Miyano: lương NET gross-up theo công thức MVL — chạy sau calculate_net_pay của controller.
 	# THỨ TỰ BA BƯỚC NÀY LÀ BẮT BUỘC, đừng đổi:
-	# 1. `add_paid_holidays` — cộng ngày nghỉ lễ vào `total_working_days`/`payment_days`. Phải chạy
+	# 1. `set_working_days` — ĐẶT `total_working_days`/`payment_days` từ lịch tuần. Phải chạy
 	#    TRƯỚC cổng, vì cổng so `payment_days` với "Tổng công" của bảng đã chốt mà bảng đã đếm lễ;
 	#    chạy sau thì cổng so số chưa cộng với số đã cộng và chặn sạch phiếu tháng có lễ.
 	# 2. `sheet_gate.gate` — chặn phiếu khi kỳ chưa chốt công và đối soát với bảng đã chốt. Mặc định
@@ -142,7 +142,7 @@ doc_events = {
 	# 3. `apply_mvl` — engine lương, đọc số ngày đã chuẩn hoá ở bước 1.
 	"Salary Slip": {
 		"validate": [
-			"hrms.vn_payroll.salary_slip_hook.add_paid_holidays",
+			"hrms.vn_payroll.salary_slip_hook.set_working_days",
 			"hrms.vn_payroll.sheet_gate.gate",
 			"hrms.vn_payroll.salary_slip_hook.apply_mvl",
 		]

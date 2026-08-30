@@ -143,72 +143,48 @@ def probation_worked_days(doc, salary_type: str) -> float:
 	return paid_work_days_between(doc.employee, start, prob_end)
 
 
-def paid_holidays_in_period(doc) -> float:
-	"""Số NGÀY NGHỈ LỄ (không phải nghỉ hàng tuần) trong kỳ, theo Holiday List của nhân viên.
+def set_working_days(doc, method=None) -> None:
+	"""ĐẶT mẫu số lương từ LỊCH TUẦN. Thay hẳn `add_paid_holidays` cũ.
 
-	Chỉ đếm ngày lễ nằm trong thời gian nhân viên còn thuộc biên chế — vào làm giữa kỳ hay nghỉ
-	việc giữa kỳ thì ngày lễ ngoài khoảng đó không phải công của họ."""
-	from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
+	Vì sao ĐẶT TUYỆT ĐỐI thay vì cộng/trừ delta: con số đúng không được phụ thuộc vào việc
+	Holiday List còn hay đã hết dòng nghỉ cuối tuần. Nhờ vậy mỗi bước triển khai độc lập, deploy
+	lệch nhau không sao, và bước di trú (gỡ 104 dòng cuối tuần) là no-op về mặt số học.
 
-	holiday_list = get_holiday_list_for_employee(doc.employee, raise_exception=False)
-	if not holiday_list:
-		return 0.0
+	`số ngày trong kỳ - (cuối tuần hợp với lễ) + lễ` rút gọn đúng bằng `số ngày theo lịch tuần`, nên
+	đặt thẳng con số đó vừa ngắn hơn vừa nói đúng ý định, thay vì hai phép trừ-cộng triệt tiêu nhau.
+	Ngày lễ NẰM TRONG mẫu số (Đ.112 BLLĐ; HR chốt 2026-08-04: ngày công chuẩn = ngày đi làm +
+	nghỉ lễ + nghỉ có lương) -> dùng `scheduled_*`, KHÔNG phải `working_*`.
 
-	start, end = getdate(doc.start_date), getdate(doc.end_date)
-	joining, relieving = frappe.db.get_value("Employee", doc.employee, ["date_of_joining", "relieving_date"])
-	if joining:
-		start = max(start, getdate(joining))
-	if relieving:
-		end = min(end, getdate(relieving))
-	if start > end:
-		return 0.0
+	Chạy cho MỌI Salary Slip — bỏ điều kiện `salary_type_of` mà `add_paid_holidays` từng dùng: sau
+	di trú không phiếu nào còn lấy được ngày nghỉ cuối tuần từ Holiday List, nên phiếu ngoài MVL bị
+	bỏ sót sẽ ra mẫu số 31 thay vì 23. Trên site cả 5 cấu trúc đều là MVL nên đây không đổi hành vi
+	thực tế, nhưng là mở rộng phạm vi phải nói rõ.
 
-	return flt(
-		frappe.db.count(
-			"Holiday",
-			{
-				"parent": holiday_list,
-				"parenttype": "Holiday List",
-				"holiday_date": ["between", [start, end]],
-				"weekly_off": 0,
-			},
-		)
-	)
+	Nhánh clamp sao chép Y NGUYÊN ERPNext (`if base > lwp: … else: 0`) để bất biến kể cả ở ca biên.
+	`doc.absent_days` đã gộp sẵn `half_absent_days x 0.5`, nên chỉ trừ đúng hai giá trị trên doc.
 
+	Phải chạy TRƯỚC `sheet_gate.gate`: cổng đối soát so `payment_days` với Tổng công của bảng đã
+	chốt, chạy sau thì cổng so số chưa đặt với số đã đặt và chặn sạch phiếu của tháng có lễ.
+	"""
+	from hrms.hr.work_schedule import scheduled_days_between
 
-def add_paid_holidays(doc, method=None) -> None:
-	"""Cộng ngày nghỉ lễ vào CẢ `total_working_days` lẫn `payment_days` của phiếu.
-
-	**Hook RIÊNG, xếp TRƯỚC `sheet_gate.gate` trong `hooks.py` — thứ tự là bắt buộc.** Cổng đối
-	soát so `payment_days` của phiếu với "Tổng công" của bảng đã chốt, mà bảng đã đếm ngày lễ; để
-	việc cộng này nằm trong `apply_mvl` (chạy SAU cổng) thì cổng so số chưa cộng với số đã cộng và
-	chặn sạch mọi phiếu của tháng có lễ ("Lệch -1.0 ngày" — đã dính 2026-08-04).
-
-	Gọi ĐÚNG MỘT LẦN mỗi lượt validate: controller tính lại `total_working_days`/`payment_days` từ
-	đầu ở mỗi lần lưu, nên cộng lại mỗi lượt là đúng, nhưng gọi hai lần trong CÙNG một lượt sẽ cộng
-	đôi. Vì thế `apply_mvl` không được gọi lại hàm này.
-
-	Quyết định 2026-08-04 (HR chốt): ngày công chuẩn = ngày đi làm + nghỉ lễ + nghỉ có lương.
-	ERPNext loại mọi ngày trong Holiday List khỏi `total_working_days`, mà nghỉ hàng tuần cũng nằm
-	trong danh sách đó — cờ `include_holidays_in_total_working_days` sẵn có bật lên thì đếm cả thứ
-	Bảy/Chủ nhật (22 → 31 ngày), KHÔNG phải thứ ta cần. Vì vậy cộng bù ở đây: chỉ ngày lễ, không
-	đụng ngày nghỉ tuần.
-
-	Cộng vào cả hai vế nên người đi làm đủ vẫn nhận đủ lương; khác biệt chỉ xuất hiện khi có ngày
-	vắng — lúc đó mẫu số lớn hơn đúng bằng số ngày lễ, khớp cách HR tính tay.
-
-	Ghi thẳng lên `doc` để `payment_days` trên phiếu và cột "Tổng công" của bảng chấm công là CÙNG
-	một con số — cổng đối soát `sheet_gate.reconcile_with_sheet` so hai vế này với nhau."""
-	# Chỉ phiếu dùng cấu trúc MVL — giữ đúng phạm vi cũ hồi hàm này còn nằm trong `apply_mvl`.
-	# Là hook riêng thì nó chạy cho MỌI Salary Slip, kể cả phiếu đi đường Frappe gốc.
-	if not salary_type_of(doc.salary_structure):
+	if not (doc.get("employee") and doc.get("start_date") and doc.get("end_date")):
 		return
 
-	holidays = paid_holidays_in_period(doc)
-	if not holidays:
-		return
-	doc.total_working_days = flt(doc.total_working_days) + holidays
-	doc.payment_days = flt(doc.payment_days) + holidays
+	doc.total_working_days = len(scheduled_days_between(doc.employee, doc.start_date, doc.end_date))
+
+	# `actual_*` đã bị controller chặn theo ngày vào làm / nghỉ việc; vào hay nghỉ giữa kỳ thì
+	# những ngày ngoài khoảng đó không phải công của người này.
+	#
+	# Phải đọc bằng getattr chứ KHÔNG phải `doc.get(...)`: hai cái này là @property của controller,
+	# không phải field, nên `doc.get()` trả None và phần chặn ngày im lặng không chạy — người vào làm
+	# giữa tháng sẽ được trả đủ cả tháng.
+	actual_start = getattr(doc, "actual_start_date", None) or doc.start_date
+	actual_end = getattr(doc, "actual_end_date", None) or doc.end_date
+	base = len(scheduled_days_between(doc.employee, actual_start, actual_end))
+
+	lwp = flt(doc.get("leave_without_pay"))
+	doc.payment_days = (base - lwp - flt(doc.get("absent_days"))) if base > lwp else 0
 
 
 def apply_mvl(doc, method=None):
