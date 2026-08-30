@@ -25,7 +25,6 @@ from hrms.api import get_current_employee_info
 from hrms.hr.doctype.leave_block_list.leave_block_list import get_applicable_block_dates
 from hrms.hr.doctype.leave_ledger_entry.leave_ledger_entry import create_leave_ledger_entry
 from hrms.hr.utils import (
-	get_holiday_dates_for_employee,
 	get_leave_period,
 	set_employee_name,
 	share_doc_with_approver,
@@ -250,7 +249,12 @@ class LeaveApplication(Document, PWANotificationsMixin):
 
 		holiday_dates = []
 		if not frappe.db.get_value("Leave Type", self.leave_type, "include_holiday"):
-			holiday_dates = get_holiday_dates_for_employee(self.employee, self.from_date, self.to_date)
+			# Ngày không phải đi làm = ngoài lịch tuần + ngày lễ. Đơn nghỉ không sinh công cho T7/CN.
+			from hrms.hr.work_schedule import non_working_days_between
+
+			holiday_dates = [
+				str(d) for d in non_working_days_between(self.employee, self.from_date, self.to_date)
+			]
 
 		for dt in daterange(getdate(self.from_date), getdate(self.to_date)):
 			date = dt.strftime("%Y-%m-%d")
@@ -1247,18 +1251,18 @@ def get_leave_entries(employee, leave_type, from_date, to_date):
 
 @frappe.whitelist()
 def get_holidays(employee, from_date, to_date, holiday_list=None):
-	"""get holidays between two dates for the given employee"""
-	if not holiday_list:
-		holiday_list = get_holiday_list_for_employee(employee)
+	"""Số ngày KHÔNG phải đi làm giữa hai mốc — ngoài lịch tuần CỘNG ngày lễ.
 
-	holidays = frappe.db.sql(
-		"""select count(distinct holiday_date) from `tabHoliday` h1, `tabHoliday List` h2
-		where h1.parent = h2.name and h1.holiday_date between %s and %s
-		and h2.name = %s""",
-		(from_date, to_date, holiday_list),
-	)[0][0]
+	Con số này bị trừ khỏi số ngày phép của đơn, nên nó phải bao gồm cả ngày nghỉ cuối tuần. Sau
+	khi lịch tuần tách khỏi Holiday List, đếm dòng Holiday là chỉ còn đếm ngày lễ — đơn nghỉ từ thứ
+	Sáu tới thứ Hai sẽ ăn 4 ngày phép thay vì 2.
 
-	return holidays
+	`holiday_list` giữ lại cho tương thích chỗ gọi; việc phân giải lịch nay làm THEO NGÀY bên trong
+	`work_schedule` (mỗi năm một Holiday List), nên truyền sẵn một danh sách không còn ý nghĩa.
+	"""
+	from hrms.hr.work_schedule import non_working_days_between
+
+	return len(non_working_days_between(employee, from_date, to_date))
 
 
 def is_lwp(leave_type):

@@ -27,6 +27,7 @@ from hrms.hr.doctype.leave_application.leave_application import (
 	get_leave_balance_on,
 	get_leave_details,
 	get_new_and_cf_leaves_taken,
+	get_number_of_leave_days,
 )
 from hrms.hr.doctype.leave_ledger_entry.leave_ledger_entry import expire_allocation
 from hrms.hr.doctype.leave_policy_assignment.leave_policy_assignment import (
@@ -37,7 +38,9 @@ from hrms.payroll.doctype.salary_slip.test_salary_slip import (
 	make_holiday_list,
 	make_leave_application,
 )
+from hrms.tests.isolation import PerTestRollback
 from hrms.tests.test_utils import get_first_sunday
+from hrms.tests.vn_test_utils import test_employee
 
 test_dependencies = ["Leave Type", "Leave Allocation", "Leave Block List", "Employee"]
 
@@ -1500,3 +1503,30 @@ def allocate_leaves(employee, leave_period, leave_type, new_leaves_allocated, el
 	).insert()
 
 	allocate_leave.submit()
+
+
+class TestLeaveDaysAgainstWorkSchedule(PerTestRollback, FrappeTestCase):
+	"""Số ngày phép của đơn phải trừ CẢ ngày nghỉ cuối tuần, không chỉ ngày lễ.
+
+	Sau khi lịch tuần tách khỏi Holiday List, đếm dòng Holiday là chỉ còn đếm ngày lễ — đơn nghỉ
+	bắc qua cuối tuần sẽ ăn oan số ngày phép nếu chỗ này không đổi nguồn.
+	"""
+
+	def setUp(self):
+		self.employee = test_employee("leave_days_ws@codes.com")
+
+	def test_leave_spanning_a_weekend_still_costs_two_days(self):
+		# T6 2026-07-24 -> T2 2026-07-27: hai ngày làm việc, hai ngày nghỉ tuần ở giữa.
+		self.assertEqual(
+			get_number_of_leave_days(self.employee, "Nghỉ phép năm", "2026-07-24", "2026-07-27"), 2
+		)
+
+	def test_a_full_working_week_costs_five_days(self):
+		self.assertEqual(
+			get_number_of_leave_days(self.employee, "Nghỉ phép năm", "2026-07-20", "2026-07-24"), 5
+		)
+
+	def test_a_weekend_only_leave_costs_nothing(self):
+		self.assertEqual(
+			get_number_of_leave_days(self.employee, "Nghỉ phép năm", "2026-07-25", "2026-07-26"), 0
+		)
