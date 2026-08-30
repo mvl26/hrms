@@ -3,9 +3,10 @@
 Ngày chạy: **2026-08-27** · Site: `miyano` · Commit: `dafe46a`, `d282d26`
 Spec: [`docs/spec/lunch-days-attendance.md`](spec/lunch-days-attendance.md) §5 · Kế hoạch: [`docs/tasks/plan-lunch-auto-and-override.md`](tasks/plan-lunch-auto-and-override.md)
 
-> **Trạng thái: CHỜ DUYỆT.** Chức năng đã chạy đúng 32/32 phép thử. Nhưng phần soát dữ liệu thật
-> phát hiện một tình huống **spec chưa lường** — người *miễn chấm công* — cần bạn quyết trước khi
-> chạy nốt tháng 6 và tháng 8. Xem §4.
+> **Trạng thái: ĐÃ XỬ LÝ — chờ duyệt bước cuối.** Lượt chạy đầu (32/32 PASS) phát hiện tình huống
+> spec chưa lường: người *miễn chấm công*. Bạn đã chốt hướng xử lý (ô tick trên hồ sơ) và tôi đã
+> làm xong — xem **§7**. Chạy lại data test: **37/37 PASS**, tháng 8 lệch từ 20 ngày về **0**.
+> Còn đúng một việc chờ bạn duyệt: recompute tháng 6 (1 bản ghi). Xem §8.
 
 ---
 
@@ -132,3 +133,78 @@ Tôi nghiêng về **A**: nó bám đúng nguyên tắc gốc của spec ("ăn t
 - Kịch bản data test: `/tmp/datatest.py` · kết quả đầy đủ: `/tmp/datatest.out`
 - Bộ test tự động của repo: **187 test xanh**, `HARNESS_NO_LEAK`, lint sạch
 - Đối chiếu phụ cấp J sau lượt recompute tháng 7: **khớp 6/6 phiếu**, không phiếu nào đổi số
+
+
+---
+
+# 7. Cập nhật sau khi bạn chốt hướng xử lý (2026-08-27)
+
+## 7.1 Giải pháp đã làm
+
+Bạn chốt: *"khi miễn chấm công thì cũng có tick chọn auto chấm ăn trưa cho những buổi chấm công
+(ký hiệu X), như vậy data sinh ra sẽ auto chạy chuẩn"* — tốt hơn cả ba phương án tôi đề xuất ở §4,
+vì đặt quyết định ở **cấp con người** (tick một lần) thay vì bắt HR sửa tay 20+ ngày mỗi tháng.
+
+Đã thêm ô **"Tự chấm ăn trưa"** (`Employee.custom_auto_lunch_when_exempt`) ngay dưới ô *Miễn chấm
+công (full công)* trên hồ sơ nhân viên, **mặc định TẮT**, chỉ hiện khi đã bật miễn chấm công.
+
+Vị trí trong luật — cố ý đặt **sau** nhánh phủ giờ trưa:
+
+```
+≥ 2 dấu phủ giờ trưa            → 1     BẰNG CHỨNG có mặt, thắng cả việc chưa bật tick
+ngày tự sinh & chưa bật tick    → 0     ← MỚI
+< 2 dấu, còn lại                → luật §5.4 như cũ
+```
+
+Người miễn chấm công thỉnh thoảng vẫn quẹt thẻ (`hieu chu` có 4 dấu trong tháng 8) — hôm nào có dấu
+phủ giờ trưa thì đó là bằng chứng thật, không cần tick.
+
+## 7.2 Data test chạy lại — 37/37 PASS
+
+Bổ sung **PHẦN E** (5 phép thử) cho đúng cơ chế mới:
+
+| Phép thử | Kết quả |
+|---|---|
+| Ngày **tự sinh**, chưa bật tick → không ăn trưa | ✅ |
+| Ngày **tự sinh**, đã bật tick → có ăn trưa | ✅ |
+| Ngày **chấm tay** (không tự sinh), chưa tick → vẫn có ăn trưa | ✅ |
+| Ngày tự sinh + ô Ăn trưa = `Có` → có ăn trưa (override vẫn thắng) | ✅ |
+| Ngày tự sinh + đã tick + mã `CT` → không ăn trưa | ✅ |
+
+## 7.3 Soát lại dữ liệu thật
+
+| Kỳ | Lệch trước | **Lệch sau** | Chênh tiền |
+|---|---|---|---|
+| 2026-06 | 1 | **1** | +35.000đ |
+| 2026-07 | 0 | **0** ✅ | 0đ |
+| 2026-08 | **20** | **0** ✅ | **0đ** |
+
+Tháng 8 hết sạch lệch — data tự chạy chuẩn đúng như bạn nói.
+
+Bản ghi tháng 6 còn lại đã kiểm từng field: `hieu chu` ngày 18/06, mã `X`,
+**`custom_auto_filled = 0`** (tức chấm tay hoặc sửa qua soát công, không phải ngày tự sinh), có
+1 dấu chấm buổi sáng. Đây đúng là ngày phải được tính ăn trưa theo luật — **không liên quan tới ô
+tick**.
+
+## 7.4 Trạng thái ô tick hiện tại
+
+| Nhân viên | Miễn chấm công | Tự chấm ăn trưa |
+|---|---|---|
+| `hieu chu` | ✅ | ❌ chưa bật |
+| `Phạm Thị Dung` | ✅ | ❌ chưa bật |
+
+Mặc định TẮT nên hành vi hiện tại là an toàn. **Bạn quyết ai thật sự lên văn phòng ăn trưa thì bật
+tick cho người đó** — hồ sơ nhân viên → tab *Gia nhập* → ngay dưới ô *Miễn chấm công (full công)*.
+
+Lưu ý: cả hai người này đang thuộc cấu trúc *Bán thời gian* / *Chuyên gia* — vốn **không có** thành
+phần phụ cấp ăn trưa, nên dù bật tick cũng chưa thành tiền. Nó chỉ thành tiền nếu sau này chuyển
+sang cấu trúc *Chính thức* hoặc *Thử việc*.
+
+# 8. Việc duy nhất còn chờ bạn duyệt
+
+Chạy `recompute_lunch_flags(6, 2026)` để sửa **1 bản ghi** tháng 6 (`hieu chu` 18/06, cờ 0 → 1).
+
+Tiền thật: **0đ** (`hieu chu` thuộc *Bán thời gian*, không hưởng phụ cấp ăn trưa) — chỉ là con số
+hiển thị trên báo cáo và Bảng Công Tháng được nắn về đúng.
+
+Tháng 7 và tháng 8 **không cần làm gì nữa**.
