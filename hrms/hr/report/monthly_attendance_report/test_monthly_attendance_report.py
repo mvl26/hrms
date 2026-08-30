@@ -5,9 +5,9 @@ from frappe.utils import getdate
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
-from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute
+from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute, get_day_kinds
 from hrms.tests.isolation import PerTestRollback
-from hrms.tests.vn_test_utils import test_employee
+from hrms.tests.vn_test_utils import default_company, test_employee
 
 
 class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
@@ -796,3 +796,51 @@ class TestMarriageLeaveHasItsOwnColumn(PerTestRollback, FrappeTestCase):
 		t = self.totals()
 		self.assertEqual(t.get("Ốm"), 2.0, "vẫn đếm riêng ở cột Ốm / chăm con ốm")
 		self.assertEqual(t.get(TOTAL_PAID, 0.0), 0.0, "BHXH chi trả → không phải công của doanh nghiệp")
+
+
+class TestDayKindsFromWorkSchedule(PerTestRollback, FrappeTestCase):
+	"""`-` đến từ LỊCH TUẦN, `NL` đến từ Holiday List — hai nguồn tách bạch.
+
+	Trước đây cả hai cùng suy từ một cờ `weekly_off`. Bộ test này chốt rằng việc tách nguồn KHÔNG
+	đổi một ký hiệu nào trên bảng công.
+	"""
+
+	def setUp(self):
+		self.company = default_company()
+		self.employee = test_employee("day_kinds@codes.com")
+		frappe.db.set_value("Employee", self.employee, "holiday_list", None)
+		frappe.clear_cache(doctype="Employee")
+
+	def kinds(self, start="2026-07-01", end="2026-07-31"):
+		return get_day_kinds([frappe._dict(name=self.employee)], start, end)[self.employee]
+
+	def test_weekend_is_rest_and_public_holiday_is_holiday(self):
+		got = self.kinds()
+		self.assertEqual(got[getdate("2026-07-25")], "rest")  # T7
+		self.assertEqual(got[getdate("2026-07-26")], "rest")  # CN
+		self.assertEqual(got[getdate("2026-07-21")], "scheduled")  # T3
+
+	def test_july_2026_has_23_non_rest_days(self):
+		"""Khớp mẫu số lương đang có trên site: total_working_days = 23.0."""
+		got = self.kinds()
+		self.assertEqual(sum(1 for k in got.values() if k != "rest"), 23)
+
+	def test_agrees_with_the_old_weekly_off_flag(self):
+		"""Đối chiếu hai nguồn: cờ `weekly_off` cũ và lịch tuần mới phải nói y hệt nhau.
+
+		Chạy được vì Holiday List hiện VẪN còn các dòng nghỉ cuối tuần (chưa di trú). Sau khi di
+		trú, test này tự nhiên trở thành no-op — giữ lại vì nó là bằng chứng của bước chuyển.
+		"""
+		hl = frappe.get_cached_value("Company", self.company, "default_holiday_list")
+		if not hl:
+			self.skipTest("site chưa có Holiday List mặc định")
+		rows = frappe.get_all(
+			"Holiday",
+			filters={"parent": hl, "holiday_date": ["between", ["2026-07-01", "2026-07-31"]]},
+			fields=["holiday_date", "weekly_off"],
+		)
+		old = {getdate(r.holiday_date): ("rest" if r.weekly_off else "holiday") for r in rows}
+		if not old:
+			self.skipTest("lịch đã di trú xong — không còn dòng cũ để đối chiếu")
+		for day, kind in self.kinds().items():
+			self.assertEqual(kind, old.get(day, "scheduled"), f"lệch ở ngày {day}")
