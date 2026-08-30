@@ -39,6 +39,16 @@ SOLAR_LABELS = {
 }
 
 
+def vn_holiday_list_name(company, year) -> str:
+	"""Tên Holiday List của một (công ty, năm) — quy ước đặt tên, khai báo MỘT chỗ.
+
+	Generator đặt tên theo quy ước này, và `work_schedule.holiday_list_for` dựa vào đúng quy ước đó
+	để tìm lịch của năm được hỏi (mỗi năm một list). Để hai bên tự đoán tên là mời một ngày nào đó
+	chúng lệch nhau và cả năm cũ mất sạch ký hiệu NL.
+	"""
+	return f"VN {company} {int(year)}"
+
+
 def create_vn_holiday_list(year, company, weekly_off_days=("Sunday",), name=None, extra_holidays=None):
 	"""Create/refresh a VN Holiday List for `year`. Returns its name. Idempotent.
 
@@ -47,7 +57,7 @@ def create_vn_holiday_list(year, company, weekly_off_days=("Sunday",), name=None
 	vẫn được áp cùng quy tắc nghỉ bù của Điều 112 khoản 3 như lễ dương.
 	"""
 	year = int(year)
-	list_name = name or f"VN {company} {year}"
+	list_name = name or vn_holiday_list_name(company, year)
 
 	if frappe.db.exists("Holiday List", list_name):
 		doc = frappe.get_doc("Holiday List", list_name)
