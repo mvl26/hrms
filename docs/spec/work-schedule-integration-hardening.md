@@ -127,8 +127,7 @@ nào đã chốt phủ ngày này không", chứ không phải "kỳ của ngư�
 D miễn chấm công · E vào làm giữa tháng, nghỉ việc ở tháng khác.
 
 **Lịch 2027**: lễ dương tự sinh · Tết âm khai tay · một lễ riêng công ty rơi giữa tuần · một lễ rơi
-Chủ nhật (sinh nghỉ bù) · **một cặp nghỉ ghép + làm bù cùng tháng** (mẫu số không đổi) · **một cặp
-khác tháng** (mẫu số hai tháng đổi ngược chiều — đúng cái bẫy đã cảnh báo ở spec trước §3b).
+thứ Bảy (sinh nghỉ bù) · **một cặp nghỉ ghép + làm bù cùng tháng** · **một cặp khác tháng**.
 
 Bộ dựng cảnh **chỉ dựng dữ liệu, không assert**. Mọi bộ test gọi nó rồi tự khẳng định phần của mình.
 
@@ -196,8 +195,28 @@ hrms/hr/doctype/compensatory_leave_request/compensatory_leave_request.py  (sửa
 - `monthly_attendance_sheet` (report tiếng Anh của upstream), `employee_benefit_application`,
   `payroll_period`, `daily_work_summary_group` — đã kiểm, không ảnh hưởng.
 
+### 6. Nghỉ ghép hiện KHÔNG phải là "đổi ngày" — bộ dựng cảnh vừa chứng minh
+
+Spec trước (§3b) viết rằng nghỉ ghép + làm bù cùng tháng thì mẫu số không đổi. **Khẳng định đó sai**,
+và test của bộ dựng cảnh bắt được ngay ở lần chạy đầu.
+
+Lý do: ngày nghỉ ghép được khai loại `Nghỉ lễ`, tức **ngày có lương**, nên nó **vẫn nằm trong mẫu
+số** (đúng quy ước "ngày công chuẩn = ngày đi làm + nghỉ lễ + nghỉ có lương"). Ngày làm bù thì cộng
+thêm một. Kết quả: **một cặp nghỉ ghép + làm bù làm mẫu số +1, không phải 0.**
+
+Số học tháng 8/2027: 22 ngày T2–T6 → 21 ngày đi làm + 1 ngày lễ (nghỉ ghép) + 1 ngày làm bù = **23**.
+
+Mô hình tự nó nhất quán. Nhưng nếu HR hiểu nghỉ ghép là **đổi ngày** (nghỉ thứ Sáu, làm bù thứ Bảy,
+net 0) thì mô hình hiện tại **chưa diễn đạt được** — sẽ cần một loại thứ ba, ví dụ *"Nghỉ không tính
+công"*, gỡ hẳn ngày đó khỏi lịch thay vì biến nó thành lễ. Xem Open Questions.
+
+Đợt này **không** thêm loại thứ ba; chỉ ghi nhận hành vi đúng bằng test và đặt câu hỏi.
+
 ## Open Questions
 
-1. **Ngày ngoài lịch có nên hiện màu khác** với ngày nghỉ không có bản ghi? Đề xuất: giữ nền "nghỉ
+1. **Nghỉ ghép: "ngày lễ" hay "đổi ngày"?** Hiện là ngày lễ có lương, nên một cặp nghỉ ghép + làm
+   bù làm mẫu số **+1** (xem §6). Nếu Miyano hiểu là đổi ngày net 0 thì cần thêm loại *"Nghỉ không
+   tính công"* — một task riêng, không nằm trong 8 task của plan này.
+2. **Ngày ngoài lịch có nên hiện màu khác** với ngày nghỉ không có bản ghi? Đề xuất: giữ nền "nghỉ
    tuần" nhưng chữ đậm, thêm một dòng chú giải — để HR thấy ngay ai đi làm cuối tuần mà không phải
    mở report riêng.
