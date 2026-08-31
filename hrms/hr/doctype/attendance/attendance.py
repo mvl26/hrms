@@ -26,8 +26,6 @@ from hrms.hr.doctype.attendance.vn_day_classifier import (
 )
 from hrms.hr.doctype.shift_assignment.shift_assignment import has_overlapping_timings
 from hrms.hr.utils import (
-	get_holiday_dates_for_employee,
-	get_holidays_for_employee,
 	validate_active_employee,
 )
 
@@ -655,17 +653,29 @@ def add_attendance(filters):
 
 
 def add_holidays(events, start, end, employee=None):
-	holidays = get_holidays_for_employee(employee, start, end)
-	if not holidays:
+	"""Phủ ngày KHÔNG phải đi làm lên calendar của Attendance — nghỉ tuần CỘNG ngày lễ.
+
+	Đọc dòng `Holiday` là chỉ còn ngày lễ sau khi lịch tuần tách khỏi Holiday List, và calendar mất
+	sạch sự kiện cuối tuần. Ngày lễ vẫn được gọi tên riêng vì nó là ngày có lương.
+	"""
+	from hrms.hr.work_schedule import non_working_days_between, public_holidays_between
+
+	if not employee:
 		return
 
-	for holiday in holidays:
+	rest_and_holidays = non_working_days_between(employee, start, end)
+	if not rest_and_holidays:
+		return
+	holidays = public_holidays_between(employee, start, end)
+
+	for day in sorted(rest_and_holidays):
+		is_holiday = day in holidays
 		events.append(
 			{
 				"doctype": "Holiday",
-				"attendance_date": holiday.holiday_date,
-				"title": _("Holiday") + ": " + cstr(holiday.description),
-				"name": holiday.name,
+				"attendance_date": day,
+				"title": _("Holiday") if is_holiday else _("Ngày nghỉ"),
+				"name": f"work-schedule::{day}",
 				"allDay": 1,
 			}
 		)
@@ -754,9 +764,13 @@ def get_unmarked_days(employee, from_date, to_date, exclude_holidays=0):
 	marked_days = [getdate(record.attendance_date) for record in records]
 
 	if cint(exclude_holidays):
-		holiday_dates = get_holiday_dates_for_employee(employee, from_date, to_date)
-		holidays = [getdate(record) for record in holiday_dates]
-		marked_days.extend(holidays)
+		# Ngày KHÔNG phải đi làm (nghỉ tuần + lễ), không phải "dòng trong Holiday List". Sau khi lịch
+		# tuần tách ra, đọc Holiday List là chỉ còn ngày lễ, và hộp thoại *Mark Attendance* sẽ CHỦ
+		# ĐỘNG gợi ý T7/CN là ngày chưa chấm -> HR rất dễ chấm nhầm một ngày công vào cuối tuần.
+		# Ngày `Làm bù` vẫn xuất hiện: nó là ngày công, thiếu bản ghi là thiếu thật.
+		from hrms.hr.work_schedule import non_working_days_between
+
+		marked_days.extend(non_working_days_between(employee, from_date, to_date))
 
 	unmarked_days = []
 
