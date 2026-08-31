@@ -55,17 +55,21 @@ class TestCheckinOutsideSchedule(PerTestRollback, FrappeTestCase):
 		name = "_Test Ngoai Lich 2026"
 		if frappe.db.exists("Holiday List", name):
 			frappe.delete_doc("Holiday List", name, force=True, ignore_permissions=True)
-		return frappe.get_doc(
-			{
-				"doctype": "Holiday List",
-				"holiday_list_name": name,
-				"from_date": "2026-01-01",
-				"to_date": "2026-12-31",
-				"holidays": [
-					{"holiday_date": PUBLIC_HOLIDAY, "description": "Nghỉ lễ công ty", "weekly_off": 0}
-				],
-			}
-		).insert(ignore_permissions=True).name
+		return (
+			frappe.get_doc(
+				{
+					"doctype": "Holiday List",
+					"holiday_list_name": name,
+					"from_date": "2026-01-01",
+					"to_date": "2026-12-31",
+					"holidays": [
+						{"holiday_date": PUBLIC_HOLIDAY, "description": "Nghỉ lễ công ty", "weekly_off": 0}
+					],
+				}
+			)
+			.insert(ignore_permissions=True)
+			.name
+		)
 
 	def checkin(self, timestamp, log_type="IN"):
 		doc = frappe.get_doc(
