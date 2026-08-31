@@ -24,8 +24,9 @@ hiển thị ký hiệu, không vào cột tổng*.
 > | 3+4 | `2092ee1` | PWA, calendar Desk, Mark Attendance, upload |
 > | 5 | `bcd2c8a` | báo cáo đi làm ngoài lịch + onboarding |
 > | 6+7 | `026cd8c` | hai nhãn, chốt kỳ đã khoá, docstring nghỉ bù |
-> | 8 | — | nghiệm thu + calendar Đơn nghỉ (điểm thứ 7 bỏ sót) + dọn 2 chỗ code chết |
-(rà soát nguồn: `docs/audit-work-schedule-integration-2026-08-30.md`)
+> | 8 | `49c1155` | nghiệm thu + calendar Đơn nghỉ (điểm thứ 7 bỏ sót) + dọn 2 chỗ code chết |
+
+Rà soát nguồn: `docs/audit-work-schedule-integration-2026-08-30.md`
 
 ## Global Constraints
 
