@@ -57,26 +57,34 @@ class WorkCalendarSettings(Document):
 	def validate_period_not_locked(self):
 		"""Không cho sửa lịch của kỳ đã chốt công.
 
-		Bảng Công Tháng đã ký mà đổi lịch quá khứ thì bảng và phiếu lương lệch nhau trong im lặng —
-		đúng loại rủi ro mà `period_lock` sinh ra để chặn, nay áp thêm cho lịch.
-		"""
-		from hrms.hr.period_lock import locking_sheet
+		Bảng Công Tháng đã ký mà đổi lịch quá khứ thì bảng và phiếu lương lệch nhau trong im lặng.
 
+		Hỏi THẲNG `Monthly Attendance Sheet` đã submit phủ ngày bị sửa, không đi vòng qua
+		`period_lock.locking_sheet`: hàm đó khoá theo PHÒNG BAN của một nhân viên cụ thể, nên nếu
+		bảng đã chốt thuộc phòng ban khác thì việc sửa lịch vẫn lọt. Lịch là chính sách TOÀN CÔNG
+		TY, nên câu hỏi đúng là 'có kỳ nào đã chốt phủ ngày này không', không phải 'kỳ của người
+		này đã chốt chưa'.
+		"""
+		saved = self.get_doc_before_save()
 		before = (
-			{getdate(r.holiday_date): r.day_type for r in self.get_doc_before_save().calendar_days}
-			if self.get_doc_before_save()
+			{getdate(r.holiday_date): r.day_type for r in saved.calendar_days if r.holiday_date}
+			if saved
 			else {}
 		)
 		now = {getdate(r.holiday_date): r.day_type for r in self.calendar_days if r.holiday_date}
 		changed = {d for d in set(before) | set(now) if before.get(d) != now.get(d)}
-		if not changed:
-			return
 
-		employee = frappe.db.get_value("Employee", {"status": "Active"}, "name")
-		if not employee:
-			return
 		for day in sorted(changed):
-			sheet = locking_sheet(employee, day)
+			sheet = frappe.db.get_value(
+				"Monthly Attendance Sheet",
+				{
+					"docstatus": 1,
+					"company": self.company,
+					"from_date": ["<=", day],
+					"to_date": [">=", day],
+				},
+				"name",
+			)
 			if sheet:
 				frappe.throw(
 					_("Ngày {0} thuộc kỳ đã chốt công ({1}). Huỷ chốt kỳ trước khi sửa lịch.").format(

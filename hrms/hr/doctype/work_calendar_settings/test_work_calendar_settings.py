@@ -159,3 +159,39 @@ class TestWorkCalendarSettings(PerTestRollback, FrappeTestCase):
 		self.set_calendar_days([(2026, "2026-08-29", "Làm bù", "Làm bù Quốc khánh")])
 		preview = frappe.get_single("Work Calendar Settings").working_days_preview(2026)
 		self.assertEqual(preview[8]["after"], 22)  # 21 ngày T2-T6 + 1 ngày làm bù
+
+	# --- chốt kỳ đã khoá ------------------------------------------------------
+
+	def submit_sheet(self, month, department=None):
+		"""Bảng Công Tháng đã chốt, cố ý gắn một phòng ban KHÁC phòng ban của nhân viên mẫu."""
+		sheet = frappe.get_doc(
+			{
+				"doctype": "Monthly Attendance Sheet",
+				"company": self.company,
+				"department": department,
+				"month": str(month),
+				"year": 2026,
+				# `from_date`/`to_date` bình thường do validate suy ra từ month/year; ở đây bỏ qua
+				# validate (nó kéo theo cả việc dựng lại bảng công) nên phải đặt tay.
+				"from_date": f"2026-{month:02d}-01",
+				"to_date": f"2026-{month:02d}-31",
+			}
+		)
+		sheet.flags.ignore_validate = True
+		sheet.insert(ignore_permissions=True)
+		sheet.submit()
+		return sheet.name
+
+	def test_editing_a_locked_period_is_blocked_even_for_another_department(self):
+		"""Chốt cũ đi vòng qua MỘT nhân viên đại diện nên lọt khi bảng đã chốt thuộc phòng ban khác.
+
+		Lịch là chính sách toàn công ty -> câu hỏi đúng là "có kỳ nào đã chốt phủ ngày này không".
+		"""
+		department = frappe.db.get_value("Department", {"company": self.company}, "name")
+		self.submit_sheet(7, department=department)
+		with self.assertRaises(frappe.ValidationError):
+			self.set_calendar_days([(2026, "2026-07-25", "Làm bù", "Làm bù")])
+
+	def test_editing_an_open_period_is_allowed(self):
+		self.set_calendar_days([(2026, "2026-12-26", "Làm bù", "Làm bù")])
+		self.assertEqual(len(self.settings.get_make_up_days(2026)), 1)

@@ -16,6 +16,24 @@ from hrms.hr.utils import (
 
 
 class CompensatoryLeaveRequest(Document):
+	"""ĐANG BẤT KHẢ DỤNG tại Miyano — đọc trước khi mất công dò.
+
+	Doctype này (xin nghỉ bù cho ngày đã đi làm vào ngày nghỉ) hiện không lập được phiếu nào, vì
+	HAI điều kiện độc lập, không cái nào thoả:
+
+	1. `validate_attendance` đòi có Attendance `Present` đúng những ngày đó — nhưng auto-attendance
+	   không bao giờ tạo công cho ngày nghỉ (`ShiftType.should_mark_attendance`), nên trừ khi HR
+	   chấm tay thì không có bản ghi nào để thoả.
+	2. `validate_holidays` đòi MỌI ngày trong khoảng phải là dòng `Holiday`. Sau khi lịch tuần tách
+	   khỏi Holiday List (`hrms/hr/work_schedule.py`), thứ Bảy/Chủ nhật không còn là dòng Holiday —
+	   tức đúng những ngày mà người ta xin nghỉ bù thì lại trượt điều kiện này.
+
+	Thực trạng khớp: 0 phiếu trên site, quỹ `Nghỉ bù` đang được cấp bằng Leave Allocation tay.
+
+	Sửa cho nó chạy được = mở lại cả vòng "đi làm ngày nghỉ -> được nghỉ bù", và việc đó thuộc
+	`docs/spec/overtime-registration.md`. Quyết định 2026-08-30: HOÃN, không sửa nửa vời.
+	"""
+
 	def validate(self):
 		validate_active_employee(self.employee)
 		validate_dates(self, self.work_from_date, self.work_end_date)

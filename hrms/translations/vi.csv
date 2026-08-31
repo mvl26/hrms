@@ -890,3 +890,5 @@ Late Or Early Leave,Đi muộn/về sớm
 MVL Salary Register,Bảng lương MVL
 Confirmation Date,Ngày chính thức
 Scheduled Confirmation Date,Ngày dự kiến chính thức
+Include Non-Working Days,Gồm cả ngày nghỉ (cuối tuần + lễ)
+Mark Auto Attendance on Non-Working Days,Chấm công tự động cả ngày ngoài lịch
