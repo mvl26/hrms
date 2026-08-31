@@ -1,9 +1,9 @@
 # Spec: Hoàn thiện tích hợp lịch làm việc với các chức năng cũ
 
-> Status: **DRAFT for approval.** Chốt 2026-08-30 từ
+> Status: **ĐÃ BUILD (2026-08-30)** — cả 8 task xong, 442 test xanh, 6 phiếu lương thật 0 lệch.
+> Chốt 2026-08-30 từ
 > `docs/audit-work-schedule-integration-2026-08-30.md`. Nối tiếp
 > `docs/spec/work-schedule-and-holiday-separation.md` (đã build, Task 1–9 + 11).
-> **Không implement tới khi được duyệt.**
 
 ## Objective
 
@@ -176,15 +176,26 @@ hrms/hr/doctype/compensatory_leave_request/compensatory_leave_request.py  (sửa
 
 ## Success Criteria
 
-- [ ] Ngày ngoài lịch có bản ghi: hiện ký hiệu, không vào cột tổng; `reconcile_with_sheet` không
+- [x] Ngày ngoài lịch có bản ghi: hiện ký hiệu, không vào cột tổng; `reconcile_with_sheet` không
       chặn — có test ở cả hai trạng thái lịch.
-- [ ] 6 điểm ở §2 đọc lịch qua cửa mới; grep "một cửa" chỉ còn đúng danh sách ngoại lệ đã ghi.
-- [ ] `employees_working_on_a_holiday` trả lời được "ai đi làm cuối tuần".
-- [ ] Hai nhãn nói đúng nghĩa, có bản dịch.
-- [ ] Chốt kỳ đã khoá hỏi thẳng `Monthly Attendance Sheet`, có test cho ca khác phòng ban.
-- [ ] `work_calendar_fixture.py` dựng đủ 3 ca / 5 nhân viên / lịch 2027 có cả hai cặp nghỉ ghép–làm bù.
-- [ ] Ma trận tích hợp xanh; cổng bất biến lương xanh; 6 phiếu thật 0 lệch.
-- [ ] `Compensatory Leave Request` có docstring nói rõ vì sao bất khả dụng và nó thuộc spec nào.
+- [x] 6 điểm ở §2 đọc lịch qua cửa mới; grep "một cửa" chỉ còn đúng danh sách ngoại lệ đã ghi.
+- [x] `employees_working_on_a_holiday` trả lời được "ai đi làm cuối tuần".
+- [x] Hai nhãn nói đúng nghĩa, có bản dịch.
+- [x] Chốt kỳ đã khoá hỏi thẳng `Monthly Attendance Sheet`, có test cho ca khác phòng ban.
+- [x] `work_calendar_fixture.py` dựng đủ 3 ca / 5 nhân viên / lịch 2027 có cả hai cặp nghỉ ghép–làm bù.
+- [x] Ma trận tích hợp xanh; cổng bất biến lương xanh; 6 phiếu thật 0 lệch.
+- [x] `Compensatory Leave Request` có docstring nói rõ vì sao bất khả dụng và nó thuộc spec nào.
+
+## Phát hiện thêm khi build (2026-08-30)
+
+- **Điểm thứ 7 bỏ sót ở lần rà:** `leave_application.add_holidays` — calendar của **Đơn nghỉ** cũng
+  đọc thẳng dòng `Holiday`, nên sau di trú người xin nghỉ không thấy cuối tuần trên lịch và dễ chọn
+  nhầm khoảng nghỉ. Đã sửa cùng cách với calendar của Attendance.
+- **Hai chỗ code chết** lộ ra khi kiểm tiêu chí "một cửa": import
+  `get_holiday_list_for_employee` ở `hrms/api/__init__.py`, và hàm
+  `hrms/utils/holiday_list.get_holiday_dates_between` không còn ai gọi. Đã gỡ — để lại thì lời hứa
+  "mọi câu hỏi về lịch đi qua một cửa" thành sai.
+- **Bộ dựng cảnh bắt được một khẳng định sai của spec trước** ngay lần chạy đầu — xem §6.
 
 ## Out of scope
 

@@ -1370,23 +1370,27 @@ def add_block_dates(events, start, end, employee, company):
 
 
 def add_holidays(events, start, end, employee, company):
-	applicable_holiday_list = get_holiday_list_for_employee(employee, company)
-	if not applicable_holiday_list:
-		return
+	"""Phủ ngày KHÔNG phải đi làm lên calendar của Đơn nghỉ — nghỉ tuần CỘNG ngày lễ.
 
-	for holiday in frappe.db.sql(
-		"""select name, holiday_date, description
-		from `tabHoliday` where parent=%s and holiday_date between %s and %s""",
-		(applicable_holiday_list, start, end),
-		as_dict=True,
-	):
+	Đọc dòng `Holiday` là chỉ còn ngày lễ sau khi lịch tuần tách khỏi Holiday List, và người xin
+	nghỉ sẽ không thấy cuối tuần trên lịch — dễ chọn nhầm khoảng nghỉ. Ngày lễ vẫn được gọi tên
+	riêng vì nó là ngày có lương.
+	"""
+	from hrms.hr.work_schedule import non_working_days_between, public_holidays_between
+
+	off_days = non_working_days_between(employee, start, end)
+	if not off_days:
+		return
+	holidays = public_holidays_between(employee, start, end)
+
+	for day in sorted(off_days):
 		events.append(
 			{
 				"doctype": "Holiday",
-				"from_date": holiday.holiday_date,
-				"to_date": holiday.holiday_date,
-				"title": _("Holiday") + ": " + cstr(holiday.description),
-				"name": holiday.name,
+				"from_date": day,
+				"to_date": day,
+				"title": _("Holiday") if day in holidays else _("Ngày nghỉ"),
+				"name": f"work-schedule::{day}",
 				"allDay": 1,
 			}
 		)

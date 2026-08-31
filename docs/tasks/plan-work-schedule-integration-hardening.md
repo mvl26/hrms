@@ -13,6 +13,18 @@ hiển thị ký hiệu, không vào cột tổng*.
 **Tech Stack:** Frappe/ERPNext HRMS v15, Python, `hrms/translations/vi.csv`, rollback harness.
 
 **Spec:** `docs/spec/work-schedule-integration-hardening.md`
+
+> **STATUS 2026-08-30 — XONG cả 8 task.** 442 test xanh, không rò rỉ dữ liệu, 6 phiếu lương thật
+> 0 lệch. Lịch 2026 trên site vẫn nguyên 104 dòng nghỉ cuối tuần (patch di trú vẫn chờ ký duyệt).
+>
+> | Task | Commit | Ghi chú |
+> |---|---|---|
+> | 1 | `5dc69b8` | bộ dựng cảnh 2027; bắt được khẳng định sai của spec trước |
+> | 2 | `26fada0` | ngày ngoài lịch: hiện ký hiệu, không cộng tổng |
+> | 3+4 | `2092ee1` | PWA, calendar Desk, Mark Attendance, upload |
+> | 5 | `bcd2c8a` | báo cáo đi làm ngoài lịch + onboarding |
+> | 6+7 | `026cd8c` | hai nhãn, chốt kỳ đã khoá, docstring nghỉ bù |
+> | 8 | — | nghiệm thu + calendar Đơn nghỉ (điểm thứ 7 bỏ sót) + dọn 2 chỗ code chết |
 (rà soát nguồn: `docs/audit-work-schedule-integration-2026-08-30.md`)
 
 ## Global Constraints

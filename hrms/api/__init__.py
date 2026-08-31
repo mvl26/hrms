@@ -5,8 +5,6 @@ from frappe.model.workflow import get_workflow_name
 from frappe.query_builder import Order
 from frappe.utils import add_days, date_diff, getdate, strip_html
 
-from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
-
 SUPPORTED_FIELD_TYPES = [
 	"Link",
 	"Select",
