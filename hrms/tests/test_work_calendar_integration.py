@@ -119,3 +119,52 @@ class TestMarkAttendanceSuggestions(WorkCalendarIntegrationBase):
 		got = get_holidays_for_employees([office, six_day], MONTH_START, MONTH_END)
 		self.assertIn(getdate(SATURDAY), got[office])
 		self.assertNotIn(getdate(SATURDAY), got[six_day], "ca 6 ngày vẫn đi làm thứ Bảy")
+
+
+class TestWorkingOnOffDaysReport(WorkCalendarIntegrationBase):
+	"""Báo cáo phải trả lời được câu hỏi chính của nó: ai đang đi làm cuối tuần."""
+
+	def mark(self, day, status="Present"):
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.employee,
+				"attendance_date": getdate(day),
+				"company": self.scenario.company,
+				"status": status,
+			}
+		)
+		att.flags.ignore_validate = True
+		att.insert(ignore_permissions=True)
+		att.submit()
+
+	def rows(self):
+		from hrms.hr.report.employees_working_on_a_holiday.employees_working_on_a_holiday import execute
+
+		filters = frappe._dict(
+			company=self.scenario.company, from_date=MONTH_START, to_date=MONTH_END, department=None
+		)
+		_columns, data = execute(filters)
+		return [r for r in data if r[0] == self.employee]
+
+	def test_finds_someone_working_on_a_saturday(self):
+		"""Nối Attendance với dòng Holiday là chỉ còn thấy người đi làm NGÀY LỄ — mất đúng công
+		dụng chính của báo cáo sau khi lịch tuần tách ra."""
+		self.mark(SATURDAY)
+		days = [getdate(r[2]) for r in self.rows()]
+		self.assertIn(getdate(SATURDAY), days)
+
+	def test_labels_the_kind_of_day(self):
+		self.mark(SATURDAY)
+		self.mark(WEDNESDAY_HOLIDAY)
+		kinds = {getdate(r[2]): r[4] for r in self.rows()}
+		self.assertNotEqual(kinds[getdate(SATURDAY)], kinds[getdate(WEDNESDAY_HOLIDAY)])
+
+	def test_ignores_a_normal_working_day(self):
+		self.mark(TUESDAY)
+		self.assertNotIn(getdate(TUESDAY), [getdate(r[2]) for r in self.rows()])
+
+	def test_ignores_absent_and_on_leave(self):
+		"""Không đi làm thì không phải 'đi làm ngày nghỉ'."""
+		self.mark(SATURDAY, status="Absent")
+		self.assertEqual(self.rows(), [])
