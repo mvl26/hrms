@@ -479,6 +479,21 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 			if att:
 				display, morning, afternoon = _resolve_day(att, code_map)
 				day_syms[day] = display
+				if emp_kinds.get(d) == "rest":
+					# Đi làm NGOÀI lịch tuần: ghi nhận ký hiệu, KHÔNG cộng vào cột tổng nào.
+					#
+					# Chưa có chính sách trả công ngày nghỉ (OT chốt "hiện không tính tăng ca"), nên
+					# cộng vào Tổng công là hứa trả tiền cho một ngày mà phiếu lương không trả:
+					# `set_working_days` đếm mẫu số theo lịch tuần nên `payment_days` không nhúc
+					# nhích, và `sheet_gate.reconcile_with_sheet` sẽ chặn SẠCH mọi phiếu của tháng đó.
+					#
+					# Không cộng thì bảng công nói đúng thực tế hôm nay: ngày đó CÓ đi làm và CHƯA
+					# được tính công. Khi OT ra đời chính nó sẽ trả, dựa trên
+					# `Employee Checkin.custom_outside_schedule` đã tích sẵn.
+					#
+					# Chỉ áp cho ngày NGOÀI lịch tuần. Ngày lễ và ngày `Làm bù` đều nằm TRONG lịch
+					# tuần nên vẫn cộng bình thường.
+					continue
 				for half in (morning, afternoon):
 					c = code_map.get(half)
 					if not c:

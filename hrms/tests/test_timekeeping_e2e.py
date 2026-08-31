@@ -23,42 +23,7 @@ from frappe.utils import get_time, getdate
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms.tests.vn_test_utils import default_company, ensure_short_hours_code, test_employee
-
-ALL_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-
-def work_every_day(employee: str, shift: str = "_Test E2E Ca 7 Ngay") -> str:
-	"""Cho nhân viên một ca làm CẢ TUẦN, để test độc lập hẳn với lịch nghỉ.
-
-	Các test ở đây kiểm "mã công nào trừ lương" và "giờ vào/ra ra mã gì" — lịch tuần chỉ là bối
-	cảnh. Từ khi lịch tuần tách khỏi Holiday List, nhân viên không phân ca rơi về lịch mặc định của
-	công ty (T2-T6), nên ngày test rơi trúng T7/CN sẽ bị bỏ qua và test đỏ vì một lý do chẳng liên
-	quan gì tới thứ nó muốn kiểm. Ca 7 ngày gỡ hẳn biến đó ra khỏi phép đo.
-	"""
-	if not frappe.db.exists("Shift Type", shift):
-		frappe.get_doc(
-			{"doctype": "Shift Type", "__newname": shift, "start_time": "8:0:0", "end_time": "17:0:0"}
-		).insert(ignore_permissions=True)
-	existing = frappe.get_all(
-		"Assignment Rule Day",
-		filters={"parent": shift, "parenttype": "Shift Type", "parentfield": "custom_working_days"},
-		pluck="day",
-	)
-	for idx, day in enumerate(ALL_WEEK, start=1):
-		if day not in existing:
-			frappe.get_doc(
-				{
-					"doctype": "Assignment Rule Day",
-					"parent": shift,
-					"parenttype": "Shift Type",
-					"parentfield": "custom_working_days",
-					"day": day,
-					"idx": idx,
-				}
-			).insert(ignore_permissions=True)
-	frappe.db.set_value("Employee", employee, "default_shift", shift)
-	frappe.clear_cache(doctype="Employee")
-	return shift
+from hrms.tests.work_calendar_fixture import work_every_day
 
 
 def mk_attendance(employee, date, submit=True, **codes):
@@ -196,6 +161,7 @@ class TestBangCongMonthEndToEnd(ShortHoursCodeMixin, FrappeTestCase):
 		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
 
 		worker = make_employee("e2e_bcct_worker@codes.com", company=default_company())
+		work_every_day(worker)  # test đo TỔNG theo mã công, lịch chỉ là bối cảnh
 		plan = {
 			1: "X",
 			2: "P",

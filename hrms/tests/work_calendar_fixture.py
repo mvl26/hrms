@@ -192,3 +192,16 @@ def build_scenario(year: int = 2027) -> frappe._dict:
 		bridge_same_month=BRIDGE_SAME_MONTH,
 		bridge_cross_month=BRIDGE_CROSS_MONTH,
 	)
+
+
+def work_every_day(employee: str, shift: str = "_Test WC Ca Bay Ngay") -> str:
+	"""Cho nhân viên một ca làm CẢ TUẦN, để phép đo độc lập hẳn với lịch nghỉ.
+
+	Dùng cho những bộ test đo *mã công ra tổng nào* hoặc *giờ vào/ra ra mã gì* — ở đó lịch tuần
+	chỉ là bối cảnh. Không có nó thì ngày test rơi trúng T7/CN sẽ bị loại khỏi cột tổng và test đỏ
+	vì một lý do chẳng liên quan gì tới thứ nó muốn kiểm.
+	"""
+	ensure_shift(shift, ALL_WEEK)
+	frappe.db.set_value("Employee", employee, "default_shift", shift, update_modified=False)
+	frappe.clear_cache(doctype="Employee")
+	return shift

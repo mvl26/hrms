@@ -8,6 +8,7 @@ from erpnext.setup.doctype.employee.test_employee import make_employee
 from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import execute, get_day_kinds
 from hrms.tests.isolation import PerTestRollback
 from hrms.tests.vn_test_utils import default_company, test_employee
+from hrms.tests.work_calendar_fixture import work_every_day
 
 
 class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
@@ -16,6 +17,11 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 		super().setUpClass()
 		cls.emp = test_employee()
 		cls.year, cls.month = 2099, 3  # far future to avoid colliding with any real/test data
+
+	def setUp(self):
+		# Ca 7 ngày: lớp này đo MÃ CÔNG ra tổng nào, không đo lịch nghỉ. Thiếu nó thì các ngày
+		# test rơi vào T7/CN bị loại khỏi cột tổng và test đỏ vì lý do không liên quan.
+		work_every_day(self.emp)
 
 	def _mk(self, day, **codes):
 		att = frappe.get_doc(
