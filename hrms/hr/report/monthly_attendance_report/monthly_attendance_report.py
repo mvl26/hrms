@@ -58,7 +58,7 @@ REPORT_CATEGORIES = [
 	("Phép", "Phép năm"),
 	("Ốm", "Ốm / chăm con ốm"),
 	("Thai sản", "Thai sản"),
-	("Tai nạn LĐ", "Tai nạn lao động"),
+	("Tai nạn LĐ", "TNLĐ"),  # nhãn ngắn: cột hẹp, "Tai nạn lao động" phải xuống 2-3 dòng
 	(BUCKET_MARRIAGE, "Nghỉ kết hôn"),
 	("Việc riêng", "Nghỉ riêng"),
 	("Không lương", "Không lương"),

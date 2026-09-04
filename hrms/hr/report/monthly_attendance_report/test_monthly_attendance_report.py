@@ -103,7 +103,7 @@ class TestBangChamCongThang(PerTestRollback, FrappeTestCase):
 				"Phép năm",
 				"Ốm / chăm con ốm",
 				"Thai sản",
-				"Tai nạn lao động",
+				"TNLĐ",
 				# KH tách khỏi "Nghỉ riêng" 2026-08-04 (HR chốt); R1/R2 vẫn ở "Nghỉ riêng"
 				"Nghỉ kết hôn",
 				"Nghỉ riêng",

@@ -114,7 +114,7 @@
  {
   "category": "Tai nạn LĐ",
   "code": "T",
-  "code_name": "Nghỉ tai nạn lao động",
+  "code_name": "TNLĐ",
   "color": null,
   "docstatus": 0,
   "doctype": "Attendance Code",
