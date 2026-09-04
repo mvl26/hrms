@@ -24,7 +24,7 @@ from frappe.utils import cint, getdate, nowdate
 MIYANO_LETTERHEAD = {
 	"name": "CÔNG TY TNHH MIYANO VIỆT NAM",
 	"tax_id": "0109529507",
-	"address": "số 20, Khu C17, ngõ 264/63, đường Ngọc Thụy, Hà Nội, Việt Nam",
+	"address": ("số 20, Khu C17, ngõ 264/63, đường Ngọc Thụy, Phường Bồ Đề, Thành phố Hà Nội, Việt Nam"),
 	# địa danh mở đầu dòng ngày tháng của khối trình ký ("Hà Nội, ngày 02 tháng 7 năm 2026")
 	"city": "Hà Nội",
 }
