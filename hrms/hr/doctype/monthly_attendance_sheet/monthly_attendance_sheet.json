@@ -95,7 +95,7 @@
    "label": "Chi tiết chấm công"
   },
   {
-   "description": "<b>Tổng công</b> = số ngày công ty trả lương = Công đi làm + Phép + Việc riêng + Nghỉ bù + Tai nạn LĐ. Ốm / chăm con ốm / thai sản do <b>BHXH</b> chi trả, nghỉ không lương và vắng không được trả — cả ba nhóm này đứng ngoài Tổng công và có cột riêng. Nghỉ lễ đếm riêng.",
+   "description": "<b>Tổng công</b> = số ngày công ty trả lương = Công đi làm + Phép + Việc riêng + Nghỉ bù + TNLĐ. Ốm / chăm con ốm / thai sản do <b>BHXH</b> chi trả, nghỉ không lương và vắng không được trả — cả ba nhóm này đứng ngoài Tổng công và có cột riêng. Nghỉ lễ đếm riêng.",
    "fieldname": "employees",
    "fieldtype": "Table",
    "label": "Nhân viên",

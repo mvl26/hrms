@@ -322,7 +322,7 @@ class TestAttendanceColorState(PerTestRollback, FrappeTestCase):
 			"Ô": c("Ốm", 0.0),
 			"Cô": c("Ốm", 0.0),
 			"TS": c("Thai sản", 0.0),
-			"T": c("Tai nạn LĐ", 0.0),
+			"T": c("TNLĐ", 0.0),
 			"NB": c("Nghỉ bù", 0.0),
 			"K": c("Không lương", 0.0),
 			"V": c("Vắng", 0.0),

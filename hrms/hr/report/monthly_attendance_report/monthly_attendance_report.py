@@ -58,7 +58,7 @@ REPORT_CATEGORIES = [
 	("Phép", "Phép năm"),
 	("Ốm", "Ốm / chăm con ốm"),
 	("Thai sản", "Thai sản"),
-	("Tai nạn LĐ", "TNLĐ"),  # nhãn ngắn: cột hẹp, "Tai nạn lao động" phải xuống 2-3 dòng
+	("TNLĐ", "TNLĐ"),  # nhãn ngắn: cột hẹp, "Tai nạn lao động" phải xuống 2-3 dòng
 	(BUCKET_MARRIAGE, "Nghỉ kết hôn"),
 	("Việc riêng", "Nghỉ riêng"),
 	("Không lương", "Không lương"),
@@ -80,7 +80,7 @@ CATEGORY_STATE = {
 	"Việc riêng": "leave",  # nghỉ hiếu hỉ có lương — giữ vàng riêng, KHÔNG theo màu phép năm
 	"Ốm": "sick",
 	"Thai sản": "sick",
-	"Tai nạn LĐ": "sick",
+	"TNLĐ": "sick",
 	"Nghỉ bù": "comp",
 	"Không lương": "unpaid",
 	"Vắng": "absent",

@@ -39,7 +39,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Category",
-   "options": "C\u00f4ng\nPh\u00e9p\n\u1ed0m\nThai s\u1ea3n\nTai n\u1ea1n L\u0110\nNgh\u1ec9 b\u00f9\nVi\u1ec7c ri\u00eang\nKh\u00f4ng l\u01b0\u01a1ng\nV\u1eafng",
+   "options": "C\u00f4ng\nPh\u00e9p\n\u1ed0m\nThai s\u1ea3n\nTNL\u0110\nNgh\u1ec9 b\u00f9\nVi\u1ec7c ri\u00eang\nKh\u00f4ng l\u01b0\u01a1ng\nV\u1eafng",
    "reqd": 1
   },
   {

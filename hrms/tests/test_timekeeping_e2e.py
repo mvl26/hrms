@@ -191,7 +191,7 @@ class TestBangCongMonthEndToEnd(ShortHoursCodeMixin, FrappeTestCase):
 		self.assertEqual(t["Việc riêng"], 1.0, "R2 (tang); KH nay có cột riêng")
 		self.assertEqual(t["Thai sản"], 1.0)
 		self.assertEqual(t["Nghỉ bù"], 1.0)
-		self.assertEqual(t["Tai nạn LĐ"], 1.0)
+		self.assertEqual(t["TNLĐ"], 1.0)
 		# cell rendering
 		self.assertEqual(row["days"][1], "X")
 		self.assertEqual(row["days"][8], "1/2P")
