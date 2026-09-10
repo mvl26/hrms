@@ -10,6 +10,7 @@ from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms.hr.doctype.attendance.attendance import mark_attendance
 from hrms.hr.working_hours import (
+	avg_office_hours,
 	compute_net_hours,
 	format_hours_hm,
 	get_active_employee_count,
@@ -22,6 +23,7 @@ from hrms.hr.working_hours import (
 	get_total_working_hours_card,
 	get_under_target_count_card,
 	get_week_buckets,
+	office_hours_map,
 	prepare_filters,
 )
 from hrms.tests.isolation import PerTestRollback
@@ -242,3 +244,59 @@ class TestFormatHoursHm(PerTestRollback, FrappeTestCase):
 	def test_no_hours_is_blank(self):
 		self.assertEqual(format_hours_hm(0.0), "")
 		self.assertEqual(format_hours_hm(None), "")
+
+
+class TestOfficeDaysCountHalfDayAsHalf(PerTestRollback, FrappeTestCase):
+	"""Mẫu số của "TB giờ/ngày": ngày đi làm NỬA BUỔI chỉ được tính 0,5 ngày.
+
+	Trước 2026-09-10 mẫu số cộng 1 cho mọi ngày, kể cả `Half Day` — người nghỉ nửa buổi làm 4 giờ
+	bị chia cho cả 1 ngày nên TB tụt xuống ~4h/ngày, trông như đi làm ít giờ trong khi họ làm đủ
+	giờ của nửa ngày đó. Đây là chỉ số HR đọc để soát, không được bóp méo như vậy."""
+
+	def setUp(self):
+		# helper của repo, không phải `_Test Company` — site miyano không có company đó
+		from hrms.tests.vn_test_utils import test_employee
+
+		self.employee = test_employee()
+		self.company = frappe.db.get_value("Employee", self.employee, "company")
+
+	def day(self, date, status, in_h, out_h):
+		# dựng thẳng document thay vì `mark_attendance` — hàm đó commit giữa chừng, huỷ savepoint
+		# của harness rollback (bẫy đã ghi trong CLAUDE.md).
+		doc = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.employee,
+				"attendance_date": getdate(date),
+				"company": self.company,
+				"status": status,
+				"in_time": f"{date} {in_h}:00",
+				"out_time": f"{date} {out_h}:00",
+			}
+		).insert(ignore_permissions=True)
+		doc.submit()
+		return doc.name
+
+	def totals(self):
+		return office_hours_map([self.employee], "2026-03-01", "2026-03-31").get(self.employee)
+
+	def test_a_half_day_counts_as_half_a_day(self):
+		self.day("2026-03-02", "Half Day", "08:00", "12:00")  # 4 giờ, không giao giờ nghỉ trưa
+		t = self.totals()
+		self.assertEqual(t["days"], 0.5, "nửa buổi phải là 0,5 ngày, không phải 1")
+		self.assertEqual(avg_office_hours(t), 8.0, "4 giờ / 0,5 ngày = 8 giờ mỗi ngày công")
+
+	def test_a_full_day_still_counts_as_one(self):
+		self.day("2026-03-03", "Present", "08:00", "17:30")  # 9,5 - 1,5 trưa = 8 giờ
+		t = self.totals()
+		self.assertEqual(t["days"], 1)
+		self.assertEqual(avg_office_hours(t), 8.0)
+
+	def test_mixed_month_divides_by_the_right_denominator(self):
+		"""Ca thật gặp trên site: 1 ngày đủ + 1 ngày nửa buổi."""
+		self.day("2026-03-04", "Present", "08:00", "17:30")  # 8 giờ
+		self.day("2026-03-05", "Half Day", "08:00", "12:00")  # 4 giờ
+		t = self.totals()
+		self.assertEqual(t["days"], 1.5)
+		self.assertEqual(t["hours"], 12.0)
+		self.assertEqual(avg_office_hours(t), 8.0, "12 giờ / 1,5 ngày — không phải 12/2 = 6")

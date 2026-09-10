@@ -24,6 +24,7 @@ from hrms.hr.working_hours import (
 	credited_hours,
 	get_lunch_window_map,
 	get_split_shift_config_map,
+	office_day_fraction,
 	presence_hours,
 )
 
@@ -170,9 +171,10 @@ def get_summary_rows(filters, employees=None, daily_rows=None):
 		# chỉ ngày thực sự có giờ mới vào tổng và vào mẫu số TB — ngày nghỉ/vắng không kéo TB xuống
 		if row["hours"] <= 0:
 			continue
-		total = totals.setdefault(row["employee"], {"hours": 0.0, "days": 0, "in": [], "out": []})
+		total = totals.setdefault(row["employee"], {"hours": 0.0, "days": 0.0, "in": [], "out": []})
 		total["hours"] += row["hours"]
-		total["days"] += 1
+		# nửa buổi chỉ là 0,5 ngày — cùng luật với cột "TB giờ/ngày" của bảng chấm công
+		total["days"] += office_day_fraction(row["status"])
 		if row["in_minutes"] is not None:
 			total["in"].append(row["in_minutes"])
 		if row["out_minutes"] is not None:
@@ -201,7 +203,7 @@ def get_summary_rows(filters, employees=None, daily_rows=None):
 
 def get_report_summary(daily_rows):
 	total_hours = round(sum(row["hours"] for row in daily_rows), 2)
-	days = sum(1 for row in daily_rows if row["hours"] > 0)
+	days = sum(office_day_fraction(row["status"]) for row in daily_rows if row["hours"] > 0)
 	employees = len({row["employee"] for row in daily_rows if row["hours"] > 0})
 
 	return [
@@ -283,7 +285,10 @@ def get_summary_columns():
 		{
 			"label": _("Days At Office"),
 			"fieldname": "days_counted",
-			"fieldtype": "Int",
+			# Float chứ không Int: ngày nửa buổi tính 0,5 nên tổng có thể lẻ (12,5). Để Int thì
+			# datatable cắt cụt thành 12, lệch hẳn một nửa ngày so với mẫu số đang chia.
+			"fieldtype": "Float",
+			"precision": 1,
 			"width": 130,
 		},
 		{
