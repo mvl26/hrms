@@ -96,7 +96,7 @@ class TestLunchFlagForAttendance(PerTestRollback, FrappeTestCase):
 
 		self._checkin("2098-12-02 08:00:00")
 		self._checkin("2098-12-02 17:30:00")
-		self.assertTrue(lunch_flag_for_attendance(self.emp, "2098-12-02", "Present", None))
+		self.assertTrue(lunch_flag_for_attendance(self.emp, "2098-12-02", "Present", None, "X"))
 
 	def test_no_checkins_now_counts_for_a_full_work_day(self):
 		"""ĐẢO quyết định §2 của spec cũ (2026-08-27).
@@ -106,7 +106,19 @@ class TestLunchFlagForAttendance(PerTestRollback, FrappeTestCase):
 		xác nhận là ngày công đủ. Nay ngày công đủ không đủ dấu chấm vẫn được tính ăn."""
 		from hrms.vn_payroll.lunch import lunch_flag_for_attendance
 
-		self.assertTrue(lunch_flag_for_attendance(self.emp, "2098-12-03", "Present", None))
+		self.assertTrue(lunch_flag_for_attendance(self.emp, "2098-12-03", "Present", None, "X"))
+
+	def test_a_day_without_an_attendance_code_earns_no_lunch(self):
+		"""Không mã thì không ăn trưa — hệ quả cố ý của danh sách CHO PHÉP (2026-09-11).
+
+		Thực tế không bao giờ xảy ra: cầu nối mã công tự gán `X`/`1/2X` khi HR bỏ trống (đã soát
+		dữ liệu thật: 0 ngày công nào thiếu mã). Giữ test này để nếu sau có đường ghi nào lách được
+		cầu nối thì hỏng về phía AN TOÀN chứ không phát nhầm suất ăn."""
+		from hrms.vn_payroll.lunch import lunch_flag_for_attendance
+
+		self._checkin("2098-12-08 08:00:00")
+		self._checkin("2098-12-08 17:30:00")
+		self.assertFalse(lunch_flag_for_attendance(self.emp, "2098-12-08", "Present", None, None))
 
 	def test_no_checkins_half_day_still_does_not_count(self):
 		"""Nửa ngày thì giữ nguyên: không có dấu thì không chứng minh được là ở lại qua trưa."""
@@ -186,7 +198,11 @@ class TestLunchPayrollInvariance(PerTestRollback, FrappeTestCase):
 
 		old = count_lunch_days(self.emp, "2099-01-01", "2099-01-31")
 		summed = sum(
-			1 for a in atts if lunch_flag_for_attendance(self.emp, a.attendance_date, a.status, a.shift)
+			1
+			for a in atts
+			if lunch_flag_for_attendance(
+				self.emp, a.attendance_date, a.status, a.shift, a.custom_attendance_code
+			)
 		)
 		self.assertEqual(summed, old, "Σ cờ per-Attendance phải bằng count_lunch_days cũ")
 		self.assertEqual(old, 2)  # đúng 2 ngày ăn
@@ -197,7 +213,9 @@ class TestLunchPayrollInvariance(PerTestRollback, FrappeTestCase):
 
 		a = self._att("2099-01-20", "Present")  # chấm tay, không một dấu chấm nào
 		self.assertTrue(
-			lunch_flag_for_attendance(self.emp, a.attendance_date, a.status, a.shift),
+			lunch_flag_for_attendance(
+				self.emp, a.attendance_date, a.status, a.shift, a.custom_attendance_code
+			),
 			"luật mới: ngày công đủ chấm tay vẫn được tính ăn",
 		)
 		self.assertEqual(

@@ -20,10 +20,13 @@ LUNCH_EARLIEST = 10 * 60  # 10:00
 LUNCH_LATEST = 16 * 60  # 16:00
 LUNCH_ELIGIBLE_STATUS = ("Present", "Half Day")
 
-# Mã công KHÔNG bao giờ tính ăn tại công ty: đi công tác ăn ngoài (và đã có Expense Claim riêng),
-# làm tại nhà thì ăn ở nhà. Loại theo MÃ chứ không theo status vì cả hai mã này đều có thể mang
-# status Present (công tác nội thành chấm Present, WFH chấm Work From Home tuỳ cấu hình).
-NO_LUNCH_CODES = ("CT", "W")
+# CHỈ hai mã này được tính ăn trưa tại công ty (user chốt 2026-09-11). Đây là danh sách CHO PHÉP,
+# không phải danh sách loại trừ: đi công tác thì dù có chấm công kiểu gì cũng không ăn tại công ty,
+# và một danh sách loại trừ sẽ để lọt mọi mã mới HR tạo về sau.
+#
+# `X` = đi làm đủ công, `1/2X` = làm nửa ngày. Chấm công tạo tay cũng rơi vào đây: cầu nối mã công
+# tự gán `X` cho status Present và `1/2X` cho Half Day khi HR không điền mã.
+LUNCH_CODES = ("X", "1/2X")
 
 # Ô "Ăn trưa" trên phiếu chấm công: người chọn thì máy không đè lại nữa (spec §5.3).
 LUNCH_OVERRIDE_AUTO = "Tự động"
@@ -108,7 +111,7 @@ def effective_lunch_flag(
 
 	if status not in LUNCH_ELIGIBLE_STATUS:
 		return 0
-	if (code or "") in NO_LUNCH_CODES:
+	if (code or "") not in LUNCH_CODES:
 		return 0
 
 	punches = list(day_datetimes or [])

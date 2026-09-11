@@ -152,6 +152,21 @@ class TestEffectiveLunchFlag(PerTestRollback, FrappeTestCase):
 	def test_leave_day_does_not_count(self):
 		self.assertEqual(self.flag(status="On Leave", code="P", punches=("08:00", "17:30")), 0)
 
+	def test_only_x_and_half_x_earn_lunch(self):
+		"""Danh sách CHO PHÉP, không phải loại trừ (user chốt 2026-09-11).
+
+		Đi công tác thì dù chấm công kiểu gì cũng không ăn tại công ty. Dùng danh sách loại trừ thì
+		mọi mã mới HR tạo về sau đều mặc nhiên được ăn trưa — đúng thứ phải tránh."""
+		covering = ("08:00", "17:30")
+		self.assertEqual(self.flag(code="X", punches=covering), 1)
+		self.assertEqual(self.flag(status="Half Day", code="1/2X", punches=covering), 1)
+		for code in ("CT", "W", "NB", "R1", "MA-MOI-NAO-DO", "", None):
+			self.assertEqual(self.flag(code=code, punches=covering), 0, f"mã {code!r} không được ăn trưa")
+
+	def test_half_day_leave_code_earns_no_lunch(self):
+		"""1/2P (nghỉ phép nửa ngày) KHÔNG được ăn trưa — hệ quả trực tiếp của danh sách cho phép."""
+		self.assertEqual(self.flag(status="Half Day", code="1/2P", punches=("08:00", "17:30")), 0)
+
 	# --- override: quyết định của người, máy không đè ---
 	def test_override_yes_wins_over_every_rule(self):
 		self.assertEqual(self.flag(status="On Leave", code="P", punches=(), override="Có"), 1)
