@@ -88,6 +88,32 @@ def is_lunch_day(status: str | None, shift: str | None, day_datetimes) -> bool:
 	return checkins_cover_lunch(day_datetimes, shift_lunch_window(shift))
 
 
+def log_type_of(log_types) -> str | None:
+	"""`log_type` của dấu chấm duy nhất trong ngày; None nếu không có/không rõ."""
+	if not log_types:
+		return None
+	first = log_types[0]
+	return first if first in ("IN", "OUT") else None
+
+
+def lone_punch_covers_lunch(punch, log_type: str | None, lunch_start: int, lunch_end: int) -> bool:
+	"""Một dấu chấm duy nhất có đủ nói rằng người đó ở công ty qua giờ trưa không.
+
+	Dấu lẻ chỉ cho MỘT đầu mốc; đầu kia giả định theo hướng có lợi (người ta đi làm cả ngày, chỉ
+	quên bấm một đầu). Hai đầu suy NGƯỢC CHIỀU nhau:
+
+	- ``IN``  — biết lúc đến, không biết lúc về ⇒ đến trước giờ trưa thì coi như ở lại ăn.
+	- ``OUT`` — biết lúc về, không biết lúc đến ⇒ về từ lúc hết giờ trưa trở đi thì đã ở đó qua trưa.
+
+	Suy theo giờ mà bỏ qua `log_type` là sai hẳn với dấu RA: một dấu `OUT` lúc 17:43 bị đọc thành
+	"chiều mới tới" trong khi thực ra là "làm cả ngày, quên chấm vào" (gặp thật: `hieu chu` 24/06,
+	30/06). Không có `log_type` thì lùi về suy đoán cũ theo giờ — dấu lẻ đa phần là dấu vào."""
+	minutes = _minutes(punch)
+	if log_type == "OUT":
+		return minutes >= lunch_end
+	return minutes < lunch_start
+
+
 def effective_lunch_flag(
 	status: str | None,
 	code: str | None,
@@ -96,6 +122,7 @@ def effective_lunch_flag(
 	override: str | None = None,
 	auto_filled: bool = False,
 	auto_lunch_when_exempt: bool = False,
+	log_types: list | None = None,
 ) -> int:
 	"""Cờ ăn trưa cuối cùng của MỘT ngày — nguồn luật duy nhất cho cả ba đường ghi (spec §5.4).
 
@@ -132,22 +159,25 @@ def effective_lunch_flag(
 		return 0  # nửa ngày: không đủ bằng chứng đã ở lại qua trưa
 	if not punches:
 		return 1  # chấm tay / sửa qua soát công: đã công nhận ngày công đủ thì mặc định có ăn
-	# Đúng một dấu: chỉ biết người đó CÓ MẶT lúc đó. Có mặt trước giờ nghỉ trưa → coi như ở lại ăn
-	# (quên chấm ra); dấu duy nhất từ giờ trưa trở đi → đến muộn, không ăn.
-	return 1 if _minutes(min(punches)) < lunch_start else 0
+	# Đúng một dấu: chỉ biết MỘT đầu mốc, đầu kia không có. `log_type` nói rõ đó là đầu nào, và
+	# hai đầu suy ngược chiều nhau — suy theo giờ thôi là sai hẳn với dấu RA (xem `lone_punch_covers_lunch`).
+	return 1 if lone_punch_covers_lunch(min(punches), log_type_of(log_types), lunch_start, lunch_end) else 0
+
+
+def day_punch_rows(employee: str, attendance_date) -> list:
+	"""Dấu chấm công của NV trong ngày, kèm `log_type`, sắp theo thời gian."""
+	day = getdate(attendance_date)
+	return frappe.get_all(
+		"Employee Checkin",
+		filters={"employee": employee, "time": ["between", [f"{day} 00:00:00", f"{day} 23:59:59"]]},
+		fields=["time", "log_type"],
+		order_by="time",
+	)
 
 
 def day_punches(employee: str, attendance_date) -> list:
 	"""Mọi dấu chấm công của NV trong đúng ngày đó, dạng datetime."""
-	day = getdate(attendance_date)
-	return [
-		get_datetime(c.time)
-		for c in frappe.get_all(
-			"Employee Checkin",
-			filters={"employee": employee, "time": ["between", [f"{day} 00:00:00", f"{day} 23:59:59"]]},
-			fields=["time"],
-		)
-	]
+	return [get_datetime(r.time) for r in day_punch_rows(employee, attendance_date)]
 
 
 def employee_auto_lunch_when_exempt(employee: str) -> bool:
@@ -174,15 +204,17 @@ def lunch_flag_for_attendance(
 		return override == LUNCH_OVERRIDE_YES  # khỏi truy vấn checkin: người đã quyết
 	if status not in LUNCH_ELIGIBLE_STATUS:
 		return False
+	_rows = day_punch_rows(employee, attendance_date)
 	return bool(
 		effective_lunch_flag(
 			status,
 			code,
 			shift,
-			day_punches(employee, attendance_date),
+			[get_datetime(r.time) for r in _rows],
 			override,
 			auto_filled=bool(cint(auto_filled)),
 			auto_lunch_when_exempt=employee_auto_lunch_when_exempt(employee) if auto_filled else False,
+			log_types=[r.log_type for r in _rows],
 		)
 	)
 

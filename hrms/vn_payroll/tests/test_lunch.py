@@ -221,3 +221,47 @@ class TestAutoLunchForExemptEmployees(PerTestRollback, FrappeTestCase):
 	def test_override_still_wins_on_an_auto_filled_day(self):
 		self.assertEqual(self.flag(auto_filled=True, tick=False, override="Có"), 1)
 		self.assertEqual(self.flag(auto_filled=True, tick=True, override="Không"), 0)
+
+
+class TestSinglePunchUsesLogType(PerTestRollback, FrappeTestCase):
+	"""Một dấu chấm duy nhất: phải đọc `log_type` chứ không suy theo giờ (2026-09-11).
+
+	Dấu lẻ chỉ cho MỘT đầu mốc, đầu kia không biết. Luật cũ suy "trước giờ trưa = vào, sau giờ trưa
+	= đến muộn" — đúng với dấu VÀO nhưng SAI hẳn với dấu RA: một dấu `OUT` lúc 17:43 nghĩa là người
+	đó làm cả ngày rồi quên chấm vào, chứ không phải chiều mới tới. Đã gặp thật trên site
+	(`hieu chu` 24/06 và 30/06) và bị mất suất ăn oan."""
+
+	def dt(self, hhmm):
+		return get_datetime(f"2026-06-24 {hhmm}:00")
+
+	def flag(self, hhmm, log_type):
+		from hrms.vn_payroll.lunch import effective_lunch_flag
+
+		return effective_lunch_flag("Present", "X", None, [self.dt(hhmm)], log_types=[log_type])
+
+	# --- dấu VÀO: biết lúc đến, không biết lúc về → giả định ở lại ---
+	def test_lone_in_before_lunch_counts(self):
+		self.assertEqual(self.flag("07:51", "IN"), 1)
+
+	def test_lone_in_after_lunch_starts_does_not_count(self):
+		"""Vào lúc 14:00 thì dù ở tới tối cũng đã lỡ bữa trưa."""
+		self.assertEqual(self.flag("14:00", "IN"), 0)
+
+	# --- dấu RA: biết lúc về, không biết lúc đến → giả định đã ở đó từ trước ---
+	def test_lone_out_after_lunch_ends_counts(self):
+		"""Ca thật: quên chấm vào, chỉ có dấu ra 17:43 → đã ở đó qua trưa."""
+		self.assertEqual(self.flag("17:43", "OUT"), 1)
+
+	def test_lone_out_before_lunch_ends_does_not_count(self):
+		"""Về lúc 11:00 thì chưa tới bữa trưa."""
+		self.assertEqual(self.flag("11:00", "OUT"), 0)
+
+	def test_lone_out_exactly_at_lunch_end_counts(self):
+		self.assertEqual(self.flag("13:30", "OUT"), 1)
+
+	# --- không có log_type thì lùi về suy đoán theo giờ như cũ ---
+	def test_missing_log_type_falls_back_to_time_heuristic(self):
+		from hrms.vn_payroll.lunch import effective_lunch_flag
+
+		self.assertEqual(effective_lunch_flag("Present", "X", None, [self.dt("07:51")], log_types=[None]), 1)
+		self.assertEqual(effective_lunch_flag("Present", "X", None, [self.dt("17:43")], log_types=None), 0)
