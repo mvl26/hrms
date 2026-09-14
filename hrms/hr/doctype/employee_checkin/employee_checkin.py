@@ -26,6 +26,49 @@ class EmployeeCheckin(Document):
 		self.fetch_shift()
 		self.set_geolocation()
 		self.validate_distance_from_shift_location()
+		self.set_outside_schedule_flag()
+
+	def set_outside_schedule_flag(self):
+		"""Đánh dấu dấu chấm rơi ngoài lịch làm việc — nền cho tính năng OT sau này.
+
+		Thuần GHI NHẬN. Không một nhánh nào của đường sinh công đọc cờ này: việc bỏ qua ngày nghỉ
+		vẫn làm theo NGÀY như trước (xem `Attendance.falls_on_non_working_day` và
+		`ShiftType.should_mark_attendance`). Nhờ vậy cờ không thể làm lệch mã công hay lương — có
+		test chứng minh bằng cách bật cờ rồi chấm lại.
+
+		Hai lý do tách bạch:
+		- `Ngày nghỉ` — ngày đó ngoài lịch tuần, hoặc là ngày lễ;
+		- `Ngoài giờ` — ngày làm việc nhưng dấu chấm nằm ngoài khung ca (ở lại muộn, tới sớm).
+
+		Khi làm OT chỉ việc quét `custom_outside_schedule = 1`, dữ liệu đã tích sẵn từ hôm nay nên
+		không phải backfill. Cố ý KHÔNG mượn `skip_auto_attendance`: cờ đó đang là đối tượng chẩn
+		đoán của `hrms/skip_attendance_diag.py`, dùng chung vào là làm nhiễu công cụ đó.
+
+		Nuốt mọi lỗi cấu hình lịch: một lượt chấm công KHÔNG BAO GIỜ được fail chỉ vì lịch chưa khai.
+		"""
+		if not self.meta.has_field("custom_outside_schedule"):
+			return  # site chưa migrate custom field -> bỏ qua, hành vi y hệt trước đây
+
+		from hrms.hr.work_schedule import WorkScheduleNotConfigured, is_working_day, shift_window
+
+		self.custom_outside_schedule = 0
+		self.custom_outside_reason = None
+		if not (self.employee and self.time):
+			return
+
+		when = get_datetime(self.time)
+		try:
+			if not is_working_day(self.employee, when.date()):
+				self.custom_outside_schedule = 1
+				self.custom_outside_reason = "Ngày nghỉ"
+				return
+			window = shift_window(self.employee, when.date())
+		except WorkScheduleNotConfigured:
+			return
+
+		if window and not (window[0] <= when <= window[1]):
+			self.custom_outside_schedule = 1
+			self.custom_outside_reason = "Ngoài giờ"
 
 	def validate_duplicate_log(self):
 		doc = frappe.db.exists(

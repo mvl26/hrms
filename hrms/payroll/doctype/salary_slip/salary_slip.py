@@ -26,7 +26,6 @@ from frappe.utils.background_jobs import enqueue
 
 import erpnext
 from erpnext.accounts.utils import get_fiscal_year
-from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
 from erpnext.utilities.transaction_base import TransactionBase
 
 from hrms.hr.utils import validate_active_employee
@@ -50,7 +49,6 @@ from hrms.payroll.doctype.salary_slip.salary_slip_loan_utils import (
 	set_loan_repayment,
 )
 from hrms.payroll.utils import sanitize_expression
-from hrms.utils.holiday_list import get_holiday_dates_between
 
 # cache keys
 HOLIDAYS_BETWEEN_DATES = "holidays_between_dates"
@@ -633,15 +631,25 @@ class SalarySlip(TransactionBase):
 		return payment_days
 
 	def get_holidays_for_employee(self, start_date, end_date):
-		holiday_list = get_holiday_list_for_employee(self.employee)
-		key = f"{holiday_list}:{start_date}:{end_date}"
-		holiday_dates = frappe.cache().hget(HOLIDAYS_BETWEEN_DATES, key)
+		"""Ngày KHÔNG phải đi làm trong khoảng — ngoài lịch tuần CỘNG ngày lễ.
 
-		if not holiday_dates:
-			holiday_dates = get_holiday_dates_between(holiday_list, start_date, end_date)
-			frappe.cache().hset(HOLIDAYS_BETWEEN_DATES, key, holiday_dates)
+		Trước khi tách lịch, các dòng trong Holiday List đúng bằng tập này (ngày nghỉ cuối tuần nằm
+		chung trong đó). Sau khi tách, đọc Holiday List là chỉ còn ngày lễ — mà con số này còn nuôi
+		ba nhánh khác của payroll: `get_unmarked_days`, `get_half_absent_days`, và nhánh đếm vắng
+		theo Attendance. Giữ nguyên ngữ nghĩa cũ ngay tại đây thì cả ba không đổi hành vi; sửa từng
+		nhánh một là chắc chắn sót.
 
-		return holiday_dates
+		Nhớ theo INSTANCE chứ không dùng cache redis như trước: tập này nay phụ thuộc cả lịch tuần
+		của ca, mà `invalidate_cache` chỉ được gắn vào Holiday List — đổi ca sẽ để lại cache cũ và
+		payroll tính theo lịch đã lỗi thời.
+		"""
+		from hrms.hr.work_schedule import non_working_days_between
+
+		key = (self.employee, str(start_date), str(end_date))
+		memo = self.__dict__.setdefault("non_working_days_memo", {})
+		if key not in memo:
+			memo[key] = non_working_days_between(self.employee, start_date, end_date)
+		return memo[key]
 
 	def calculate_lwp_or_ppl_based_on_leave_application(
 		self, holidays, working_days_list, daily_wages_fraction_for_half_day

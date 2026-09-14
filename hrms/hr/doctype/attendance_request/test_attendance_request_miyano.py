@@ -228,8 +228,10 @@ class TestAttendanceRequestApproval(PerTestRollback, FrappeTestCase):
 				"doctype": "Attendance Request",
 				"employee": emp,
 				"company": frappe.db.get_value("Employee", emp, "company"),
-				"from_date": "2098-06-01",
-				"to_date": "2098-06-01",
+				# ngày làm việc (thứ Hai): từ khi lịch tuần tách khỏi Holiday List, phiếu rơi vào
+				# T7/CN không sinh công nữa nên mọi ngày trong test phải là ngày làm việc thật
+				"from_date": "2098-06-02",
+				"to_date": "2098-06-02",
 				"reason": "On Duty",
 			}
 		)
@@ -354,7 +356,7 @@ class TestAttendanceRequestCode(PerTestRollback, FrappeTestCase):
 
 	def test_full_flow_wfh_end_to_end(self):
 		# tạo + submit Attendance Request thật (reason native) → native sinh Attendance + hook ghi W.
-		date = "2098-09-07"
+		date = "2098-09-08"  # thứ Hai — ngày nghỉ tuần không sinh công (xem work_schedule)
 		ar = frappe.get_doc(
 			{
 				"doctype": "Attendance Request",
@@ -740,5 +742,6 @@ class TestAttendanceRequestWorkCredit(PerTestRollback, FrappeTestCase):
 
 	def test_new_day_without_prior_record_stays_full_credit(self):
 		"""Nhánh tạo mới vốn đã đúng (cầu nối chạy) — chốt lại để bản sửa không làm hỏng."""
-		row = self.day_from_request("2094-04-17", "On Duty", existing_absent=False)
+		# 2094-04-17 là thứ Bảy: ngày nghỉ tuần không sinh công. Dùng thứ Hai kế tiếp.
+		row = self.day_from_request("2094-04-19", "On Duty", existing_absent=False)
 		self.assertEqual(row.custom_work_credit, 1.0)

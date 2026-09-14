@@ -4,10 +4,6 @@ from frappe.model.document import Document
 from frappe.utils import add_days, cstr, date_diff, getdate
 from frappe.utils.csvutils import UnicodeWriter
 
-from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
-
-from hrms.hr.utils import get_holiday_dates_for_employee
-
 
 class UploadAttendance(Document):
 	pass
@@ -81,8 +77,6 @@ def get_data(args):
 			):
 				existing_attendance = existing_attendance_records[tuple([getdate(date), employee.name])]
 
-			employee_holiday_list = get_holiday_list_for_employee(employee.name)
-
 			row = [
 				existing_attendance and existing_attendance.name or "",
 				employee.name,
@@ -93,7 +87,9 @@ def get_data(args):
 				employee.company,
 				existing_attendance and existing_attendance.naming_series or get_naming_series(),
 			]
-			if date in holidays[employee_holiday_list]:
+			# khoá theo NHÂN VIÊN: lịch tuần đến từ ca, hai người cùng Holiday List vẫn có thể
+			# nghỉ khác ngày
+			if getdate(date) in holidays.get(employee.name, ()):
 				row[4] = "Holiday"
 			data.append(row)
 
@@ -101,14 +97,17 @@ def get_data(args):
 
 
 def get_holidays_for_employees(employees, from_date, to_date):
-	holidays = {}
-	for employee in employees:
-		holiday_list = get_holiday_list_for_employee(employee)
-		holiday = get_holiday_dates_for_employee(employee, getdate(from_date), getdate(to_date))
-		if holiday_list not in holidays:
-			holidays[holiday_list] = holiday
+	"""{nhân viên: ngày KHÔNG phải đi làm} — để template Excel đánh dấu sẵn ngày nghỉ.
 
-	return holidays
+	Khoá theo NHÂN VIÊN chứ không theo Holiday List như trước: lịch tuần nay đến từ ca, nên hai
+	người dùng chung một Holiday List vẫn có thể có ngày nghỉ khác nhau.
+	"""
+	from hrms.hr.work_schedule import non_working_days_between
+
+	return {
+		employee: non_working_days_between(employee, getdate(from_date), getdate(to_date))
+		for employee in employees
+	}
 
 
 def writedata(w, data):

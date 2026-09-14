@@ -5,8 +5,6 @@ from frappe.model.workflow import get_workflow_name
 from frappe.query_builder import Order
 from frappe.utils import add_days, date_diff, getdate, strip_html
 
-from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
-
 SUPPORTED_FIELD_TYPES = [
 	"Link",
 	"Select",
@@ -145,15 +143,15 @@ def get_attendance_for_calendar(employee: str, from_date: str, to_date: str) -> 
 	return {d["attendance_date"]: d["status"] for d in attendance}
 
 
-def get_holidays_for_calendar(employee: str, from_date: str, to_date: str) -> list[str]:
-	if holiday_list := get_holiday_list_for_employee(employee, raise_exception=False):
-		return frappe.get_all(
-			"Holiday",
-			filters={"parent": holiday_list, "holiday_date": ["between", [from_date, to_date]]},
-			pluck="holiday_date",
-		)
+def get_holidays_for_calendar(employee: str, from_date: str, to_date: str) -> list:
+	"""Ngày KHÔNG phải đi làm để tô trên lịch chấm công của PWA — nghỉ tuần CỘNG ngày lễ.
 
-	return []
+	Đọc dòng `Holiday` là chỉ còn ngày lễ sau khi lịch tuần tách khỏi Holiday List, và lịch của nhân
+	viên sẽ mất sạch màu cuối tuần. Xem `hrms/hr/work_schedule.py`.
+	"""
+	from hrms.hr.work_schedule import non_working_days_between
+
+	return sorted(non_working_days_between(employee, from_date, to_date))
 
 
 @frappe.whitelist()
@@ -392,7 +390,15 @@ def get_leave_balance_map(employee: str) -> dict[str, dict[str, float]]:
 
 @frappe.whitelist()
 def get_holidays_for_employee(employee: str) -> list[dict]:
-	holiday_list = get_holiday_list_for_employee(employee, raise_exception=False)
+	"""Ngày NGHỈ LỄ sắp tới cho mục *Upcoming Holidays* của PWA.
+
+	Ngữ nghĩa GIỮ NGUYÊN — đây là "ngày lễ", không phải "ngày nghỉ", nên vẫn lọc `weekly_off = 0`.
+	Chỉ đổi cách tìm danh sách: đi qua `holiday_list_for` để lấy đúng lịch của năm đang hỏi, vì mỗi
+	năm một Holiday List.
+	"""
+	from hrms.hr.work_schedule import holiday_list_for
+
+	holiday_list = holiday_list_for(employee, frappe.utils.today())
 	if not holiday_list:
 		return []
 

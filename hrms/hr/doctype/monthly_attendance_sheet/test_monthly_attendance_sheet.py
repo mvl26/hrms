@@ -6,6 +6,7 @@ from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms.tests.isolation import PerTestRollback
 from hrms.tests.vn_test_utils import test_employee
+from hrms.tests.work_calendar_fixture import work_every_day
 
 
 class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
@@ -41,6 +42,9 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		self._sheet(month="7", year=2097).insert()  # different month -> no duplicate
 
 	def _seed_attendance(self, emp, year, month, day, **codes):
+		# Ca 7 ngày: lớp này đo MÃ CÔNG ra cột tổng nào, không đo lịch nghỉ. Không có nó thì ngày
+		# test rơi trúng T7/CN bị loại khỏi cột tổng (đúng luật) và test đỏ vì lý do không liên quan.
+		work_every_day(emp)
 		att = frappe.get_doc(
 			{
 				"doctype": "Attendance",

@@ -20,9 +20,8 @@ from frappe import _
 from frappe.utils import cint, flt, getdate
 from frappe.utils.nestedset import get_descendants_of
 
-from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
-
 from hrms.hr.attendance_legend import legend_html
+from hrms.hr.work_schedule import scheduled_days_map
 from hrms.hr.working_hours import avg_office_hours, format_hours_hm, office_hours_map
 
 Filters = frappe._dict
@@ -59,7 +58,7 @@ REPORT_CATEGORIES = [
 	("Phép", "Phép năm"),
 	("Ốm", "Ốm / chăm con ốm"),
 	("Thai sản", "Thai sản"),
-	("Tai nạn LĐ", "Tai nạn lao động"),
+	("TNLĐ", "TNLĐ"),  # nhãn ngắn: cột hẹp, "Tai nạn lao động" phải xuống 2-3 dòng
 	(BUCKET_MARRIAGE, "Nghỉ kết hôn"),
 	("Việc riêng", "Nghỉ riêng"),
 	("Không lương", "Không lương"),
@@ -81,7 +80,7 @@ CATEGORY_STATE = {
 	"Việc riêng": "leave",  # nghỉ hiếu hỉ có lương — giữ vàng riêng, KHÔNG theo màu phép năm
 	"Ốm": "sick",
 	"Thai sản": "sick",
-	"Tai nạn LĐ": "sick",
+	"TNLĐ": "sick",
 	"Nghỉ bù": "comp",
 	"Không lương": "unpaid",
 	"Vắng": "absent",
@@ -345,28 +344,14 @@ def get_attendances(filters: Filters, start, end) -> dict:
 	return by_emp
 
 
-def get_holidays(employees: list, start, end) -> dict:
-	"""{employee: {day-of-month: is_weekly_off}} from each employee's resolved Holiday List."""
-	cache = {}
-	result = {}
-	for e in employees:
-		hl = e.holiday_list or get_holiday_list_for_employee(e.name, raise_exception=False)
-		if not hl:
-			result[e.name] = {}
-			continue
-		if hl not in cache:
-			rows = frappe.get_all(
-				"Holiday",
-				filters={
-					"parent": hl,
-					"parenttype": "Holiday List",
-					"holiday_date": ["between", [start, end]],
-				},
-				fields=["holiday_date", "weekly_off"],
-			)
-			cache[hl] = {getdate(r.holiday_date).day: cint(r.weekly_off) for r in rows}
-		result[e.name] = cache[hl]
-	return result
+def get_day_kinds(employees: list, start, end) -> dict:
+	"""{employee: {ngày: "scheduled" | "rest" | "holiday"}} — hai nguồn tách bạch.
+
+	`rest` đến từ LỊCH TUẦN của ca (Shift Type), `holiday` đến từ Holiday List. Trước đây cả hai
+	cùng suy từ một cờ `weekly_off` trên Holiday List, nên không phân biệt được "cuối tuần" với
+	"ngày nghỉ lễ" ở tầng khái niệm. Xem `hrms/hr/work_schedule.py`.
+	"""
+	return scheduled_days_map([e.name for e in employees], start, end)
 
 
 def weekday_label(year: int, month: int, day: int) -> str:
@@ -466,7 +451,7 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 	code_map = get_code_map()
 	employees = get_employees(filters, start, end)
 	attendances = get_attendances(filters, start, end)
-	holidays = get_holidays(employees, start, end)
+	day_kinds = get_day_kinds(employees, start, end)
 
 	from hrms.vn_payroll.lunch import lunch_days_map  # nguồn duy nhất; 1 truy vấn gộp cho cả bảng
 
@@ -478,7 +463,7 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 	rows = []
 	for e in employees:
 		emp_att = attendances.get(e.name, {})
-		emp_hol = holidays.get(e.name, {})
+		emp_kinds = day_kinds.get(e.name, {})
 		relieving = getdate(e.relieving_date) if e.relieving_date else None
 		joining = getdate(e.date_of_joining) if e.date_of_joining else None
 		day_syms = {}
@@ -494,6 +479,21 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 			if att:
 				display, morning, afternoon = _resolve_day(att, code_map)
 				day_syms[day] = display
+				if emp_kinds.get(d) == "rest":
+					# Đi làm NGOÀI lịch tuần: ghi nhận ký hiệu, KHÔNG cộng vào cột tổng nào.
+					#
+					# Chưa có chính sách trả công ngày nghỉ (OT chốt "hiện không tính tăng ca"), nên
+					# cộng vào Tổng công là hứa trả tiền cho một ngày mà phiếu lương không trả:
+					# `set_working_days` đếm mẫu số theo lịch tuần nên `payment_days` không nhúc
+					# nhích, và `sheet_gate.reconcile_with_sheet` sẽ chặn SẠCH mọi phiếu của tháng đó.
+					#
+					# Không cộng thì bảng công nói đúng thực tế hôm nay: ngày đó CÓ đi làm và CHƯA
+					# được tính công. Khi OT ra đời chính nó sẽ trả, dựa trên
+					# `Employee Checkin.custom_outside_schedule` đã tích sẵn.
+					#
+					# Chỉ áp cho ngày NGOÀI lịch tuần. Ngày lễ và ngày `Làm bù` đều nằm TRONG lịch
+					# tuần nên vẫn cộng bình thường.
+					continue
 				for half in (morning, afternoon):
 					c = code_map.get(half)
 					if not c:
@@ -519,9 +519,9 @@ def get_sheet_rows(filters: Filters) -> list[dict]:
 				# phân biệt được "chưa vào làm" với "quên chấm công", trong khi payroll đã loại các
 				# ngày này khỏi payment_days theo date_of_joining.
 				day_syms[day] = MARKER_NOT_JOINED
-			elif day in emp_hol:
-				if emp_hol[day]:
-					day_syms[day] = MARKER_WEEKLY_OFF  # nghỉ hàng tuần (CN) — không tính công
+			elif emp_kinds.get(d) in ("rest", "holiday"):
+				if emp_kinds[d] == "rest":
+					day_syms[day] = MARKER_WEEKLY_OFF  # ngoài lịch tuần (T7/CN) — không tính công
 				else:
 					# Nghỉ lễ HƯỞNG NGUYÊN LƯƠNG (Đ.112 BLLĐ) → vừa đếm riêng, vừa vào Tổng công.
 					# Quyết định 2026-08-04 (HR chốt): ngày công chuẩn = ngày đi làm + nghỉ lễ + nghỉ

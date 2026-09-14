@@ -134,7 +134,7 @@ doc_events = {
 	"Timesheet": {"validate": "hrms.hr.utils.validate_active_employee"},
 	# Miyano: lương NET gross-up theo công thức MVL — chạy sau calculate_net_pay của controller.
 	# THỨ TỰ BA BƯỚC NÀY LÀ BẮT BUỘC, đừng đổi:
-	# 1. `add_paid_holidays` — cộng ngày nghỉ lễ vào `total_working_days`/`payment_days`. Phải chạy
+	# 1. `set_working_days` — ĐẶT `total_working_days`/`payment_days` từ lịch tuần. Phải chạy
 	#    TRƯỚC cổng, vì cổng so `payment_days` với "Tổng công" của bảng đã chốt mà bảng đã đếm lễ;
 	#    chạy sau thì cổng so số chưa cộng với số đã cộng và chặn sạch phiếu tháng có lễ.
 	# 2. `sheet_gate.gate` — chặn phiếu khi kỳ chưa chốt công và đối soát với bảng đã chốt. Mặc định
@@ -142,7 +142,7 @@ doc_events = {
 	# 3. `apply_mvl` — engine lương, đọc số ngày đã chuẩn hoá ở bước 1.
 	"Salary Slip": {
 		"validate": [
-			"hrms.vn_payroll.salary_slip_hook.add_paid_holidays",
+			"hrms.vn_payroll.salary_slip_hook.set_working_days",
 			"hrms.vn_payroll.sheet_gate.gate",
 			"hrms.vn_payroll.salary_slip_hook.apply_mvl",
 		]
@@ -329,6 +329,7 @@ fixtures = [
 					"Attendance-custom_afternoon_code",
 					"Attendance-custom_work_credit",
 					"Attendance-custom_lunch",
+					"Attendance-custom_lunch_override",
 					"Leave Type-custom_attendance_code",
 					"Leave Application-custom_attendance_code",
 					"Leave Application-custom_leave_reason",
@@ -342,9 +343,13 @@ fixtures = [
 					"Shift Type-custom_flexible_shift",
 					"Shift Type-custom_flex_band_minutes",
 					"Shift Type-custom_min_work_hours",
+					"Shift Type-custom_working_days",
+					"Employee Checkin-custom_outside_schedule",
+					"Employee Checkin-custom_outside_reason",
 					"Employee-custom_citizen_id",
 					"Employee-custom_social_insurance_no",
 					"Employee-custom_exempt_from_checkin",
+					"Employee-custom_auto_lunch_when_exempt",
 					"Employee-custom_exempt_from_checkin_from",
 					"Attendance-custom_auto_filled",
 				],

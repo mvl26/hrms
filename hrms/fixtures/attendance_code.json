@@ -112,9 +112,9 @@
   "work_fraction": 0.0
  },
  {
-  "category": "Tai nạn LĐ",
+  "category": "TNLĐ",
   "code": "T",
-  "code_name": "Nghỉ tai nạn lao động",
+  "code_name": "TNLĐ",
   "color": null,
   "docstatus": 0,
   "doctype": "Attendance Code",

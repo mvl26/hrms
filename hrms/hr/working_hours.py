@@ -138,6 +138,18 @@ def presence_hours(in_time, out_time, attendance_date, lunch_start=None, lunch_e
 	return round(max(present - lunch, 0.0), 2)
 
 
+def office_day_fraction(status: str | None) -> float:
+	"""Ngày đó chiếm bao nhiêu phần của một ngày công tại văn phòng.
+
+	Nửa buổi chỉ là 0,5 ngày. Trước 2026-09-10 mẫu số cộng 1 cho mọi ngày, nên người nghỉ nửa buổi
+	làm 4 giờ bị chia cho cả 1 ngày → TB tụt còn ~4h/ngày, đọc như thể họ làm ít giờ trong khi thực
+	tế họ làm đủ giờ của nửa ngày đó. Đây là chỉ số HR dùng để soát, không được bóp méo như vậy.
+
+	Chỉ đọc `status`, KHÔNG đụng `custom_work_credit`: work_credit là số ngày ĐƯỢC TRẢ LƯƠNG (nghỉ
+	không lương nửa ngày vẫn đi làm nửa ngày), còn ở đây ta cần phần ngày CÓ MẶT tại văn phòng."""
+	return 0.5 if status == "Half Day" else 1.0
+
+
 def office_hours_map(employees, start, end) -> dict:
 	"""{employee: {"hours": tổng giờ có mặt, "days": số ngày}} cho các ngày làm việc TẠI VĂN PHÒNG.
 
@@ -159,7 +171,7 @@ def office_hours_map(employees, start, end) -> dict:
 			"docstatus": 1,
 			"status": ["in", OFFICE_STATUSES],
 		},
-		fields=["employee", "attendance_date", "shift", "in_time", "out_time"],
+		fields=["employee", "attendance_date", "status", "shift", "in_time", "out_time"],
 	)
 
 	totals = {}
@@ -168,9 +180,9 @@ def office_hours_map(employees, start, end) -> dict:
 		hours = presence_hours(r.in_time, r.out_time, r.attendance_date, lunch_start, lunch_end)
 		if hours <= 0:  # không có giờ vào/ra → không phải ngày ở văn phòng, không kéo TB xuống
 			continue
-		total = totals.setdefault(r.employee, {"hours": 0.0, "days": 0})
+		total = totals.setdefault(r.employee, {"hours": 0.0, "days": 0.0})
 		total["hours"] += hours
-		total["days"] += 1
+		total["days"] += office_day_fraction(r.status)
 	return totals
 
 

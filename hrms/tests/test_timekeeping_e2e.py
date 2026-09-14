@@ -23,6 +23,7 @@ from frappe.utils import get_time, getdate
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
 from hrms.tests.vn_test_utils import default_company, ensure_short_hours_code, test_employee
+from hrms.tests.work_calendar_fixture import work_every_day
 
 
 def mk_attendance(employee, date, submit=True, **codes):
@@ -94,7 +95,8 @@ class TestPayrollDaysScenarios(ShortHoursCodeMixin, FrappeTestCase):
 	def test_month_mixed_codes_payment_days(self):
 		emp = make_employee("e2e_payroll@codes.com", company=default_company())
 		company = frappe.db.get_value("Employee", emp, "company")
-		# June 2099, no holiday list covers it -> a clean 30 working days.
+		# Ca 7 ngày: test này đo cách payroll đọc MÃ CÔNG, không đo lịch nghỉ.
+		work_every_day(emp)
 		plan = {
 			1: "X",  # present        -> 0
 			2: "P",  # annual leave   -> 0 (paid, not in LWP map)
@@ -159,6 +161,7 @@ class TestBangCongMonthEndToEnd(ShortHoursCodeMixin, FrappeTestCase):
 		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import get_sheet_rows
 
 		worker = make_employee("e2e_bcct_worker@codes.com", company=default_company())
+		work_every_day(worker)  # test đo TỔNG theo mã công, lịch chỉ là bối cảnh
 		plan = {
 			1: "X",
 			2: "P",
@@ -188,7 +191,7 @@ class TestBangCongMonthEndToEnd(ShortHoursCodeMixin, FrappeTestCase):
 		self.assertEqual(t["Việc riêng"], 1.0, "R2 (tang); KH nay có cột riêng")
 		self.assertEqual(t["Thai sản"], 1.0)
 		self.assertEqual(t["Nghỉ bù"], 1.0)
-		self.assertEqual(t["Tai nạn LĐ"], 1.0)
+		self.assertEqual(t["TNLĐ"], 1.0)
 		# cell rendering
 		self.assertEqual(row["days"][1], "X")
 		self.assertEqual(row["days"][8], "1/2P")
@@ -261,6 +264,7 @@ class TestCheckinAutoAttendanceE2E(FrappeTestCase):
 		st = self._shift("E2E Full Day Shift")
 		emp = make_employee("e2e_checkin_full@codes.com", company=default_company())
 		date = getdate()  # setup_shift_type's process window is anchored on today
+		work_every_day(emp, shift=st.name)  # 'hôm nay' có thể rơi vào T7/CN -> ca phải làm cả tuần
 		self._assign(st.name, emp, date)
 		make_checkin(emp, datetime.combine(date, get_time("08:00:00")))
 		make_checkin(emp, datetime.combine(date, get_time("17:05:00")))
@@ -284,6 +288,7 @@ class TestCheckinAutoAttendanceE2E(FrappeTestCase):
 		st = self._shift("E2E Split Shift", split=True)
 		emp = make_employee("e2e_checkin_half@codes.com", company=default_company())
 		date = getdate()  # setup_shift_type's process window is anchored on today
+		work_every_day(emp, shift=st.name)  # 'hôm nay' có thể rơi vào T7/CN -> ca phải làm cả tuần
 		self._assign(st.name, emp, date)
 		# chỉ làm buổi sáng = 4h < 8h tối thiểu -> mã 1/2X (đi làm nhưng thiếu giờ) -> Half Day
 		make_checkin(emp, datetime.combine(date, get_time("08:00:00")))

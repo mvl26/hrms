@@ -88,7 +88,7 @@ class BusinessTrip(Document):
 		Work From Home (a paid working day) via the attendance-code bridge — payroll-neutral."""
 		from frappe.utils import add_days, getdate
 
-		from erpnext.setup.doctype.employee.employee import is_holiday
+		from hrms.hr.work_schedule import is_working_day
 
 		if not frappe.db.exists("Attendance Code", "CT"):
 			return
@@ -96,7 +96,7 @@ class BusinessTrip(Document):
 		for t in self.travelers:
 			day = start
 			while day <= end:
-				if not is_holiday(t.employee, day, raise_exception=False):
+				if is_working_day(t.employee, day):
 					auto_filled = self.auto_filled_attendance(t.employee, day)
 					if auto_filled:
 						self.convert_auto_filled_to_trip(auto_filled)

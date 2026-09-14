@@ -92,3 +92,176 @@ class TestCountLunchDays(PerTestRollback, FrappeTestCase):
 		self.day(8, "Present", ("08:00:00", "11:00:00"))  # sáng, 0
 		self.day(9, "Half Day", ("08:00:00", "17:30:00"))  # +1 (Half Day cũng là ngày công)
 		self.assertEqual(self.count(), 2)
+
+
+class TestEffectiveLunchFlag(PerTestRollback, FrappeTestCase):
+	"""Luật ăn trưa per-ngày (spec §5.4, 2026-08-27) — thuần hàm, không đụng DB.
+
+	Điểm mới so với bản 2026-07-25: ngày công KHÔNG có đủ dấu chấm (chấm tay, sửa qua soát công,
+	quên chấm ra) không còn bị mất suất ăn; và người có thể ép có/không, máy không đè lại."""
+
+	def dt(self, hhmm):
+		return get_datetime(f"2026-07-06 {hhmm}:00")
+
+	def flag(self, status="Present", code="X", punches=(), override=None):
+		from hrms.vn_payroll.lunch import effective_lunch_flag
+
+		return effective_lunch_flag(status, code, None, [self.dt(p) for p in punches], override)
+
+	# --- không đủ dấu chấm: theo mặc định của status (PHẦN MỚI) ---
+	def test_present_without_any_punch_counts(self):
+		"""Chấm tay / sửa qua soát công: đã công nhận ngày công đủ thì mặc định có ăn."""
+		self.assertEqual(self.flag(punches=()), 1)
+
+	def test_present_with_one_morning_punch_counts(self):
+		"""Quên chấm ra — có mặt từ sáng thì coi như ở lại ăn, không phạt vì lỗi thao tác."""
+		self.assertEqual(self.flag(punches=("08:00",)), 1)
+
+	def test_present_with_one_afternoon_punch_does_not_count(self):
+		"""Một dấu duy nhất lúc 14:00 = chiều mới tới ⇒ KHÔNG ăn tại công ty.
+
+		Đếm số dấu thôi thì ca này ra sai — phải xét cả giờ."""
+		self.assertEqual(self.flag(punches=("14:00",)), 0)
+
+	def test_half_day_with_one_morning_punch_does_not_count(self):
+		"""Nửa ngày một dấu: vẫn không đủ bằng chứng ở lại qua trưa."""
+		self.assertEqual(self.flag(status="Half Day", code="1/2X", punches=("08:00",)), 0)
+
+	def test_half_day_without_punch_does_not_count(self):
+		"""Không có dấu thì không chứng minh được là ở lại qua trưa."""
+		self.assertEqual(self.flag(status="Half Day", code="1/2X", punches=()), 0)
+
+	# --- đủ dấu chấm: giữ nguyên luật cũ (phủ giờ nghỉ trưa) ---
+	def test_two_punches_covering_lunch_counts(self):
+		self.assertEqual(self.flag(punches=("08:00", "17:30")), 1)
+
+	def test_two_punches_leaving_before_lunch_does_not_count(self):
+		self.assertEqual(self.flag(punches=("08:00", "11:00")), 0)
+
+	def test_half_day_covering_lunch_still_counts(self):
+		self.assertEqual(self.flag(status="Half Day", code="1/2X", punches=("08:00", "17:30")), 1)
+
+	# --- loại trừ theo mã / trạng thái ---
+	def test_business_trip_never_counts(self):
+		"""Đi công tác ăn ngoài, đã có Expense Claim riêng."""
+		self.assertEqual(self.flag(code="CT", punches=("08:00", "17:30")), 0)
+
+	def test_work_from_home_never_counts(self):
+		self.assertEqual(self.flag(code="W", punches=("08:00", "17:30")), 0)
+
+	def test_leave_day_does_not_count(self):
+		self.assertEqual(self.flag(status="On Leave", code="P", punches=("08:00", "17:30")), 0)
+
+	def test_only_x_and_half_x_earn_lunch(self):
+		"""Danh sách CHO PHÉP, không phải loại trừ (user chốt 2026-09-11).
+
+		Đi công tác thì dù chấm công kiểu gì cũng không ăn tại công ty. Dùng danh sách loại trừ thì
+		mọi mã mới HR tạo về sau đều mặc nhiên được ăn trưa — đúng thứ phải tránh."""
+		covering = ("08:00", "17:30")
+		self.assertEqual(self.flag(code="X", punches=covering), 1)
+		self.assertEqual(self.flag(status="Half Day", code="1/2X", punches=covering), 1)
+		for code in ("CT", "W", "NB", "R1", "MA-MOI-NAO-DO", "", None):
+			self.assertEqual(self.flag(code=code, punches=covering), 0, f"mã {code!r} không được ăn trưa")
+
+	def test_half_day_leave_code_earns_no_lunch(self):
+		"""1/2P (nghỉ phép nửa ngày) KHÔNG được ăn trưa — hệ quả trực tiếp của danh sách cho phép."""
+		self.assertEqual(self.flag(status="Half Day", code="1/2P", punches=("08:00", "17:30")), 0)
+
+	# --- override: quyết định của người, máy không đè ---
+	def test_override_yes_wins_over_every_rule(self):
+		self.assertEqual(self.flag(status="On Leave", code="P", punches=(), override="Có"), 1)
+		self.assertEqual(self.flag(code="CT", punches=(), override="Có"), 1)
+
+	def test_override_no_wins_over_covering_punches(self):
+		self.assertEqual(self.flag(punches=("08:00", "17:30"), override="Không"), 0)
+
+	def test_blank_override_means_automatic(self):
+		for auto in (None, "", "Tự động"):
+			self.assertEqual(self.flag(punches=(), override=auto), 1, auto)
+
+
+class TestAutoLunchForExemptEmployees(PerTestRollback, FrappeTestCase):
+	"""Người MIỄN CHẤM CÔNG: ngày `X` tự sinh chỉ được ăn trưa khi hồ sơ có tick "Tự chấm ăn trưa".
+
+	Không có tick thì ngày tự sinh KHÔNG tự cấp phụ cấp: hệ thống sinh `X` cho mọi ngày làm việc mà
+	không ai xác nhận người đó có mặt tại công ty (spec §5.8, user chốt 2026-08-27)."""
+
+	def dt(self, hhmm):
+		return get_datetime(f"2026-08-05 {hhmm}:00")
+
+	def flag(self, punches=(), auto_filled=False, tick=False, override=None):
+		from hrms.vn_payroll.lunch import effective_lunch_flag
+
+		return effective_lunch_flag(
+			"Present",
+			"X",
+			None,
+			[self.dt(p) for p in punches],
+			override,
+			auto_filled=auto_filled,
+			auto_lunch_when_exempt=tick,
+		)
+
+	def test_auto_filled_day_without_tick_gets_no_lunch(self):
+		"""Đúng 20 ngày tháng 8 của 2 người miễn chấm công."""
+		self.assertEqual(self.flag(auto_filled=True, tick=False), 0)
+
+	def test_auto_filled_day_with_tick_gets_lunch(self):
+		"""HR bật tick cho người thật sự lên văn phòng → data tự chạy chuẩn, khỏi sửa tay từng ngày."""
+		self.assertEqual(self.flag(auto_filled=True, tick=True), 1)
+
+	def test_real_punches_win_over_a_missing_tick(self):
+		"""Có dấu chấm phủ giờ trưa là BẰNG CHỨNG có mặt — không cần tick."""
+		self.assertEqual(self.flag(punches=("08:00", "17:30"), auto_filled=True, tick=False), 1)
+
+	def test_manual_day_is_unaffected_by_the_tick(self):
+		"""Ngày chấm tay / sửa qua soát công không phải ngày tự sinh → giữ nguyên luật cũ."""
+		self.assertEqual(self.flag(auto_filled=False, tick=False), 1)
+
+	def test_override_still_wins_on_an_auto_filled_day(self):
+		self.assertEqual(self.flag(auto_filled=True, tick=False, override="Có"), 1)
+		self.assertEqual(self.flag(auto_filled=True, tick=True, override="Không"), 0)
+
+
+class TestSinglePunchUsesLogType(PerTestRollback, FrappeTestCase):
+	"""Một dấu chấm duy nhất: phải đọc `log_type` chứ không suy theo giờ (2026-09-11).
+
+	Dấu lẻ chỉ cho MỘT đầu mốc, đầu kia không biết. Luật cũ suy "trước giờ trưa = vào, sau giờ trưa
+	= đến muộn" — đúng với dấu VÀO nhưng SAI hẳn với dấu RA: một dấu `OUT` lúc 17:43 nghĩa là người
+	đó làm cả ngày rồi quên chấm vào, chứ không phải chiều mới tới. Đã gặp thật trên site
+	(`hieu chu` 24/06 và 30/06) và bị mất suất ăn oan."""
+
+	def dt(self, hhmm):
+		return get_datetime(f"2026-06-24 {hhmm}:00")
+
+	def flag(self, hhmm, log_type):
+		from hrms.vn_payroll.lunch import effective_lunch_flag
+
+		return effective_lunch_flag("Present", "X", None, [self.dt(hhmm)], log_types=[log_type])
+
+	# --- dấu VÀO: biết lúc đến, không biết lúc về → giả định ở lại ---
+	def test_lone_in_before_lunch_counts(self):
+		self.assertEqual(self.flag("07:51", "IN"), 1)
+
+	def test_lone_in_after_lunch_starts_does_not_count(self):
+		"""Vào lúc 14:00 thì dù ở tới tối cũng đã lỡ bữa trưa."""
+		self.assertEqual(self.flag("14:00", "IN"), 0)
+
+	# --- dấu RA: biết lúc về, không biết lúc đến → giả định đã ở đó từ trước ---
+	def test_lone_out_after_lunch_ends_counts(self):
+		"""Ca thật: quên chấm vào, chỉ có dấu ra 17:43 → đã ở đó qua trưa."""
+		self.assertEqual(self.flag("17:43", "OUT"), 1)
+
+	def test_lone_out_before_lunch_ends_does_not_count(self):
+		"""Về lúc 11:00 thì chưa tới bữa trưa."""
+		self.assertEqual(self.flag("11:00", "OUT"), 0)
+
+	def test_lone_out_exactly_at_lunch_end_counts(self):
+		self.assertEqual(self.flag("13:30", "OUT"), 1)
+
+	# --- không có log_type thì lùi về suy đoán theo giờ như cũ ---
+	def test_missing_log_type_falls_back_to_time_heuristic(self):
+		from hrms.vn_payroll.lunch import effective_lunch_flag
+
+		self.assertEqual(effective_lunch_flag("Present", "X", None, [self.dt("07:51")], log_types=[None]), 1)
+		self.assertEqual(effective_lunch_flag("Present", "X", None, [self.dt("17:43")], log_types=None), 0)

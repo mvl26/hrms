@@ -16,9 +16,6 @@ from frappe.utils import (
 	nowdate,
 )
 
-from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
-from erpnext.setup.doctype.holiday_list.holiday_list import is_holiday
-
 import hrms
 from hrms.hr.doctype.attendance.vn_day_classifier import (
 	DEFAULT_FLEX_BAND_MINUTES,
@@ -29,8 +26,6 @@ from hrms.hr.doctype.attendance.vn_day_classifier import (
 )
 from hrms.hr.doctype.shift_assignment.shift_assignment import has_overlapping_timings
 from hrms.hr.utils import (
-	get_holiday_dates_for_employee,
-	get_holidays_for_employee,
 	validate_active_employee,
 )
 
@@ -76,17 +71,39 @@ class Attendance(Document):
 		# biết chính xác nó có đổi hay không.
 		self.flags.vn_status_before_leave_record = (self.status, self.leave_type)
 
+	def before_update_after_submit(self):
+		"""Sửa ô "Ăn trưa" trên ngày ĐÃ CHỐT thì cờ kết quả phải theo kịp.
+
+		`run_before_save_methods` chỉ gọi `before_validate` cho `save`/`submit`; đường
+		update-after-submit chỉ chạy đúng method này. Không móc vào đây thì HR đổi ô Ăn trưa mà
+		`custom_lunch` đứng yên — lựa chọn tay không có tác dụng gì. Chấm công vận hành thực tế
+		luôn ở trạng thái đã submit nên đây mới là đường đi chính, không phải ngoại lệ."""
+		self.set_lunch_flag()
+
 	def set_lunch_flag(self):
-		"""Miyano: ghi cờ ăn trưa (custom_lunch) từ checkin của ngày này — nguồn duy nhất cho số buổi
-		ăn trưa (report + Bảng Công Tháng + phiếu lương đều đếm từ cờ). Thuần dữ liệu, payroll đọc
-		riêng cho phụ cấp ăn trưa; không đụng status/leave_type/half_day_status."""
-		if not frappe.get_meta("Attendance").has_field("custom_lunch"):
+		"""Miyano: ghi cờ ăn trưa (custom_lunch) — nguồn duy nhất cho số buổi ăn trưa (report + Bảng
+		Công Tháng + phiếu lương đều đếm từ cờ). Thuần dữ liệu; không đụng status/leave_type/
+		half_day_status → số công không đổi, chỉ phụ cấp ăn đổi.
+
+		Ô "Ăn trưa" (`custom_lunch_override`) do người chọn thì THẮNG: chạy lại bao nhiêu lần cũng
+		không đè lên lựa chọn tay (spec §5.3)."""
+		meta = frappe.get_meta("Attendance")
+		if not meta.has_field("custom_lunch"):
 			return  # field chưa migrate
 		from hrms.vn_payroll.lunch import lunch_flag_for_attendance
 
+		override = self.get("custom_lunch_override") if meta.has_field("custom_lunch_override") else None
 		self.custom_lunch = (
 			1
-			if lunch_flag_for_attendance(self.employee, self.attendance_date, self.status, self.shift)
+			if lunch_flag_for_attendance(
+				self.employee,
+				self.attendance_date,
+				self.status,
+				self.shift,
+				self.get("custom_attendance_code"),
+				override,
+				self.get("custom_auto_filled"),
+			)
 			else 0
 		)
 
@@ -145,10 +162,15 @@ class Attendance(Document):
 			return None
 		return cfg
 
-	def falls_on_holiday(self) -> bool:
-		"""Ngày chấm công có nằm trong Holiday List của nhân viên không (T7/CN/lễ)."""
-		holiday_list = get_holiday_list_for_employee(self.employee, raise_exception=False)
-		return bool(holiday_list) and is_holiday(holiday_list, getdate(self.attendance_date))
+	def falls_on_non_working_day(self) -> bool:
+		"""Ngày chấm công có phải ngày KHÔNG đi làm không (ngoài lịch tuần, hoặc ngày lễ).
+
+		Hỏi lịch tuần của ca chứ không hỏi Holiday List: sau khi tách, danh sách đó chỉ còn ngày lễ
+		nên hỏi nó về thứ Bảy sẽ ra "ngày làm việc".
+		"""
+		from hrms.hr.work_schedule import is_working_day
+
+		return not is_working_day(self.employee, getdate(self.attendance_date))
 
 	def apply_vn_half_day_classifier(self):
 		"""Chấm mã công + giờ net từ giờ vào/ra theo luật ca trượt & đủ giờ (`vn_day_classifier`).
@@ -173,7 +195,7 @@ class Attendance(Document):
 		cfg = self.get_split_shift_config()
 		if not cfg:
 			return
-		if not cint(cfg.get("mark_auto_attendance_on_holidays")) and self.falls_on_holiday():
+		if not cint(cfg.get("mark_auto_attendance_on_holidays")) and self.falls_on_non_working_day():
 			# Ngày nghỉ (T7/CN/lễ) mà ca KHÔNG bật chấm công ngày nghỉ: không tự chấm mã. Bản ghi vẫn
 			# có thể sinh ra từ nhập tay / Yêu cầu chấm công; đem khung ca ngày thường ra chấm thì
 			# người đi làm ngày nghỉ bị quy thành V hoặc nửa công.
@@ -631,17 +653,29 @@ def add_attendance(filters):
 
 
 def add_holidays(events, start, end, employee=None):
-	holidays = get_holidays_for_employee(employee, start, end)
-	if not holidays:
+	"""Phủ ngày KHÔNG phải đi làm lên calendar của Attendance — nghỉ tuần CỘNG ngày lễ.
+
+	Đọc dòng `Holiday` là chỉ còn ngày lễ sau khi lịch tuần tách khỏi Holiday List, và calendar mất
+	sạch sự kiện cuối tuần. Ngày lễ vẫn được gọi tên riêng vì nó là ngày có lương.
+	"""
+	from hrms.hr.work_schedule import non_working_days_between, public_holidays_between
+
+	if not employee:
 		return
 
-	for holiday in holidays:
+	rest_and_holidays = non_working_days_between(employee, start, end)
+	if not rest_and_holidays:
+		return
+	holidays = public_holidays_between(employee, start, end)
+
+	for day in sorted(rest_and_holidays):
+		is_holiday = day in holidays
 		events.append(
 			{
 				"doctype": "Holiday",
-				"attendance_date": holiday.holiday_date,
-				"title": _("Holiday") + ": " + cstr(holiday.description),
-				"name": holiday.name,
+				"attendance_date": day,
+				"title": _("Holiday") if is_holiday else _("Ngày nghỉ"),
+				"name": f"work-schedule::{day}",
 				"allDay": 1,
 			}
 		)
@@ -730,9 +764,13 @@ def get_unmarked_days(employee, from_date, to_date, exclude_holidays=0):
 	marked_days = [getdate(record.attendance_date) for record in records]
 
 	if cint(exclude_holidays):
-		holiday_dates = get_holiday_dates_for_employee(employee, from_date, to_date)
-		holidays = [getdate(record) for record in holiday_dates]
-		marked_days.extend(holidays)
+		# Ngày KHÔNG phải đi làm (nghỉ tuần + lễ), không phải "dòng trong Holiday List". Sau khi lịch
+		# tuần tách ra, đọc Holiday List là chỉ còn ngày lễ, và hộp thoại *Mark Attendance* sẽ CHỦ
+		# ĐỘNG gợi ý T7/CN là ngày chưa chấm -> HR rất dễ chấm nhầm một ngày công vào cuối tuần.
+		# Ngày `Làm bù` vẫn xuất hiện: nó là ngày công, thiếu bản ghi là thiếu thật.
+		from hrms.hr.work_schedule import non_working_days_between
+
+		marked_days.extend(non_working_days_between(employee, from_date, to_date))
 
 	unmarked_days = []
 

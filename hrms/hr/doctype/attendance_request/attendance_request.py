@@ -3,10 +3,9 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import add_days, date_diff, format_date, get_link_to_form, getdate
 
-from erpnext.setup.doctype.employee.employee import is_holiday
-
 import hrms
 from hrms.hr.utils import validate_active_employee, validate_dates
+from hrms.hr.work_schedule import is_working_day
 
 
 class OverlappingAttendanceRequestError(frappe.ValidationError):
@@ -137,8 +136,8 @@ class AttendanceRequest(Document):
 			doc.submit()
 
 	def should_mark_attendance(self, attendance_date: str) -> bool:
-		# Check if attendance_date is a holiday
-		if not self.include_holidays and is_holiday(self.employee, attendance_date):
+		# Ngày không phải đi làm (ngoài lịch tuần hoặc ngày lễ)
+		if not self.include_holidays and not is_working_day(self.employee, attendance_date):
 			frappe.msgprint(
 				_("Attendance not submitted for {0} as it is a Holiday.").format(
 					frappe.bold(format_date(attendance_date))
@@ -221,7 +220,7 @@ class AttendanceRequest(Document):
 		for day in range(request_days):
 			attendance_date = add_days(self.from_date, day)
 
-			if not self.include_holidays and is_holiday(self.employee, attendance_date):
+			if not self.include_holidays and not is_working_day(self.employee, attendance_date):
 				attendance_warnings.append({"date": attendance_date, "reason": "Holiday", "action": "Skip"})
 			elif self.has_leave_record(attendance_date):
 				attendance_warnings.append({"date": attendance_date, "reason": "On Leave", "action": "Skip"})

@@ -20,6 +20,23 @@ LUNCH_EARLIEST = 10 * 60  # 10:00
 LUNCH_LATEST = 16 * 60  # 16:00
 LUNCH_ELIGIBLE_STATUS = ("Present", "Half Day")
 
+# CHỈ hai mã này được tính ăn trưa tại công ty (user chốt 2026-09-11). Đây là danh sách CHO PHÉP,
+# không phải danh sách loại trừ: đi công tác thì dù có chấm công kiểu gì cũng không ăn tại công ty,
+# và một danh sách loại trừ sẽ để lọt mọi mã mới HR tạo về sau.
+#
+# `X` = đi làm đủ công, `1/2X` = làm nửa ngày. Chấm công tạo tay cũng rơi vào đây: cầu nối mã công
+# tự gán `X` cho status Present và `1/2X` cho Half Day khi HR không điền mã.
+LUNCH_CODES = ("X", "1/2X")
+
+# Ô "Ăn trưa" trên phiếu chấm công: người chọn thì máy không đè lại nữa (spec §5.3).
+LUNCH_OVERRIDE_AUTO = "Tự động"
+LUNCH_OVERRIDE_YES = "Có"
+LUNCH_OVERRIDE_NO = "Không"
+
+# Dưới ngưỡng này thì dấu chấm KHÔNG đủ để kết luận có ở lại qua trưa hay không (0 dấu = chấm tay
+# hoặc sửa qua soát công; 1 dấu = quên chấm ra) → rơi về mặc định theo status thay vì phạt về 0.
+MIN_PUNCHES_TO_DECIDE = 2
+
 
 def _minutes(dt) -> int:
 	return dt.hour * 60 + dt.minute
@@ -71,20 +88,135 @@ def is_lunch_day(status: str | None, shift: str | None, day_datetimes) -> bool:
 	return checkins_cover_lunch(day_datetimes, shift_lunch_window(shift))
 
 
-def lunch_flag_for_attendance(employee: str, attendance_date, status: str | None, shift: str | None) -> bool:
-	"""Cờ ăn trưa của MỘT Attendance — đọc checkin của đúng ngày đó rồi áp luật ``is_lunch_day``."""
+def log_type_of(log_types) -> str | None:
+	"""`log_type` của dấu chấm duy nhất trong ngày; None nếu không có/không rõ."""
+	if not log_types:
+		return None
+	first = log_types[0]
+	return first if first in ("IN", "OUT") else None
+
+
+def lone_punch_covers_lunch(punch, log_type: str | None, lunch_start: int, lunch_end: int) -> bool:
+	"""Một dấu chấm duy nhất có đủ nói rằng người đó ở công ty qua giờ trưa không.
+
+	Dấu lẻ chỉ cho MỘT đầu mốc; đầu kia giả định theo hướng có lợi (người ta đi làm cả ngày, chỉ
+	quên bấm một đầu). Hai đầu suy NGƯỢC CHIỀU nhau:
+
+	- ``IN``  — biết lúc đến, không biết lúc về ⇒ đến trước giờ trưa thì coi như ở lại ăn.
+	- ``OUT`` — biết lúc về, không biết lúc đến ⇒ về từ lúc hết giờ trưa trở đi thì đã ở đó qua trưa.
+
+	Suy theo giờ mà bỏ qua `log_type` là sai hẳn với dấu RA: một dấu `OUT` lúc 17:43 bị đọc thành
+	"chiều mới tới" trong khi thực ra là "làm cả ngày, quên chấm vào" (gặp thật: `hieu chu` 24/06,
+	30/06). Không có `log_type` thì lùi về suy đoán cũ theo giờ — dấu lẻ đa phần là dấu vào."""
+	minutes = _minutes(punch)
+	if log_type == "OUT":
+		return minutes >= lunch_end
+	return minutes < lunch_start
+
+
+def effective_lunch_flag(
+	status: str | None,
+	code: str | None,
+	shift: str | None,
+	day_datetimes,
+	override: str | None = None,
+	auto_filled: bool = False,
+	auto_lunch_when_exempt: bool = False,
+	log_types: list | None = None,
+) -> int:
+	"""Cờ ăn trưa cuối cùng của MỘT ngày — nguồn luật duy nhất cho cả ba đường ghi (spec §5.4).
+
+	Người chọn tay thì thắng tuyệt đối; còn lại suy từ trạng thái + mã công + dấu chấm.
+
+	`auto_filled` = ngày do hệ thống TỰ SINH cho người miễn chấm công
+	(`Attendance.custom_auto_filled`), tức không ai xác nhận người đó có mặt. Những ngày ấy chỉ
+	được ăn trưa khi hồ sơ nhân viên bật `auto_lunch_when_exempt` (spec §5.8)."""
+	if override == LUNCH_OVERRIDE_YES:
+		return 1
+	if override == LUNCH_OVERRIDE_NO:
+		return 0
+
+	if status not in LUNCH_ELIGIBLE_STATUS:
+		return 0
+	if (code or "") not in LUNCH_CODES:
+		return 0
+
+	punches = list(day_datetimes or [])
+	lunch_start, lunch_end = shift_lunch_window(shift)
+	if len(punches) >= MIN_PUNCHES_TO_DECIDE:
+		# Dấu chấm phủ giờ trưa là BẰNG CHỨNG có mặt — thắng cả việc chưa bật tick.
+		return 1 if checkins_cover_lunch(punches, (lunch_start, lunch_end)) else 0
+
+	# Ngày TỰ SINH của người miễn chấm công: hệ thống sinh `X` cho mọi ngày làm việc mà không ai
+	# xác nhận có mặt tại công ty. Không bật tick thì không tự cấp — nếu không, người miễn chấm
+	# công được ăn trưa mỗi ngày, vĩnh viễn, không một bằng chứng nào.
+	if auto_filled and not auto_lunch_when_exempt:
+		return 0
+
+	# Dưới 2 dấu thì luật "phủ giờ nghỉ trưa" không kết luận được. KHÔNG mặc định có ăn cho mọi
+	# trường hợp: một dấu duy nhất lúc 14:00 nghĩa là chiều mới tới, chắc chắn không ăn tại công ty.
+	if status != "Present":
+		return 0  # nửa ngày: không đủ bằng chứng đã ở lại qua trưa
+	if not punches:
+		return 1  # chấm tay / sửa qua soát công: đã công nhận ngày công đủ thì mặc định có ăn
+	# Đúng một dấu: chỉ biết MỘT đầu mốc, đầu kia không có. `log_type` nói rõ đó là đầu nào, và
+	# hai đầu suy ngược chiều nhau — suy theo giờ thôi là sai hẳn với dấu RA (xem `lone_punch_covers_lunch`).
+	return 1 if lone_punch_covers_lunch(min(punches), log_type_of(log_types), lunch_start, lunch_end) else 0
+
+
+def day_punch_rows(employee: str, attendance_date) -> list:
+	"""Dấu chấm công của NV trong ngày, kèm `log_type`, sắp theo thời gian."""
+	day = getdate(attendance_date)
+	return frappe.get_all(
+		"Employee Checkin",
+		filters={"employee": employee, "time": ["between", [f"{day} 00:00:00", f"{day} 23:59:59"]]},
+		fields=["time", "log_type"],
+		order_by="time",
+	)
+
+
+def day_punches(employee: str, attendance_date) -> list:
+	"""Mọi dấu chấm công của NV trong đúng ngày đó, dạng datetime."""
+	return [get_datetime(r.time) for r in day_punch_rows(employee, attendance_date)]
+
+
+def employee_auto_lunch_when_exempt(employee: str) -> bool:
+	"""Hồ sơ NV có bật "Tự chấm ăn trưa" cho ngày tự sinh không (chỉ có nghĩa khi miễn chấm công)."""
+	if not employee or not frappe.get_meta("Employee").has_field("custom_auto_lunch_when_exempt"):
+		return False
+	return bool(cint(frappe.db.get_value("Employee", employee, "custom_auto_lunch_when_exempt")))
+
+
+def lunch_flag_for_attendance(
+	employee: str,
+	attendance_date,
+	status: str | None,
+	shift: str | None,
+	code: str | None = None,
+	override: str | None = None,
+	auto_filled: bool = False,
+) -> bool:
+	"""Cờ ăn trưa của MỘT Attendance — đọc dấu chấm của đúng ngày rồi áp ``effective_lunch_flag``.
+
+	`code`/`override` mặc định None để mọi lời gọi cũ vẫn chạy: không mã thì không rơi vào loại trừ
+	CT/W, không override thì đi nhánh tự động."""
+	if override in (LUNCH_OVERRIDE_YES, LUNCH_OVERRIDE_NO):
+		return override == LUNCH_OVERRIDE_YES  # khỏi truy vấn checkin: người đã quyết
 	if status not in LUNCH_ELIGIBLE_STATUS:
 		return False
-	day = getdate(attendance_date)
-	times = [
-		get_datetime(c.time)
-		for c in frappe.get_all(
-			"Employee Checkin",
-			filters={"employee": employee, "time": ["between", [f"{day} 00:00:00", f"{day} 23:59:59"]]},
-			fields=["time"],
+	_rows = day_punch_rows(employee, attendance_date)
+	return bool(
+		effective_lunch_flag(
+			status,
+			code,
+			shift,
+			[get_datetime(r.time) for r in _rows],
+			override,
+			auto_filled=bool(cint(auto_filled)),
+			auto_lunch_when_exempt=employee_auto_lunch_when_exempt(employee) if auto_filled else False,
+			log_types=[r.log_type for r in _rows],
 		)
-	]
-	return is_lunch_day(status, shift, times)
+	)
 
 
 def compute_lunch_flags_for_period(month, year, company: str | None = None) -> dict:
@@ -95,12 +227,27 @@ def compute_lunch_flags_for_period(month, year, company: str | None = None) -> d
 	filters = {"attendance_date": ["between", [start, end]], "docstatus": 1}
 	if company:
 		filters["company"] = company
+	meta = frappe.get_meta("Attendance")
+	fields = ["name", "employee", "attendance_date", "status", "shift"]
+	# Mã công quyết định loại trừ CT/W; ô "Ăn trưa" là lựa chọn tay mà lượt tính lại KHÔNG được xoá.
+	for optional in ("custom_attendance_code", "custom_lunch_override", "custom_auto_filled"):
+		if meta.has_field(optional):
+			fields.append(optional)
+
 	flags = {}
-	for a in frappe.get_all(
-		"Attendance", filters=filters, fields=["name", "employee", "attendance_date", "status", "shift"]
-	):
+	for a in frappe.get_all("Attendance", filters=filters, fields=fields):
 		flags[a.name] = (
-			1 if lunch_flag_for_attendance(a.employee, a.attendance_date, a.status, a.shift) else 0
+			1
+			if lunch_flag_for_attendance(
+				a.employee,
+				a.attendance_date,
+				a.status,
+				a.shift,
+				a.get("custom_attendance_code"),
+				a.get("custom_lunch_override"),
+				a.get("custom_auto_filled"),
+			)
+			else 0
 		)
 	return flags
 
@@ -128,14 +275,26 @@ def backfill_lunch_flags(dry_run: int = 1) -> dict:
 	if not frappe.get_meta("Attendance").has_field("custom_lunch"):
 		return {"error": "field custom_lunch chưa migrate", "changed": 0}
 	dry = cint(dry_run)
-	atts = frappe.get_all(
-		"Attendance",
-		filters={"docstatus": 1},
-		fields=["name", "employee", "attendance_date", "status", "shift", "custom_lunch"],
-	)
+	meta = frappe.get_meta("Attendance")
+	fields = ["name", "employee", "attendance_date", "status", "shift", "custom_lunch"]
+	for optional in ("custom_attendance_code", "custom_lunch_override"):
+		if meta.has_field(optional):
+			fields.append(optional)
+	atts = frappe.get_all("Attendance", filters={"docstatus": 1}, fields=fields)
 	to_change = 0
 	for a in atts:
-		flag = 1 if lunch_flag_for_attendance(a.employee, a.attendance_date, a.status, a.shift) else 0
+		flag = (
+			1
+			if lunch_flag_for_attendance(
+				a.employee,
+				a.attendance_date,
+				a.status,
+				a.shift,
+				a.get("custom_attendance_code"),
+				a.get("custom_lunch_override"),
+			)
+			else 0
+		)
 		if cint(a.custom_lunch) != flag:
 			to_change += 1
 			if not dry:

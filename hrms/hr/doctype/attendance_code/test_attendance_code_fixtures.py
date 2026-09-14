@@ -42,7 +42,7 @@ VN_ATTENDANCE_CODES = {
 	"Ô": ("Ốm", 0.0, 0, "On Leave", "Nghỉ ốm"),
 	"Cô": ("Ốm", 0.0, 0, "On Leave", "Nghỉ chăm con ốm"),
 	"TS": ("Thai sản", 0.0, 0, "On Leave", "Nghỉ thai sản"),
-	"T": ("Tai nạn LĐ", 0.0, 1, "On Leave", "Nghỉ tai nạn lao động"),
+	"T": ("TNLĐ", 0.0, 1, "On Leave", "Nghỉ tai nạn lao động"),
 	"NB": ("Nghỉ bù", 0.0, 1, "On Leave", "Nghỉ bù"),
 	"K": ("Không lương", 0.0, 0, "On Leave", "Nghỉ không lương"),
 	"1/2K": ("Không lương", 0.5, 0, "Half Day", "Nghỉ không lương"),

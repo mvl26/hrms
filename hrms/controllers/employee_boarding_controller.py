@@ -124,8 +124,27 @@ class EmployeeBoardingController(Document):
 		return [start_date, end_date]
 
 	def update_if_holiday(self, date, holiday_list):
-		while is_holiday(holiday_list, date):
-			date = add_days(date, 1)
+		"""Đẩy ngày của task onboarding sang ngày làm việc kế tiếp.
+
+		Hỏi lịch tuần chứ không hỏi Holiday List: sau khi tách, danh sách đó chỉ còn ngày lễ nên
+		task sẽ rơi vào thứ Bảy. Không có nhân viên (đơn onboarding chưa gắn người) thì giữ hành vi
+		cũ theo `holiday_list` — chưa suy được lịch tuần của ai cả.
+		"""
+		employee = self.get("employee")
+		if not employee:
+			while is_holiday(holiday_list, date):
+				date = add_days(date, 1)
+			return date
+
+		from hrms.hr.work_schedule import WorkScheduleNotConfigured, is_working_day
+
+		try:
+			guard = 0
+			while not is_working_day(employee, date) and guard < 14:
+				date = add_days(date, 1)
+				guard += 1
+		except WorkScheduleNotConfigured:
+			pass  # chưa khai lịch -> đừng chặn onboarding, cứ giữ ngày đã tính
 		return date
 
 	def assign_task_to_users(self, task, users):

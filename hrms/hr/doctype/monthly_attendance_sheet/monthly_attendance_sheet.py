@@ -34,7 +34,7 @@ CATEGORY_FIELD = {
 	"Việc riêng": "personal_leave",
 	"Ốm": "sick_leave",
 	"Thai sản": "maternity_leave",
-	"Tai nạn LĐ": "work_accident_leave",
+	"TNLĐ": "work_accident_leave",
 	"Nghỉ bù": "comp_off",
 	"Không lương": "unpaid_leave",
 	"Vắng": "absent",

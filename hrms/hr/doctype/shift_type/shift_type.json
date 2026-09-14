@@ -158,7 +158,7 @@
    "description": "Ngày nghỉ (T7/CN/lễ) mà nhân viên có chấm công thì có tính công hay không.\n\n• TẮT (mặc định): ngày nghỉ KHÔNG sinh bản ghi công dù có lượt chấm. Lượt chấm vẫn được lưu và hiện cờ “Ngày nghỉ nhưng có chấm công” ở trang Soát công tháng để HR xử lý riêng (nghỉ bù, tăng ca…).\n• BẬT: ngày nghỉ được chấm công y như ngày thường — trừ nghỉ trưa, đủ số giờ tối thiểu mới đủ công (X), thiếu giờ thành 1/2X.",
    "fieldname": "mark_auto_attendance_on_holidays",
    "fieldtype": "Check",
-   "label": "Mark Auto Attendance on Holidays"
+   "label": "Mark Auto Attendance on Non-Working Days"
   },
   {
    "default": "0",

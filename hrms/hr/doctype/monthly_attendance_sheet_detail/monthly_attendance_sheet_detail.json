@@ -313,7 +313,7 @@
    "description": "Nghỉ do tai nạn lao động — Đ.38.3 ATVSLĐ: công ty trả đủ lương, đã nằm trong Tổng công.",
    "fieldname": "work_accident_leave",
    "fieldtype": "Float",
-   "label": "Tai nạn LĐ",
+   "label": "TNLĐ",
    "precision": "2",
    "read_only": 1
   },

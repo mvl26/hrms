@@ -305,6 +305,9 @@ class TestSimulatePayrollModeDelta(PerTestRollback, FrappeTestCase):
 
 		self.employee = make_employee("mode_delta@codes.com", company=default_company())
 
+	# Ngày dùng trong lớp này PHẢI là ngày làm việc: từ khi lịch tuần tách khỏi Holiday List, mã công
+	# rơi vào T7/CN không còn được payroll đọc (ngày đó không ai có công). Tháng 03/2098: mùng 2 và
+	# mùng 9 là Chủ nhật, mùng 8 là thứ Bảy.
 	def mark(self, day, code):
 		frappe.get_doc(
 			{
@@ -319,7 +322,7 @@ class TestSimulatePayrollModeDelta(PerTestRollback, FrappeTestCase):
 		return next(r for r in report["rows"] if r["employee"] == self.employee)
 
 	def test_unpaid_leave_docks_days_only_under_attendance_mode(self):
-		self.mark(2, "K")  # nghỉ không lương
+		self.mark(10, "K")  # nghỉ không lương (thứ Hai)
 
 		report = simulate_payroll_mode_delta(2098, 3, company=default_company(), employees=[self.employee])
 		row = self.row_for(report)
@@ -369,7 +372,7 @@ class TestSimulatePayrollModeDelta(PerTestRollback, FrappeTestCase):
 		self.assertFalse(report["payroll_identical"])
 
 	def test_simulating_does_not_write_anything(self):
-		self.mark(8, "K")
+		self.mark(11, "K")  # thứ Ba
 		before_mode = frappe.db.get_single_value("Payroll Settings", "payroll_based_on")
 		before_slips = frappe.db.count(
 			"Salary Slip"

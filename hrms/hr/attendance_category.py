@@ -21,7 +21,7 @@ CATEGORIES = (
 	"Phép",
 	"Ốm",
 	"Thai sản",
-	"Tai nạn LĐ",
+	"TNLĐ",
 	"Nghỉ bù",
 	"Việc riêng",
 	"Không lương",

@@ -131,7 +131,8 @@
    "default": "0",
    "fieldname": "include_holidays",
    "fieldtype": "Check",
-   "label": "Include Holidays"
+   "label": "Include Non-Working Days",
+   "description": "Gồm cả ngày KHÔNG phải đi làm — nghỉ cuối tuần lẫn ngày lễ. Bật thì phiếu sinh công cho cả những ngày đó; tick nhầm là sinh ra ngày công thừa."
   }
  ],
  "is_submittable": 1,
