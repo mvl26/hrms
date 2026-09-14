@@ -260,7 +260,7 @@ class TestOfficeDaysCountHalfDayAsHalf(PerTestRollback, FrappeTestCase):
 		self.employee = test_employee()
 		self.company = frappe.db.get_value("Employee", self.employee, "company")
 
-	def day(self, date, status, in_h, out_h):
+	def day(self, date, status, in_h, out_h, leave_type=None):
 		# dựng thẳng document thay vì `mark_attendance` — hàm đó commit giữa chừng, huỷ savepoint
 		# của harness rollback (bẫy đã ghi trong CLAUDE.md).
 		doc = frappe.get_doc(
@@ -270,6 +270,7 @@ class TestOfficeDaysCountHalfDayAsHalf(PerTestRollback, FrappeTestCase):
 				"attendance_date": getdate(date),
 				"company": self.company,
 				"status": status,
+				"leave_type": leave_type,
 				"in_time": f"{date} {in_h}:00",
 				"out_time": f"{date} {out_h}:00",
 			}
@@ -280,11 +281,22 @@ class TestOfficeDaysCountHalfDayAsHalf(PerTestRollback, FrappeTestCase):
 	def totals(self):
 		return office_hours_map([self.employee], "2026-03-01", "2026-03-31").get(self.employee)
 
-	def test_a_half_day_counts_as_half_a_day(self):
-		self.day("2026-03-02", "Half Day", "08:00", "12:00")  # 4 giờ, không giao giờ nghỉ trưa
+	def test_short_hours_day_still_counts_as_a_whole_day(self):
+		"""`1/2X` (làm nửa ngày THIẾU GIỜ) vẫn là một ngày công — user chốt 2026-09-14.
+
+		Người đó vẫn đi làm cả ngày, chỉ là thiếu giờ. Chia cho 0,5 thì 4 giờ hoá ra 8h/ngày, CHE
+		MẤT đúng cái mà chỉ số này sinh ra để phát hiện. Nhận biết bằng `leave_type` rỗng."""
+		self.day("2026-03-02", "Half Day", "08:00", "12:00")  # 4 giờ, không có loại nghỉ
 		t = self.totals()
-		self.assertEqual(t["days"], 0.5, "nửa buổi phải là 0,5 ngày, không phải 1")
-		self.assertEqual(avg_office_hours(t), 8.0, "4 giờ / 0,5 ngày = 8 giờ mỗi ngày công")
+		self.assertEqual(t["days"], 1, "ngày thiếu giờ vẫn là 1 ngày công")
+		self.assertEqual(avg_office_hours(t), 4.0, "4 giờ / 1 ngày — phải lộ ra là thiếu giờ")
+
+	def test_half_day_leave_counts_as_half_a_day(self):
+		"""`1/2P` / `1/2K` thì khác: nửa ngày kia là nghỉ có phép, họ chỉ phải làm nửa ngày."""
+		self.day("2026-03-02", "Half Day", "08:00", "12:00", leave_type="Nghỉ phép năm")
+		t = self.totals()
+		self.assertEqual(t["days"], 0.5)
+		self.assertEqual(avg_office_hours(t), 8.0, "4 giờ / 0,5 ngày = làm đủ phần của mình")
 
 	def test_a_full_day_still_counts_as_one(self):
 		self.day("2026-03-03", "Present", "08:00", "17:30")  # 9,5 - 1,5 trưa = 8 giờ
@@ -293,10 +305,11 @@ class TestOfficeDaysCountHalfDayAsHalf(PerTestRollback, FrappeTestCase):
 		self.assertEqual(avg_office_hours(t), 8.0)
 
 	def test_mixed_month_divides_by_the_right_denominator(self):
-		"""Ca thật gặp trên site: 1 ngày đủ + 1 ngày nửa buổi."""
-		self.day("2026-03-04", "Present", "08:00", "17:30")  # 8 giờ
-		self.day("2026-03-05", "Half Day", "08:00", "12:00")  # 4 giờ
+		"""Ca thật gặp trên site: 1 ngày đủ + 1 ngày thiếu giờ + 1 ngày nghỉ phép nửa buổi."""
+		self.day("2026-03-04", "Present", "08:00", "17:30")  # 8 giờ, 1 ngày
+		self.day("2026-03-05", "Half Day", "08:00", "12:00")  # 4 giờ thiếu giờ, 1 ngày
+		self.day("2026-03-06", "Half Day", "08:00", "12:00", leave_type="Nghỉ phép năm")  # 4 giờ, 0,5 ngày
 		t = self.totals()
-		self.assertEqual(t["days"], 1.5)
-		self.assertEqual(t["hours"], 12.0)
-		self.assertEqual(avg_office_hours(t), 8.0, "12 giờ / 1,5 ngày — không phải 12/2 = 6")
+		self.assertEqual(t["days"], 2.5)
+		self.assertEqual(t["hours"], 16.0)
+		self.assertEqual(avg_office_hours(t), 6.4, "16 giờ / 2,5 ngày")
