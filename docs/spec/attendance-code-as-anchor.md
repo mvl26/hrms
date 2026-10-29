@@ -275,3 +275,22 @@ thái nháp. Không cái nào dính tới thay đổi này.
 | 3 test `validate_pool_code` | khoá luật hằng cứng | bỏ; thay bằng đối chứng `P`/`1/2P` suy từ bảng |
 
 **Còn treo:** chưa deploy — xem mục "Sau khi xong" của `docs/tasks/plan-attendance-code-as-anchor.md`.
+
+## Bổ sung 2026-10-29 — mã công và loại nghỉ là dữ liệu gieo, không phải fixture
+
+**Sự cố:** HR chuyển `P` sang loại nghỉ phép năm có lương do họ tạo. Sau mỗi `bench migrate`, `P`
+lại trỏ về "Nghỉ phép năm" mặc định, và các loại nghỉ mặc định đã xoá cũng hiện lại. Nguyên nhân:
+`sync_fixtures` nạp **mọi** file JSON trong `hrms/fixtures/` (dù `hooks.fixtures` có khai hay không)
+theo kiểu xoá rồi chèn lại (`import_doc(force=True)`).
+
+**Cách làm mới:** `leave_type.json` và `attendance_code.json` chuyển sang `hrms/seed_data/`.
+`setup_vn_defaults.seed_master_data` chạy ở `after_install` và mọi lần `after_migrate`, và chỉ chèn:
+
+- Mã công đã có trên site thì để nguyên, kể cả khi đã gắn loại nghỉ khác.
+- Loại nghỉ mặc định chỉ được dựng khi **chưa mã nào của nó** có trên site. Mã đã có tức là HR đã
+  quyết nó thuộc loại nghỉ nào.
+- Mã mới chỉ gắn loại nghỉ mặc định khi loại đó tồn tại và chưa có mã nào khác giữ cùng cặp
+  (trạng thái, loại nghỉ).
+
+Hệ quả: muốn đổi một mã hoặc loại nghỉ **đã có** trên site thì phải viết patch, sửa JSON không có
+tác dụng. Test: `hrms/tests/test_setup_vn_defaults.py::TestSeedNeverOverwritesHrChoices`.

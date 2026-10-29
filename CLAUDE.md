@@ -28,7 +28,7 @@ Because `miyano` carries real data, some ordinary Frappe commands are unsafe:
 - **Run this project's tests via the rollback console harness** instead: `frappe.flags.in_test = True`, monkeypatch `frappe.db.commit` → no-op, isolate each test with a savepoint (a `unittest.TextTestResult` subclass that opens a savepoint in `startTest` and rolls back in `stopTest`), and `frappe.db.rollback()` in `finally`. Drive it with `bench --site miyano console` / `bench execute`.
 - **Payroll-invariance gate:** any attendance change must prove Salary Slip `payment_days` / `absent_days` / LWP are unchanged before vs. after. Payroll reads only `status` / `leave_type` / `half_day_status`; display fields (mã công, `custom_cong`, …) must never move payroll numbers.
 - **Ask first / get sign-off** before: changing payroll-bridge logic, running a backfill or data-migration patch (not `git revert`-able), editing `Leave Type`s, or deploying `fixtures` onto the site.
-- **Deploy model:** code-defined doctypes & schema → `bench --site miyano migrate`; master data (Leave Types, Attendance Codes, custom fields) → the `fixtures` mechanism, re-synced every migrate.
+- **Deploy model:** code-defined doctypes & schema → `bench --site miyano migrate`; custom fields / property setters → the `fixtures` mechanism, re-synced (delete + re-insert) every migrate. **Leave Types + Attendance Codes are NOT fixtures** — they are seeded once from `hrms/seed_data/` (`setup_vn_defaults.seed_master_data`, insert-only) and then belong to HR; changing an existing one on the site needs a patch, not a JSON edit.
 
 ## Commands
 
@@ -88,7 +88,8 @@ Key files & mechanisms:
 
 - **Custom doctypes** (VN): `Attendance Code`, `Monthly Attendance Sheet` (+ `Detail`), `Business Trip` (+ `Traveler`) — renamed from VN-romanized names 2026-07-15 (labels stay VN via translations). Plus `Attendance` custom fields (`custom_attendance_code`, `custom_morning_code`, `custom_afternoon_code`, `custom_work_credit`), `Expense Claim-custom_business_trip`, and 5 `Shift Type` split-half-day fields.
 - **`hrms/setup_vn_defaults.py::ensure_defaults()`** — wired to `after_install` **and every `after_migrate`**. Idempotently self-heals the Công Tác workflow + `COO` role and warns (never recreates) if fixture master data is missing. Touches no HR Settings or transactional data.
-- **Fixtures** (`hrms/fixtures/`): 8 VN `Leave Type`s, 14 `Attendance Code`s, and the custom fields above. **Keep the `hooks.py` `fixtures` export filter in sync with the JSON** — `test_setup_vn_defaults.py` enforces it.
+- **Fixtures** (`hrms/fixtures/`): the custom fields + property setters above. **Keep the `hooks.py` `fixtures` export filter in sync with the JSON** — `test_setup_vn_defaults.py` enforces it. Never put Leave Type / Attendance Code JSON back in that folder: `sync_fixtures` imports every file there (hooks or not) and overwrites HR's choices — e.g. it kept moving `P` back onto "Nghỉ phép năm" (2026-10-29).
+- **Seed data** (`hrms/seed_data/`): 10 VN `Leave Type`s + 17 `Attendance Code`s, inserted only when missing. A default leave type is created only while none of its codes exists — the code is the anchor.
 - **`hrms/skip_attendance_diag.py`** — standalone diagnostic/repair tool for check-ins wrongly stuck at `skip_auto_attendance = 1` (run via `bench execute`; see its docstring).
 - **GOTCHA:** a leading-underscore method on a Frappe `Document` is intercepted by `__getattr__` (returns `None`) — name helper methods **without** a `_` prefix.
 

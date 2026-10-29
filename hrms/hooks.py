@@ -300,30 +300,11 @@ company_data_to_be_ignored = [
 	"Employee Separation Template",
 ]
 
-# VN timekeeping (mã công) master data — deployed to all sites via `bench migrate`.
-# Leave Type is filtered to only the VN anchors so existing/standard Leave Types are not exported.
+# VN timekeeping schema (custom fields, property setters) — re-synced on every `bench migrate`.
+# Leave Type + Attendance Code are NOT fixtures: `sync_fixtures` deletes and re-inserts every
+# record, which put `P` back onto "Nghỉ phép năm" after HR had moved it. They are seeded once
+# from `hrms/seed_data/` by `setup_vn_defaults.seed_master_data` and then belong to HR.
 fixtures = [
-	{
-		"dt": "Leave Type",
-		"filters": {
-			"name": [
-				"in",
-				[
-					"Nghỉ phép năm",
-					"Nghỉ ốm",
-					"Nghỉ chăm con ốm",
-					"Nghỉ thai sản",
-					"Nghỉ tai nạn lao động",
-					"Nghỉ bù",
-					"Nghỉ không lương",
-					"Nghỉ kết hôn",
-					"Nghỉ con kết hôn",
-					"Nghỉ tang",
-				],
-			]
-		},
-	},
-	"Attendance Code",
 	{
 		"dt": "Custom Field",
 		"filters": {

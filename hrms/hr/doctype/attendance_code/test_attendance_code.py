@@ -104,6 +104,6 @@ class TestAttendanceCode(PerTestRollback, FrappeTestCase):
 		self.assertIsNone(doc.leave_type)
 
 	def test_all_fixture_codes_pass_validation(self):
-		"""17 mã đang có trên site phải qua được — nếu không, `bench migrate` re-sync fixtures sẽ vỡ."""
+		"""17 mã đang có trên site phải qua được — nếu không, lưu lại bất kỳ mã nào trên form sẽ vỡ."""
 		for name in frappe.get_all("Attendance Code", pluck="name"):
 			frappe.get_doc("Attendance Code", name).validate()

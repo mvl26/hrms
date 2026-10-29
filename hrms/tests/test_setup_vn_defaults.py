@@ -65,3 +65,76 @@ class TestSetupVnDefaults(PerTestRollback, FrappeTestCase):
 		).insert(ignore_permissions=True)
 
 		self.assertIn("Nghỉ thử chưa gắn mã", leave_types_without_code())
+
+
+class TestSeedNeverOverwritesHrChoices(PerTestRollback, FrappeTestCase):
+	"""Mã công + Loại nghỉ là dữ liệu GIEO MỘT LẦN, không phải fixture.
+
+	Sự cố 2026-10-29: HR gắn `P` sang một loại nghỉ phép năm có lương của họ, rồi mỗi lần
+	`bench migrate` thì `P` lại về "Nghỉ phép năm" mặc định. Lý do: `sync_fixtures` nạp MỌI file
+	JSON trong `hrms/fixtures/` theo kiểu xoá-rồi-chèn (`import_doc(force=True)`), nên nó ghi đè
+	từng mã công và dựng lại từng loại nghỉ mặc định. Công xoay quanh mã công — mã đã có chủ thì
+	app không được đổi chủ, cũng không được đẻ thêm loại nghỉ cho nó."""
+
+	OWN_TYPE = "Phép năm có lương (HR tự tạo)"
+
+	def setUp(self):
+		frappe.get_doc({"doctype": "Leave Type", "leave_type_name": self.OWN_TYPE, "is_lwp": 0}).insert(
+			ignore_permissions=True
+		)
+		# đổi chủ thẳng ở nguồn sự thật, như HR làm trên form Mã Công
+		for code in ("P", "1/2P"):
+			frappe.db.set_value("Attendance Code", code, "leave_type", self.OWN_TYPE)
+
+	def test_seed_keeps_a_code_on_the_leave_type_hr_chose(self):
+		from hrms.setup_vn_defaults import seed_master_data
+
+		seed_master_data()
+		self.assertEqual(frappe.db.get_value("Attendance Code", "P", "leave_type"), self.OWN_TYPE)
+		self.assertEqual(frappe.db.get_value("Attendance Code", "1/2P", "leave_type"), self.OWN_TYPE)
+
+	def test_seed_does_not_recreate_a_default_leave_type_whose_codes_are_taken(self):
+		from hrms.setup_vn_defaults import seed_master_data
+
+		frappe.db.delete("Leave Type", {"name": "Nghỉ phép năm"})
+		seed_master_data()
+		self.assertFalse(frappe.db.exists("Leave Type", "Nghỉ phép năm"))
+
+	def test_seed_keeps_hr_edits_on_an_existing_leave_type(self):
+		from hrms.setup_vn_defaults import seed_master_data
+
+		frappe.db.set_value("Leave Type", "Nghỉ phép năm", "max_leaves_allowed", 99)
+		seed_master_data()
+		self.assertEqual(frappe.db.get_value("Leave Type", "Nghỉ phép năm", "max_leaves_allowed"), 99)
+
+	def test_seed_still_fills_a_fresh_site(self):
+		"""Site mới (CI, cài lại) vẫn phải có đủ bộ mặc định, đã gắn sẵn với nhau."""
+		from hrms.setup_vn_defaults import seed_master_data
+
+		frappe.db.delete("Attendance Code", {"name": "KH"})
+		frappe.db.delete("Leave Type", {"name": "Nghỉ kết hôn"})
+		seed_master_data()
+		self.assertTrue(frappe.db.exists("Leave Type", "Nghỉ kết hôn"))
+		self.assertEqual(frappe.db.get_value("Attendance Code", "KH", "leave_type"), "Nghỉ kết hôn")
+
+	def test_seed_is_idempotent(self):
+		from hrms.setup_vn_defaults import seed_master_data
+
+		seed_master_data()
+		before = (frappe.db.count("Attendance Code"), frappe.db.count("Leave Type"))
+		seed_master_data()
+		self.assertEqual((frappe.db.count("Attendance Code"), frappe.db.count("Leave Type")), before)
+
+	def test_codes_and_leave_types_are_not_fixtures(self):
+		"""`sync_fixtures` nạp mọi JSON trong `hrms/fixtures/`, kể cả khi hooks không khai — nên
+		bỏ khỏi hooks là chưa đủ, file phải ra khỏi thư mục đó."""
+		import os
+
+		import hrms.hooks as hooks
+
+		declared = {e if isinstance(e, str) else e["dt"] for e in hooks.fixtures}
+		self.assertNotIn("Attendance Code", declared)
+		self.assertNotIn("Leave Type", declared)
+		fixture_dir = frappe.get_app_path("hrms", "fixtures")
+		self.assertNotIn("attendance_code.json", os.listdir(fixture_dir))
+		self.assertNotIn("leave_type.json", os.listdir(fixture_dir))

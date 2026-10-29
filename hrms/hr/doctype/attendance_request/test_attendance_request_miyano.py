@@ -16,7 +16,7 @@ from hrms.tests.isolation import PerTestRollback
 from hrms.tests.vn_test_utils import test_employee
 
 _FIX_DIR = os.path.join(frappe.get_app_path("hrms"), "fixtures")
-_FIXTURE = os.path.join(_FIX_DIR, "attendance_code.json")
+_FIXTURE = os.path.join(frappe.get_app_path("hrms"), "seed_data", "attendance_code.json")
 
 # 4 tình huống yêu cầu chấm công (giá trị reason) — WFH/On Duty là option native, 2 cái sau Miyano thêm.
 EXPECTED_REASONS = {

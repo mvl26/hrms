@@ -6,15 +6,18 @@ It is intentionally narrow and safe to run on every migrate:
   - Self-heals the Công Tác approval workflow + `COO` role by delegating to the existing idempotent
     `ensure_workflow()` (previously only ran once via the patch log, so a deleted workflow/role stayed
     gone until re-patched; now it is re-ensured on every migrate).
-  - Verifies the fixture-backed master data (VN leave types, attendance codes, custom fields) is
-    present and logs a warning if any is missing. It does NOT recreate fixture data — the `fixtures`
-    mechanism owns that (and re-syncs it every migrate); recreating here would risk partial/dup rows.
+  - Seeds the VN leave types + attendance codes from `hrms/seed_data/` ONCE (`seed_master_data`):
+    a record is inserted only when the site lacks it, and an existing one is never touched. They used
+    to be fixtures, and `sync_fixtures` deletes + re-inserts every record on every migrate — HR moved
+    `P` onto their own paid annual-leave type and each migrate put it back on "Nghỉ phép năm".
+  - Verifies the fixture-backed schema (custom fields, property setters) is present and logs a
+    warning if any is missing. It does NOT recreate fixture data — the `fixtures` mechanism owns that.
   - Warns about Leave Types that no Attendance Code points at. Mã công là neo của tuyến chấm công:
     một loại nghỉ không có mã cả ngày nào trỏ tới sẽ cho ra 0 công, im lặng. Nó chỉ CẢNH BÁO — mã
     công là master data do HR quyết, đoán một ký hiệu thay họ chỉ tạo rác.
 
-It never mutates HR Settings (geolocation tracking stays off by default), seeds no sample master data,
-and touches no payroll/attendance transactional data.
+It never mutates HR Settings (geolocation tracking stays off by default), never edits an existing
+master record, and touches no payroll/attendance transactional data.
 """
 
 import json
@@ -25,16 +28,22 @@ from hrms.patches.v15_0.setup_cong_tac_workflow import ensure_workflow
 
 # doctype -> fixture file basename (under hrms/fixtures/), both keyed by "name"
 FIXTURE_DOCTYPES = {
-	"Leave Type": "leave_type",
-	"Attendance Code": "attendance_code",
 	"Custom Field": "custom_field",
 	"Property Setter": "property_setter",
 }
+
+# Dữ liệu gieo một lần (hrms/seed_data/) — sau đó thuộc về HR. Loại nghỉ trước, mã công sau:
+# mã công trỏ link tới loại nghỉ.
+SEED_LEAVE_TYPES = "leave_type"
+SEED_ATTENDANCE_CODES = "attendance_code"
+# Cột hệ thống trong file xuất — để Frappe tự đặt khi chèn.
+SEED_SKIP_KEYS = ("modified", "creation", "owner", "modified_by", "docstatus")
 
 
 def ensure_defaults():
 	"""Idempotent post-install / post-migrate setup. Returns a small summary dict for testability."""
 	ensure_workflow()
+	seeded = seed_master_data()
 
 	missing = check_fixture_master_data()
 	if missing:
@@ -55,10 +64,75 @@ def ensure_defaults():
 	return {
 		"workflow": bool(frappe.db.exists("Workflow", "Cong Tac Approval")),
 		"coo_role": bool(frappe.db.exists("Role", "COO")),
+		"seeded": seeded,
 		"missing": missing,
 		"leave_types_without_code": unmapped,
 		"shifts_without_working_days": shifts_without_schedule,
 	}
+
+
+def seed_master_data() -> dict:
+	"""Chèn loại nghỉ + mã công mặc định CÒN THIẾU; không bao giờ sửa bản ghi đã có.
+
+	Công xoay quanh mã công, nên mã công quyết loại nghỉ chứ không ngược lại:
+	  - Mã đã có trên site → để nguyên, kể cả khi HR đã chuyển nó sang loại nghỉ khác.
+	  - Loại nghỉ mặc định chỉ được dựng khi CHƯA mã nào của nó có mặt trên site (site mới). Mã đã
+	    có mà loại nghỉ thì không, nghĩa là HR đã chọn chỗ khác cho mã đó — dựng lại chỉ đẻ ra một
+	    loại nghỉ mồ côi, chính là cái HR vừa xoá.
+	  - Mã mới chèn chỉ gắn loại nghỉ mặc định nếu loại đó có mặt và chưa có mã khác giữ cùng cặp
+	    (trạng thái, loại nghỉ) — nếu không `AttendanceCode.validate` sẽ chặn cả lượt migrate.
+
+	Trả về {"Leave Type": [...], "Attendance Code": [...]} những gì vừa chèn."""
+	leave_types = seed_records(SEED_LEAVE_TYPES)
+	codes = seed_records(SEED_ATTENDANCE_CODES)
+	seeded = {"Leave Type": [], "Attendance Code": []}
+
+	for record in leave_types:
+		name = record["name"]
+		if frappe.db.exists("Leave Type", name):
+			continue
+		own_codes = [c["name"] for c in codes if c.get("leave_type") == name]
+		if any(frappe.db.exists("Attendance Code", code) for code in own_codes):
+			continue
+		insert_seed(record)
+		seeded["Leave Type"].append(name)
+
+	for record in codes:
+		if frappe.db.exists("Attendance Code", record["name"]):
+			continue
+		record = dict(record)
+		leave_type = record.get("leave_type")
+		if leave_type and (
+			not frappe.db.exists("Leave Type", leave_type)
+			or frappe.db.exists(
+				"Attendance Code",
+				{"leave_type": leave_type, "maps_to_status": record.get("maps_to_status")},
+			)
+		):
+			record["leave_type"] = None
+		insert_seed(record)
+		seeded["Attendance Code"].append(record["name"])
+
+	return seeded
+
+
+def insert_seed(record: dict):
+	doc = frappe.get_doc({k: v for k, v in record.items() if k not in SEED_SKIP_KEYS})
+	# Loại nghỉ được chèn TRƯỚC mã của nó, nên hook `warn_if_unmapped` sẽ báo "chưa gắn mã" cho
+	# một tình trạng chỉ kéo dài vài dòng — tắt tiếng để log migrate không đầy cảnh báo giả.
+	muted = frappe.flags.mute_messages
+	frappe.flags.mute_messages = True
+	try:
+		doc.insert(ignore_permissions=True)
+	finally:
+		frappe.flags.mute_messages = muted
+
+
+def seed_records(seed: str) -> list[dict]:
+	path = frappe.get_app_path("hrms", "seed_data", f"{seed}.json")
+	# đường dẫn nội bộ của app (frappe.get_app_path), không đến từ request
+	with open(path, encoding="utf-8") as f:  # nosemgrep
+		return [record for record in json.load(f) if record.get("name")]
 
 
 def warn_shifts_without_working_days() -> list[str]:
