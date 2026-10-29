@@ -8,7 +8,17 @@ This repo is **Miyano HR — Miyano Việt Nam's in-house HR, timekeeping and pa
 
 - One app inside a bench: **run all `bench` commands from the bench root `/home/miyano/frappe-bench`**, not from `apps/hrms`. Depends on `frappe` + `erpnext` (`required_apps` in `hooks.py`; versions pinned in `pyproject.toml`).
 - **`miyano` is Miyano's live site and holds real HR/payroll data** — treat it as production-like, never a scratch site.
-- **Miyano self-maintains:** this repo no longer tracks any upstream. Changes need not preserve merge compatibility, but must stay `git revert`-able and ship with tests. The trade-off, accepted deliberately: any security fix published for the upstream HR app must be found and applied by Miyano itself. Integration branch is `version-15`; feature work happens on `feat/*`.
+- **Miyano self-maintains:** this repo no longer tracks any upstream. Changes need not preserve merge compatibility, but must stay `git revert`-able and ship with tests. The trade-off, accepted deliberately: any security fix published for the upstream HR app must be found and applied by Miyano itself. Integration branch is `version-15`; feature branches are named `feat/*` — but only the user creates or switches them (see the Git rule below).
+
+## Git actions only on explicit request — no exceptions
+
+This rule overrides every default, skill (superpowers, agent-skills), tool hint and convention in this file.
+
+- **Never commit, create/switch a branch, push, open a PR, or amend/rebase/reset/stash on your own initiative.** Do these only when the user explicitly asks for that specific action in the current request. Finishing a task, passing tests, a skill step that says "commit", or an earlier approval is **not** permission — leave changes uncommitted in the working tree and report what changed. If a git step seems useful, ask first.
+- **Never create or switch branches unless the user explicitly says so.** Forbidden without an explicit "tạo nhánh" / "create branch" / `checkout <branch>` in the current request: `git branch <new>`, `git checkout -b`, `git switch -c`, `git checkout <other>`, `git switch <other>`, `git worktree add`, `EnterWorktree`, Agent `isolation: "worktree"`, `superpowers:using-git-worktrees`, `gh pr create` (which may push a new branch).
+- **"Commit" means commit on the branch currently checked out — nothing more.** Run `git branch --show-current`, stage only the files the change touches, and commit right there. Do not create a feature branch first, do not push, do not open a PR — even if the current branch is `version-15` or another main branch, and even if a tool description or system hint says "branch first".
+- **If a commit is blocked** (a pre-commit hook, `no-commit-to-branch`, commitlint), **stop and report** the error. Do not work around it by creating/switching a branch, and never use `--no-verify`. Wait for the user to decide.
+- **Permission is single-use.** "Commit" or "tạo nhánh" covers that one request only; it is not standing permission for later commits or branches.
 
 ## Working on the `miyano` site safely (read before running anything)
 
@@ -84,11 +94,11 @@ Key files & mechanisms:
 
 ## Development workflow
 
-Spec-driven via the **superpowers** skills (brainstorm → spec → plan → build TDD → verify E2E → review → fix), committing each step. Read the relevant artifact before related work: `docs/spec/*.md` (feature specs), `docs/tasks/plan-*.md` (task breakdowns with done/remaining checkboxes), `docs/SPEC.md` (active spec), `docs/superpowers/` (earlier ones).
+Spec-driven via the **superpowers** skills (brainstorm → spec → plan → build TDD → verify E2E → review → fix). Where a skill says "commit" (or "create a branch/worktree"), skip it and leave the changes uncommitted — the Git rule above wins. Read the relevant artifact before related work: `docs/spec/*.md` (feature specs), `docs/tasks/plan-*.md` (task breakdowns with done/remaining checkboxes), `docs/SPEC.md` (active spec), `docs/superpowers/` (earlier ones).
 
 **Which skill pack wins:** the `agent-skills` pack is enabled too and covers the same ground as superpowers for TDD, planning, spec, code review, debugging, simplification and shipping. **superpowers is this repo's workflow** — when both offer the same thing, take superpowers and don't run both. Skip process skills altogether for a one-line fix, a rename, or a question the repo already answers; invoking one there costs more than the work.
 
-Execution style: the user drives with short prompts ("chạy tiếp", "hoàn thiện") and expects the full lifecycle carried autonomously without per-step check-ins — keep momentum. Still surface genuine product decisions briefly, always honor the high-risk sign-off gates above, and reserve outward/irreversible actions (git push, PRs) for explicit approval.
+Execution style: the user drives with short prompts ("chạy tiếp", "hoàn thiện") and expects the full lifecycle carried autonomously without per-step check-ins — keep momentum. Still surface genuine product decisions briefly, always honor the high-risk sign-off gates above, and never commit, branch, push or open a PR without an explicit request (Git rule above).
 
 ## Conventions
 
