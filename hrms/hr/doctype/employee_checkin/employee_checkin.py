@@ -38,7 +38,9 @@ class EmployeeCheckin(Document):
 
 		Hai lý do tách bạch:
 		- `Ngày nghỉ` — ngày đó ngoài lịch tuần, hoặc là ngày lễ;
-		- `Ngoài giờ` — ngày làm việc nhưng dấu chấm nằm ngoài khung ca (ở lại muộn, tới sớm).
+		- `Ngoài giờ` — ngày làm việc nhưng dấu chấm nằm ngoài khung ca (ở lại muộn, tới sớm). Ca
+		  trượt thì khung ca là khung ĐÃ TRƯỢT theo dấu chấm đầu tiên của ngày, không phải giờ danh
+		  nghĩa: tới 07:00 khi ca cho trượt 3h là trong giờ.
 
 		Khi làm OT chỉ việc quét `custom_outside_schedule = 1`, dữ liệu đã tích sẵn từ hôm nay nên
 		không phải backfill. Cố ý KHÔNG mượn `skip_auto_attendance`: cờ đó đang là đối tượng chẩn
@@ -62,13 +64,30 @@ class EmployeeCheckin(Document):
 				self.custom_outside_schedule = 1
 				self.custom_outside_reason = "Ngày nghỉ"
 				return
-			window = shift_window(self.employee, when.date())
+			window = shift_window(self.employee, when.date(), first_punch=self.first_punch_of_day(when))
 		except WorkScheduleNotConfigured:
 			return
 
 		if window and not (window[0] <= when <= window[1]):
 			self.custom_outside_schedule = 1
 			self.custom_outside_reason = "Ngoài giờ"
+
+	def first_punch_of_day(self, when):
+		"""Dấu chấm sớm nhất của nhân viên trong ngày, tính cả dấu đang lưu — mốc để ca trượt.
+
+		Cờ được tính MỘT LẦN lúc dấu chấm được lưu. Dấu về muộn hơn mà giờ lại sớm hơn (máy chấm
+		đồng bộ lệch thứ tự) sẽ đổi mốc trượt của cả ngày nhưng không tính lại cờ của các dấu đã
+		lưu — chấp nhận được vì cờ chỉ để ghi nhận, bước tính OT phải tự đọc lại cả ngày."""
+		earliest = frappe.db.get_value(
+			"Employee Checkin",
+			{
+				"employee": self.employee,
+				"time": ["between", [f"{when.date()} 00:00:00", f"{when.date()} 23:59:59"]],
+				"name": ["!=", self.name or ""],
+			},
+			"min(time)",
+		)
+		return min(get_datetime(earliest), when) if earliest else when
 
 	def validate_duplicate_log(self):
 		doc = frappe.db.exists(

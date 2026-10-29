@@ -22,7 +22,7 @@ from datetime import date, datetime, time, timedelta
 
 import frappe
 from frappe import _
-from frappe.utils import getdate
+from frappe.utils import cint, get_datetime, getdate
 
 # date.weekday(): 0 = thứ Hai … 6 = Chủ nhật. Tên thứ khớp child doctype `Assignment Rule Day`.
 # Loại ngày đặc biệt (khớp `Work Calendar Day.day_type`) — chỉ "Làm bù" đổi được lịch tuần.
@@ -473,22 +473,43 @@ def scheduled_days_map(employees: list[str], start, end) -> dict[str, dict[date,
 	return out
 
 
-def shift_window(employee: str, date) -> tuple[datetime, datetime] | None:
+def shift_window(employee: str, date, first_punch=None) -> tuple[datetime, datetime] | None:
 	"""(giờ vào, giờ ra) của ca trong ngày, hoặc `None` nếu ngày đó ngoài lịch tuần.
 
 	Đây là định nghĩa "trong ca / ngoài ca" mà tính năng OT sẽ dùng — khai một chỗ để OT không
 	phải phát minh lại khái niệm.
+
+	`first_punch` = dấu chấm ĐẦU TIÊN của ngày. Ca bật giờ linh hoạt thì khung ca trượt theo dấu đó
+	(tối đa ± biên trượt) — dùng CHÍNH hàm trượt của bộ chấm công (`vn_day_classifier.shift_window`)
+	để "ngoài giờ" và "đủ công" không bao giờ nói về hai khung khác nhau. Không truyền `first_punch`,
+	hoặc ca không trượt, thì trả khung danh nghĩa của ca.
 	"""
 	if not is_scheduled_day(employee, date):
 		return None
 	shift = employee_shift(employee, date)
 	if not shift:
 		return None
-	timings = frappe.get_cached_value("Shift Type", shift, ["start_time", "end_time"])
-	if not timings or timings[0] is None or timings[1] is None:
+	fields = ["start_time", "end_time"]
+	# 2 field giờ linh hoạt là custom field (fixtures): site chưa migrate thì coi như ca không trượt.
+	meta = frappe.get_meta("Shift Type")
+	flex_fields = [f for f in ("custom_flexible_shift", "custom_flex_band_minutes") if meta.has_field(f)]
+	cfg = frappe.db.get_value("Shift Type", shift, fields + flex_fields, as_dict=True)
+	if not cfg or cfg.start_time is None or cfg.end_time is None:
 		return None
-	on = getdate(date)
-	return (
-		datetime.combine(on, time.min) + timings[0],
-		datetime.combine(on, time.min) + timings[1],
+	day = datetime.combine(getdate(date), time.min)
+	if not first_punch:
+		return day + cfg.start_time, day + cfg.end_time
+
+	from hrms.hr.doctype.attendance.vn_day_classifier import DEFAULT_FLEX_BAND_MINUTES
+	from hrms.hr.doctype.attendance.vn_day_classifier import shift_window as slide_window
+
+	band = cfg.get("custom_flex_band_minutes")
+	return slide_window(
+		get_datetime(first_punch),
+		day,
+		cfg.start_time,
+		cfg.end_time,
+		flexible=bool(cint(cfg.get("custom_flexible_shift"))),
+		# 0 nghĩa là "tắt trượt" (khác với bỏ trống → dùng mặc định) — cùng quy ước với bộ chấm công
+		band_minutes=DEFAULT_FLEX_BAND_MINUTES if band is None else cint(band),
 	)
