@@ -215,11 +215,10 @@ class TestEmployeeWorkingHoursDaily(PerTestRollback, FrappeTestCase):
 		self.assertEqual(row["hours"], 0.0)
 		self.assertEqual(row["credited_hours"], 0.0)
 
-	def test_day_without_punch_has_no_presence_hours(self):
-		"""Ngày được trả công nhưng không có giờ vào/ra (WFH, yêu cầu chấm công, nhập tay) không
-		phải ngày làm ở văn phòng → 0 giờ và không vào mẫu số TB."""
+	def test_manual_day_without_punch_has_no_presence_hours(self):
+		"""Ngày nhập tay `X` không có giờ vào/ra và không có giấy tờ nào → 0 giờ, không vào mẫu số TB."""
 		employee = make_employee("ewh_nopunch@miyano.test", company=default_company())
-		make_attendance(employee, MONDAY, status="Work From Home", working_hours=8.0)
+		make_attendance(employee, MONDAY, status="Present")
 
 		rows = get_daily_rows(base_filters(employee=employee))
 		summary = get_summary_rows(base_filters(employee=employee))
@@ -227,6 +226,18 @@ class TestEmployeeWorkingHoursDaily(PerTestRollback, FrappeTestCase):
 		self.assertEqual(rows[0]["hours"], 0.0)
 		self.assertEqual(summary[0]["days_counted"], 0)
 		self.assertEqual(summary[0]["avg_hours"], 0.0)
+
+	def test_off_site_day_counts_a_full_shift(self):
+		"""Ngày làm ngoài văn phòng (`CT` / `W`, không có lượt chấm) tính đủ giờ ca và VÀO mẫu số TB —
+		user chốt 2026-10-29: họ vẫn làm việc, chỉ không chấm công ở công ty. Trước đó là 0 giờ."""
+		employee = make_employee("ewh_offsite@miyano.test", company=default_company())
+		make_attendance(employee, MONDAY, status="Work From Home")  # cầu nối suy mã CT
+
+		rows = get_daily_rows(base_filters(employee=employee))
+		summary = get_summary_rows(base_filters(employee=employee))
+
+		self.assertEqual((rows[0]["hours"], rows[0]["credited_hours"]), (8.0, 8.0))
+		self.assertEqual((summary[0]["days_counted"], summary[0]["avg_hours"]), (1.0, 8.0))
 
 	def test_absent_day_with_punch_is_excluded(self):
 		"""Ngày đã chấm là vắng thì dù có punch lẻ cũng không tính là ngày làm việc."""

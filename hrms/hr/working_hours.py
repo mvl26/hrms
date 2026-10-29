@@ -17,8 +17,8 @@ FULL_DAY_STATUSES = ("Present", "Work From Home")
 # Ngày đã chấm là nghỉ thì dù có punch lẻ cũng không tính là ngày làm việc ở văn phòng.
 NON_PRESENCE_STATUSES = ("Absent", "On Leave")
 
-# Ngày làm việc bình thường TẠI VĂN PHÒNG. `Work From Home` bị loại có chủ đích: cả mã `W` (làm tại
-# nhà) lẫn `CT` (đi công tác) đều map sang status đó, mà cả hai đều không phải ngày ở văn phòng.
+# Ngày làm việc bình thường TẠI VĂN PHÒNG. `Work From Home` (mã `W` làm tại nhà, `CT` đi công tác)
+# không nằm ở đây; những nơi tính giờ theo giấy tờ thêm nó vào riêng (xem `off_site_fraction`).
 # Nghỉ lễ / nghỉ tuần không có bản ghi Attendance nào nên tự rơi ra ngoài.
 OFFICE_STATUSES = ("Present", "Half Day")
 
@@ -140,6 +140,97 @@ def presence_hours(in_time, out_time, attendance_date, lunch_start=None, lunch_e
 	return round(max(present - lunch, 0.0), 2)
 
 
+# ---------------------------------------------------------------------------
+# Ngày làm việc theo GIẤY TỜ (không có lượt chấm ở văn phòng)
+# ---------------------------------------------------------------------------
+
+# User chốt 2026-10-29: phần ngày có công theo giấy tờ được tính ĐỦ giờ ca — đi công tác, làm tại
+# nhà, làm từ xa, quên chấm vẫn là làm việc, chỉ không chấm công ở văn phòng. Đi muộn / về sớm thì
+# đã có giờ vào-ra thật nên giữ giờ thật. Nghỉ phép không bao giờ có công theo đường này.
+REQUEST_FULL_HOURS_REASONS = frozenset({"Work From Home", "On Duty", "Remote Work", "Missed Punch"})
+# Ngày không có Yêu cầu chấm công (Công Tác, nhập tay) nhận ra qua mã: CT / W là làm ngoài văn phòng.
+OFF_SITE_WORK_CODES = frozenset({"CT", "W"})
+
+
+def attendance_request_map(names) -> dict:
+	"""{tên Yêu cầu chấm công: reason/half_day/half_day_date} — một truy vấn cho cả bảng."""
+	names = sorted({n for n in names or () if n})
+	if not names:
+		return {}
+	return {
+		r.name: r
+		for r in frappe.get_all(
+			"Attendance Request",
+			filters={"name": ["in", names]},
+			fields=["name", "reason", "half_day", "half_day_date"],
+		)
+	}
+
+
+def off_site_fraction(attendance_date, request=None, code=None, morning=None, afternoon=None) -> float:
+	"""Phần ngày (0 / 0,5 / 1) có công theo giấy tờ và được tính đủ giờ ca.
+
+	Có Yêu cầu chấm công thì đơn quyết định (nửa ngày → 0,5, còn lại → 1; đi muộn / về sớm → 0).
+	Không có đơn thì đọc mã: cả ngày `CT`/`W` → 1, mỗi buổi `CT`/`W` → 0,5."""
+	if request:
+		if request.get("reason") not in REQUEST_FULL_HOURS_REASONS:
+			return 0.0
+		half_date = request.get("half_day_date")
+		if cint(request.get("half_day")) and half_date and getdate(half_date) == getdate(attendance_date):
+			return 0.5
+		return 1.0
+	if code in OFF_SITE_WORK_CODES:
+		return 1.0
+	return 0.5 * ((morning in OFF_SITE_WORK_CODES) + (afternoon in OFF_SITE_WORK_CODES))
+
+
+def with_off_site_hours(presence, fraction, shift_hours) -> float:
+	"""Giờ của ngày = giờ có mặt thật + phần theo giấy tờ x giờ ca. Cả ngày theo giấy tờ → đúng giờ ca
+	(dấu chấm lẻ nếu có không cộng thêm)."""
+	if fraction >= 1:
+		return round(flt(shift_hours), 2)
+	if fraction <= 0:
+		return flt(presence)
+	return round(flt(presence) + fraction * flt(shift_hours), 2)
+
+
+class ShiftHours(dict):
+	"""{ca: giờ ca/ngày} nhớ đệm trong một lượt dựng báo cáo (`work_schedule.shift_hours_per_day`)."""
+
+	def __missing__(self, shift):
+		from hrms.hr.work_schedule import shift_hours_per_day
+
+		self[shift] = shift_hours_per_day(shift or None)
+		return self[shift]
+
+
+def day_hours(row, presence, requests: dict, shift_hours: ShiftHours) -> float:
+	"""Giờ làm của một dòng Attendance (cần `attendance_date`, `shift`, `attendance_request`, ba mã)."""
+	fraction = off_site_fraction(
+		row.attendance_date,
+		requests.get(row.get("attendance_request")),
+		row.get("custom_attendance_code"),
+		row.get("custom_morning_code"),
+		row.get("custom_afternoon_code"),
+	)
+	if not fraction:
+		return presence
+	shift = row.get("shift")
+	if not shift and row.get("employee"):
+		# ngày do đơn sinh ra thường không mang ca (đơn không bắt buộc chọn ca) → ca của ngày đó
+		from hrms.hr.work_schedule import employee_shift
+
+		shift = employee_shift(row.employee, row.attendance_date)
+	return with_off_site_hours(presence, fraction, shift_hours[shift or ""])
+
+
+def off_site_fields() -> list[str]:
+	"""Field `day_hours` cần — đọc phòng thủ: ba mã công là custom field (fixtures)."""
+	meta = frappe.get_meta("Attendance")
+	optional = ("custom_attendance_code", "custom_morning_code", "custom_afternoon_code")
+	return ["attendance_request", *(f for f in optional if meta.has_field(f))]
+
+
 def office_day_fraction(status: str | None, leave_type: str | None = None) -> float:
 	"""Ngày đó chiếm bao nhiêu phần của một ngày công tại văn phòng.
 
@@ -163,9 +254,9 @@ def office_day_fraction(status: str | None, leave_type: str | None = None) -> fl
 def office_hours_map(employees, start, end) -> dict:
 	"""{employee: {"hours": tổng giờ có mặt, "days": số ngày}} cho các ngày làm việc TẠI VĂN PHÒNG.
 
-	Mẫu số của "TB giờ/ngày": chỉ ngày `Present`/`Half Day` mà thực sự có giờ vào lẫn giờ ra. Ngày
-	nghỉ phép, công tác, làm tại nhà, nghỉ lễ, nghỉ tuần đều không vào — nghỉ lễ/nghỉ tuần vì không
-	có Attendance, công tác/WFH vì mang status `Work From Home`, nghỉ phép vì `On Leave`.
+	Mẫu số của "TB giờ/ngày": ngày `Present`/`Half Day` có giờ vào lẫn giờ ra, VÀ (từ 2026-10-29)
+	ngày làm theo giấy tờ — công tác / làm tại nhà / làm từ xa / quên chấm — tính đủ giờ ca cho phần
+	đơn phủ (`day_hours`). Nghỉ phép (`On Leave`), nghỉ lễ, nghỉ tuần (không có Attendance) không vào.
 
 	Một truy vấn gộp cho cả bảng, cùng lối với `lunch_days_map`."""
 	employees = list(employees or [])
@@ -179,15 +270,28 @@ def office_hours_map(employees, start, end) -> dict:
 			"employee": ["in", employees],
 			"attendance_date": ["between", [start, end]],
 			"docstatus": 1,
-			"status": ["in", OFFICE_STATUSES],
+			# `Work From Home` (mã CT / W) vào từ 2026-10-29: ngày làm theo giấy tờ tính đủ giờ ca
+			"status": ["in", (*OFFICE_STATUSES, "Work From Home")],
 		},
-		fields=["employee", "attendance_date", "status", "leave_type", "shift", "in_time", "out_time"],
+		fields=[
+			"employee",
+			"attendance_date",
+			"status",
+			"leave_type",
+			"shift",
+			"in_time",
+			"out_time",
+			*off_site_fields(),
+		],
 	)
+	requests = attendance_request_map(r.get("attendance_request") for r in rows)
+	shift_hours = ShiftHours()
 
 	totals = {}
 	for r in rows:
 		lunch_start, lunch_end = lunch_windows.get(r.shift or "", (None, None))
 		hours = presence_hours(r.in_time, r.out_time, r.attendance_date, lunch_start, lunch_end)
+		hours = day_hours(r, hours, requests, shift_hours)
 		if hours <= 0:  # không có giờ vào/ra → không phải ngày ở văn phòng, không kéo TB xuống
 			continue
 		total = totals.setdefault(r.employee, {"hours": 0.0, "days": 0.0})
@@ -265,9 +369,11 @@ def get_net_hours_map(filters):
 			Attendance.shift,
 			Extract("day", Attendance.attendance_date).as_("day_of_month"),
 			Attendance.status,
+			Attendance.attendance_date,
 			Attendance.in_time,
 			Attendance.out_time,
 			Attendance.working_hours,
+			*(Attendance[f] for f in off_site_fields()),
 		)
 		.where(
 			(Attendance.docstatus == 1)
@@ -282,12 +388,30 @@ def get_net_hours_map(filters):
 	# ca tách sáng/chiều đã lưu working_hours net (đã loại trưa) -> dashboard không trừ trưa lần nữa
 	split_shifts = set(frappe.get_all("Shift Type", filters={"custom_split_half_day": 1}, pluck="name"))
 
+	records = query.run(as_dict=True)
+	requests = attendance_request_map(d.get("attendance_request") for d in records)
+	lunch_windows = get_lunch_window_map()
+	shift_hours = ShiftHours()
+
 	hours_map = {}
-	for d in query.run(as_dict=True):
+	for d in records:
 		shift = d.shift or ""
-		net = compute_net_hours(
-			d.status, d.in_time, d.out_time, d.working_hours, is_split=shift in split_shifts
-		)
+		if off_site_fraction(
+			d.attendance_date,
+			requests.get(d.get("attendance_request")),
+			d.get("custom_attendance_code"),
+			d.get("custom_morning_code"),
+			d.get("custom_afternoon_code"),
+		):
+			# ngày theo giấy tờ: `working_hours` đã là giờ ĐÃ CỘNG phần đơn → tính lại từ giờ có mặt,
+			# cộng phần đơn một lần (dựa vào `working_hours` là cộng hai lần)
+			lunch_start, lunch_end = lunch_windows.get(shift, (None, None))
+			presence = presence_hours(d.in_time, d.out_time, d.attendance_date, lunch_start, lunch_end)
+			net = day_hours(d, presence, requests, shift_hours)
+		else:
+			net = compute_net_hours(
+				d.status, d.in_time, d.out_time, d.working_hours, is_split=shift in split_shifts
+			)
 		hours_map.setdefault(d.employee, {}).setdefault(shift, {})[d.day_of_month] = net
 
 	return hours_map

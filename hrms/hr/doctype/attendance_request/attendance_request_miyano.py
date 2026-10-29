@@ -156,7 +156,7 @@ def set_attendance_request_code(doc, method=None):
 	for att in frappe.get_all(
 		"Attendance",
 		filters={"attendance_request": doc.name, "docstatus": ["<", 2]},
-		fields=["name", "attendance_date", "half_day_status"],
+		fields=["name", "employee", "attendance_date", "half_day_status", "shift", "in_time", "out_time"],
 	):
 		if is_half and getdate(att.attendance_date) == half_date:
 			# buổi còn lại: hiện diện đủ → X (đủ công); không → K không lương (chỉ làm nửa ngày). Khớp
@@ -180,11 +180,33 @@ def set_attendance_request_code(doc, method=None):
 				"custom_afternoon_code": None,
 				"custom_work_credit": work_credit(code),
 			}
+		if hours := off_site_working_hours(doc, att):
+			vals["working_hours"] = hours
 		for field, value in vals.items():
 			frappe.db.set_value("Attendance", att.name, field, value, update_modified=False)
 		# Mã vừa đổi bằng `db_set` → cờ ăn trưa phải theo mã MỚI (quên chấm công được công nhận thì
 		# có ăn trưa; làm tại nhà / công tác thì không).
 		refresh_lunch_flag(att.name)
+
+
+def off_site_working_hours(doc, att) -> float | None:
+	"""Ô "Giờ làm" của ngày theo đơn: giờ có mặt thật + phần đơn phủ x giờ ca (user chốt 2026-10-29 —
+	vẫn làm việc, chỉ không chấm công ở văn phòng). None khi đơn không đổi giờ (đi muộn / về sớm giữ
+	giờ thật). Cùng luật với báo cáo giờ làm (`working_hours.day_hours`)."""
+	from hrms.hr.working_hours import (
+		ShiftHours,
+		day_hours,
+		get_lunch_window_map,
+		off_site_fraction,
+		presence_hours,
+	)
+
+	if not off_site_fraction(att.attendance_date, doc):
+		return None
+	lunch_start, lunch_end = get_lunch_window_map().get(att.shift or "", (None, None))
+	presence = presence_hours(att.in_time, att.out_time, att.attendance_date, lunch_start, lunch_end)
+	row = frappe._dict(att, attendance_request=doc.name)
+	return day_hours(row, presence, {doc.name: doc}, ShiftHours())
 
 
 def approved_request_for(employee: str, date) -> str | None:

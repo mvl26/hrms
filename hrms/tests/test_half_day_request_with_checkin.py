@@ -226,3 +226,39 @@ class TestHalfDayRequestWithCheckin(PerTestRollback, FrappeTestCase):
 	def test_full_day_on_duty_still_has_no_lunch(self):
 		self.request("On Duty", half=False)
 		self.assertEqual(self.day().custom_lunch, 0)
+
+	# --- giờ làm ---------------------------------------------------------------------------------
+	def test_half_half_day_counts_a_full_shift_of_hours(self):
+		self.punch("13:30:00", "17:30:00")
+		self.request("On Duty")
+
+		self.assertEqual(self.day().working_hours, 8.0)
+		row = self.report_row()
+		self.assertEqual((row["hours"], row["credited_hours"]), (8.0, 8.0))
+		self.assertEqual(self.office_hours(), {"hours": 8.0, "days": 1.0})
+
+	def test_request_then_checkin_counts_a_full_shift_of_hours(self):
+		self.request("On Duty")
+		self.assertEqual(self.day().working_hours, 4.0)  # mới có nửa buổi đơn
+
+		self.punch("13:30:00", "17:30:00")
+
+		self.assertEqual(self.day().working_hours, 8.0)
+		self.assertEqual(self.report_row()["hours"], 8.0)
+
+	def test_full_day_work_from_home_counts_a_full_shift(self):
+		self.request("Work From Home", half=False)
+
+		self.assertEqual(self.day().working_hours, 8.0)
+		self.assertEqual(self.report_row()["hours"], 8.0)
+		self.assertEqual(self.office_hours(), {"hours": 8.0, "days": 1.0})
+
+	def test_missed_punch_counts_a_full_shift(self):
+		self.request("Missed Punch", half=False)
+		self.assertEqual(self.report_row()["hours"], 8.0)
+
+	def test_late_arrival_keeps_the_real_hours(self):
+		self.punch("09:30:00", "17:30:00")  # 6,5h có mặt
+		self.request("Late Or Early Leave", half=False)
+
+		self.assertEqual(self.report_row()["hours"], 6.5)

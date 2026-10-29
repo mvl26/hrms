@@ -55,7 +55,8 @@ viên** (quy ước đặt tên: tên/fieldname tiếng Anh, label tiếng Việ
 | Trường hợp | Giờ có mặt | Giờ tính công (cột đối chiếu) |
 |---|---|---|
 | Có cả giờ vào và giờ ra | `(ra − vào) −` phần giao với khung nghỉ trưa, **không cắt theo khung ca** | ca tách buổi: `counted_hours` (phần trong khung ca, trừ trưa) · ca thường: `compute_net_hours` |
-| Thiếu giờ vào hoặc giờ ra (WFH, yêu cầu chấm công, nhập tay) | 0 — không xác định được thời gian ở văn phòng | `compute_net_hours` |
+| Thiếu giờ vào hoặc giờ ra (nhập tay, không giấy tờ) | 0 — không xác định được thời gian ở văn phòng | `compute_net_hours` |
+| Làm theo giấy tờ (đơn WFH / on-duty / làm từ xa / quên chấm; mã CT / W) — từ 2026-10-29 | giờ ca × phần đơn phủ + giờ có mặt thật phần còn lại (đi muộn/về sớm: giờ thật) | `working_hours.day_hours` |
 | Trạng thái Absent / On Leave | 0 kể cả khi có punch lẻ | 0 |
 
 Khung nghỉ trưa lấy theo `custom_lunch_start` / `custom_lunch_end` của ca, mặc định
@@ -115,7 +116,9 @@ Ba thẻ tóm tắt (report summary): Tổng giờ có mặt · Số NV có mặ
 3. Absent / On Leave ra **0h** và **không** vào mẫu số TB, kể cả khi có punch.
 4. Ca tách buổi 08:00–17:30, có mặt 08:00→19:30 ra **10,0h** giờ có mặt và **8,0h** giờ tính công
    — giờ có mặt KHÔNG bị cap ở khung ca.
-4b. Ngày không có giờ vào/ra ra **0h** và không vào mẫu số.
+4b. Ngày không có giờ vào/ra ra **0h** và không vào mẫu số — **trừ** ngày làm theo giấy tờ (đổi
+    2026-10-29): đơn WFH / on-duty / làm từ xa / quên chấm hoặc mã CT / W tính đủ giờ ca cho phần đơn
+    phủ và vào mẫu số (cả báo cáo này, cột TB giờ/ngày của bảng chấm công, dashboard giờ làm).
 4c. Khung nghỉ trưa rác của ca (start = end) rơi về mặc định 12:00–13:30.
 5. Nhân viên Active không có Attendance nào trong kỳ vẫn hiện ở Summary với 0 giờ, TB 0.
 6. TB giờ/ngày = tổng ÷ số ngày có giờ > 0 (ví dụ 8 + 6 + 0 → 2 ngày, TB 7,0).
