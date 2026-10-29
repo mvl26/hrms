@@ -203,3 +203,26 @@ class TestHalfDayRequestWithCheckin(PerTestRollback, FrappeTestCase):
 		self.assertEqual(d.custom_work_credit, 0.5)
 		self.assertEqual(self.payable_days(), 0.5)
 		self.assertEqual(d.custom_lunch, 0)
+
+	# --- ăn trưa ---------------------------------------------------------------------------------
+	def test_half_outside_half_office_day_has_lunch(self):
+		self.punch("13:30:00", "17:30:00")
+		self.request("On Duty")
+		self.assertEqual(self.day().custom_lunch, 1)
+
+	def test_lunch_survives_when_checkin_arrives_after_the_request(self):
+		self.request("Work From Home")
+		self.punch("13:30:00", "17:30:00")
+		self.assertEqual(self.day().custom_lunch, 1)
+
+	def test_lunch_recompute_before_payroll_keeps_the_half_half_day(self):
+		from hrms.vn_payroll.lunch import compute_lunch_flags_for_period
+
+		self.punch("13:30:00", "17:30:00")
+		self.request("On Duty")
+		flags = compute_lunch_flags_for_period(self.date.month, self.date.year, self.company)
+		self.assertEqual(flags[self.day().name], 1)
+
+	def test_full_day_on_duty_still_has_no_lunch(self):
+		self.request("On Duty", half=False)
+		self.assertEqual(self.day().custom_lunch, 0)
