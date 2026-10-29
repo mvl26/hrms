@@ -183,6 +183,89 @@ class TestBusinessTrip(PerTestRollback, FrappeTestCase):
 		for a in atts:
 			self.assertEqual(a.status, "Work From Home")  # paid working day (payroll-neutral)
 
+	def _approve(self, from_d, to_d):
+		doc = self._trip(approver=self.user, from_d=from_d, to_d=to_d)
+		doc.insert()
+		apply_workflow(doc, "Gửi duyệt")
+		return doc
+
+	def _day(self, date, **kw):
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": date,
+				"company": frappe.db.get_value("Employee", self.emp, "company"),
+				**kw,
+			}
+		).insert()
+		att.submit()
+		return att
+
+	def _row(self, name):
+		return frappe.db.get_value(
+			"Attendance",
+			name,
+			["status", "custom_attendance_code", "custom_work_credit", "custom_lunch", "docstatus"],
+			as_dict=True,
+		)
+
+	def test_approval_turns_an_absent_day_into_ct(self):
+		"""Job chấm vắng chạy trước khi chuyến được duyệt → ngày đi công tác mang `V`. Chuyến đã
+		duyệt là bằng chứng người đó đi làm, nên `V` phải thành `CT` — y hệt đơn nghỉ đổi `V` → `P`."""
+		att = self._day("2097-08-05", status="Absent")
+		self.assertEqual(self._row(att.name).custom_attendance_code, "V", "tiền đề: ngày đang là V")
+
+		apply_workflow(self._approve("2097-08-05", "2097-08-05"), "Duyệt")
+
+		row = self._row(att.name)
+		self.assertEqual(row.custom_attendance_code, "CT")
+		self.assertEqual(row.status, "Work From Home")
+		self.assertEqual(row.custom_work_credit, 1.0)
+		self.assertEqual(row.custom_lunch, 0, "đi công tác thì không ăn trưa tại công ty")
+
+	def test_approval_leaves_a_day_with_real_punches_alone(self):
+		"""Ngày có giờ vào/ra thật là dữ liệu thật — Công Tác không được đè (luật E8 có sẵn)."""
+		att = self._day(
+			"2097-08-06",
+			in_time="2097-08-06 08:00:00",
+			out_time="2097-08-06 17:30:00",
+			custom_attendance_code="X",
+		)
+
+		apply_workflow(self._approve("2097-08-06", "2097-08-06"), "Duyệt")
+
+		self.assertEqual(self._row(att.name).custom_attendance_code, "X")
+
+	def test_approval_leaves_a_leave_day_alone(self):
+		"""Ngày đã là nghỉ (có loại nghỉ) không phải ô trống để Công Tác điền."""
+		att = self._day("2097-08-07", custom_attendance_code="K")
+
+		apply_workflow(self._approve("2097-08-07", "2097-08-07"), "Duyệt")
+
+		self.assertEqual(self._row(att.name).custom_attendance_code, "K")
+
+	def test_approval_into_a_locked_period_is_refused_before_anything_is_written(self):
+		"""Duyệt chuyến rơi vào kỳ đã chốt: báo đúng tên kỳ, và không ngày nào bị ghi.
+
+		Ngày `V` có sẵn sẽ được đổi bằng `db_set` — đường không qua hook khoá kỳ — nên phải chặn
+		ngay tại chuyến, trước khi ghi bất cứ ngày nào."""
+		att = self._day("2097-09-02", status="Absent")
+		trip = self._approve("2097-09-02", "2097-09-02")
+		frappe.get_doc(
+			{
+				"doctype": "Monthly Attendance Sheet",
+				"company": frappe.db.get_value("Employee", self.emp, "company"),
+				"month": "9",
+				"year": 2097,
+			}
+		).insert().submit()
+
+		with self.assertRaisesRegex(frappe.ValidationError, "đã chốt"):
+			apply_workflow(trip, "Duyệt")
+
+		self.assertEqual(self._row(att.name).custom_attendance_code, "V")
+
 	# --- print formats ---
 	def test_print_qd_and_giay_di_duong_render(self):
 		doc = self._approved_trip()
