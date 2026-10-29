@@ -357,6 +357,36 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		self.assertIn("Tổng<br>công", html)  # cột công duy nhất: số ngày công ty trả lương
 		self.assertNotIn("Công<br>đi làm", html)  # bảng chỉ mang MỘT con số công
 
+	def test_print_format_has_a_marriage_leave_column(self):
+		"""Bảng lưu `marriage_leave` (mã KH) thành cột riêng từ 2026-08-04, nhưng bản in thì không
+		có cột đó: ngày nghỉ kết hôn nằm trong Tổng công mà không dòng nào trên bản ký giải thích."""
+		import json
+
+		emp = frappe.db.get_value("Employee", {"company": self.company, "status": "Active"}, "name")
+		if not emp:
+			self.skipTest("no employee in company")
+		# Bản in đọc từ DB; nạp nội dung của FILE vào (rollback sau test) để đo đúng thứ sẽ lên site.
+		path = frappe.get_app_path(
+			"hrms", "hr", "print_format", "monthly_attendance_sheet", "monthly_attendance_sheet.json"
+		)
+		with open(path, encoding="utf-8") as f:
+			frappe.db.set_value("Print Format", "Monthly Attendance Sheet", "html", json.load(f)["html"])
+
+		Y, M = 2096, 12
+		self._seed_attendance(emp, Y, M, 3, custom_attendance_code="KH")
+		sheet = self._sheet(month=str(M), year=Y)
+		sheet.insert()
+		sheet.populate_from_attendance()
+		sheet.save()
+		row = next(r for r in sheet.employees if r.employee == emp)
+		self.assertEqual(row.marriage_leave, 1.0, "tiền đề: bảng có ghi nhận ngày KH")
+
+		html = frappe.get_print(
+			"Monthly Attendance Sheet", sheet.name, print_format="Monthly Attendance Sheet"
+		)
+		self.assertIn("<th>KH</th>", html)
+		self.assertIn('<td class="bct-kh">1.0</td>', html)
+
 
 class TestSubmitWarnsAboutUnreviewedDays(PerTestRollback, FrappeTestCase):
 	"""Chốt công khoá kỳ, nên trước khi khoá phải nói rõ còn bao nhiêu ô đáng ngờ."""
