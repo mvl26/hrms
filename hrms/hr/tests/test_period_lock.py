@@ -154,3 +154,204 @@ class TestLockedPeriodStopsAutoAttendance(PerTestRollback, FrappeTestCase):
 		dates = shift.get_dates_for_attendance(self.emp)
 		locked = [d for d in dates if str(d).startswith("2099-11")]
 		self.assertEqual(locked, [], "không được chấm vắng vào kỳ đã chốt")
+
+
+class TestLockCoversEveryWritePath(PerTestRollback, FrappeTestCase):
+	"""Khoá kỳ phải đứng trước MỌI đường ghi lên Attendance, không chỉ đường đi qua hook.
+
+	Hook `guard_period_not_locked` chỉ chạy khi Attendance được insert / sửa sau submit / huỷ qua
+	`Document`. Nhưng đơn nghỉ, Yêu cầu chấm công, job nửa ngày và lượt tính lại ăn trưa đều ghi
+	bằng `db_set` / `set_value` — thẳng xuống DB, không hook nào chạy. Trước bản sửa này, chốt công
+	xong vẫn duyệt được đơn nghỉ lùi ngày vào kỳ đã khoá: Attendance đổi, phiếu lương đổi theo,
+	còn bảng công đã ký thì đứng im.
+	"""
+
+	LEAVE_TYPE = "Nghỉ phép năm"
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		ensure_short_hours_code()
+		cls.emp = test_employee()
+		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
+
+	def lock_november(self):
+		frappe.get_doc(
+			{"doctype": "Monthly Attendance Sheet", "company": self.company, "month": "11", "year": 2099}
+		).insert().submit()
+
+	def mk_attendance(self, day, **kw):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": f"2099-11-{day:02d}",
+				"company": self.company,
+				**kw,
+			}
+		).insert()
+		doc.submit()
+		return doc
+
+	def allocate_leave(self):
+		frappe.get_doc(
+			{
+				"doctype": "Leave Allocation",
+				"employee": self.emp,
+				"leave_type": self.LEAVE_TYPE,
+				"from_date": "2099-01-01",
+				"to_date": "2099-12-31",
+				"new_leaves_allocated": 12,
+				"company": self.company,
+			}
+		).insert(ignore_permissions=True).submit()
+
+	def leave_application(self, day):
+		date = f"2099-11-{day:02d}"
+		return frappe.get_doc(
+			{
+				"doctype": "Leave Application",
+				"employee": self.emp,
+				"leave_type": self.LEAVE_TYPE,
+				"from_date": date,
+				"to_date": date,
+				"company": self.company,
+				"status": "Approved",
+			}
+		).insert(ignore_permissions=True)
+
+	def payroll_fields(self, name):
+		return frappe.db.get_value(
+			"Attendance",
+			name,
+			["status", "leave_type", "half_day_status", "docstatus", "custom_attendance_code"],
+			as_dict=True,
+		)
+
+	def test_approving_leave_onto_a_day_in_a_locked_period_is_blocked(self):
+		"""Kịch bản L11 của báo cáo rà soát: đơn nghỉ lùi ngày vào kỳ đã chốt."""
+		self.allocate_leave()
+		att = self.mk_attendance(5, status="Absent")
+		leave = self.leave_application(5)
+		self.lock_november()
+		before = self.payroll_fields(att.name)
+
+		with self.assertRaises(frappe.exceptions.ValidationError):
+			leave.submit()
+
+		self.assertEqual(self.payroll_fields(att.name), before, "ngày công trong kỳ đã chốt bị đổi")
+
+	def test_cancelling_leave_inside_a_locked_period_is_blocked(self):
+		self.allocate_leave()
+		self.mk_attendance(6, status="Absent")
+		leave = self.leave_application(6)
+		leave.submit()
+		att = frappe.db.get_value("Attendance", {"leave_application": leave.name}, "name")
+		self.lock_november()
+		before = self.payroll_fields(att)
+
+		with self.assertRaises(frappe.exceptions.ValidationError):
+			leave.cancel()
+
+		self.assertEqual(self.payroll_fields(att), before, "huỷ đơn nghỉ đã huỷ luôn ngày công đã chốt")
+
+	def test_leave_outside_the_locked_period_still_goes_through(self):
+		"""Khoá tháng 11 không được chặn đơn nghỉ của tháng 12."""
+		self.allocate_leave()
+		self.lock_november()
+		leave = frappe.get_doc(
+			{
+				"doctype": "Leave Application",
+				"employee": self.emp,
+				"leave_type": self.LEAVE_TYPE,
+				"from_date": "2099-12-01",
+				"to_date": "2099-12-01",
+				"company": self.company,
+				"status": "Approved",
+			}
+		).insert(ignore_permissions=True)
+		leave.submit()
+		self.assertEqual(leave.docstatus, 1)
+
+	def test_attendance_request_onto_a_day_in_a_locked_period_is_blocked(self):
+		att = self.mk_attendance(10, status="Absent")
+		request = frappe.get_doc(
+			{
+				"doctype": "Attendance Request",
+				"employee": self.emp,
+				"company": self.company,
+				"from_date": "2099-11-10",
+				"to_date": "2099-11-10",
+				"reason": "Work From Home",
+			}
+		).insert(ignore_permissions=True)
+		self.lock_november()
+		before = self.payroll_fields(att.name)
+
+		with self.assertRaises(frappe.exceptions.ValidationError):
+			request.submit()
+
+		self.assertEqual(self.payroll_fields(att.name), before, "ngày công trong kỳ đã chốt bị đổi")
+
+	def test_lunch_recompute_leaves_a_locked_period_alone(self):
+		from hrms.vn_payroll.lunch import recompute_lunch_flags
+
+		att = self.mk_attendance(11, custom_attendance_code="X")
+		# cờ lệch với luật (ngày X chấm tay đáng ra = 1) — đúng thứ lượt tính lại sẽ "sửa"
+		frappe.db.set_value("Attendance", att.name, "custom_lunch", 0, update_modified=False)
+		self.lock_november()
+
+		recompute_lunch_flags(11, 2099, self.company)
+
+		self.assertEqual(
+			frappe.db.get_value("Attendance", att.name, "custom_lunch"),
+			0,
+			"số buổi ăn trưa của kỳ đã chốt bị tính lại → lệch với bảng công đã ký",
+		)
+
+	def test_lunch_recompute_still_fixes_an_open_period(self):
+		from hrms.vn_payroll.lunch import recompute_lunch_flags
+
+		att = self.mk_attendance(12, custom_attendance_code="X")
+		frappe.db.set_value("Attendance", att.name, "custom_lunch", 0, update_modified=False)
+
+		recompute_lunch_flags(11, 2099, self.company)
+
+		self.assertEqual(frappe.db.get_value("Attendance", att.name, "custom_lunch"), 1)
+
+	def test_half_day_absent_job_leaves_a_locked_period_alone(self):
+		"""Job hằng giờ ép "nửa còn lại = Absent" khi thiếu lượt chấm — trừ 0,5 ngày lương. Kỳ đã
+		chốt thì con số đó đã nằm trên bảng ký, không được đổi sau lưng."""
+		shift = "VN Lock Shift (test)"
+		if not frappe.db.exists("Shift Type", shift):
+			frappe.get_doc(
+				{
+					"doctype": "Shift Type",
+					"__newname": shift,
+					"start_time": "08:00:00",
+					"end_time": "17:30:00",
+					"enable_auto_attendance": 1,
+				}
+			).insert()
+		frappe.get_doc(
+			{
+				"doctype": "Shift Assignment",
+				"employee": self.emp,
+				"company": self.company,
+				"shift_type": shift,
+				"start_date": "2099-11-01",
+				"end_date": "2099-11-30",
+			}
+		).insert().submit()
+		att = self.mk_attendance(13, status="Present")
+		# trạng thái mà upstream để lại sau khi duyệt đơn nghỉ nửa ngày lên một ngày đang Vắng
+		frappe.db.set_value(
+			"Attendance",
+			att.name,
+			{"status": "Half Day", "half_day_status": "Present", "modify_half_day_status": 1},
+		)
+		self.lock_november()
+
+		frappe.get_doc("Shift Type", shift).mark_absent_for_half_day_dates(self.emp)
+
+		self.assertEqual(frappe.db.get_value("Attendance", att.name, "half_day_status"), "Present")

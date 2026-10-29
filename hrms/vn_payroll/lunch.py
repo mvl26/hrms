@@ -296,15 +296,26 @@ def recompute_lunch_flags(month: int | str, year: int | str, company: str | None
 	bắt checkin về muộn). Trả số bản ghi thay đổi. Chỉ ghi field hiển thị (db_set, update_modified=False)
 	→ không đụng payroll status. No-op nếu field chưa migrate.
 
-	Chỉ Nhân sự được gọi."""
+	Chỉ Nhân sự được gọi, và KHÔNG chạm kỳ đã chốt: số buổi ăn trưa đi vào khoản ăn trưa trên phiếu
+	lương, mà bảng công đã ký thì đã chụp con số đó rồi."""
 	from hrms.hr.attendance_review import require_timekeeping_role
+	from hrms.hr.period_lock import is_period_locked
 
 	require_timekeeping_role()
 	if not frappe.get_meta("Attendance").has_field("custom_lunch"):
 		return 0
 	changed = 0
+	# Bảng Công Tháng luôn phủ trọn tháng, nên trong một kỳ mỗi nhân viên chỉ có một câu trả lời.
+	locked = {}
 	for name, flag in compute_lunch_flags_for_period(month, year, company).items():
-		if cint(frappe.db.get_value("Attendance", name, "custom_lunch")) != flag:
+		row = frappe.db.get_value(
+			"Attendance", name, ["custom_lunch", "employee", "attendance_date"], as_dict=True
+		)
+		if row.employee not in locked:
+			locked[row.employee] = is_period_locked(row.employee, row.attendance_date)
+		if locked[row.employee]:
+			continue
+		if cint(row.custom_lunch) != flag:
 			frappe.db.set_value("Attendance", name, "custom_lunch", flag, update_modified=False)
 			changed += 1
 	return changed

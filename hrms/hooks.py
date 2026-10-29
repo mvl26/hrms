@@ -109,7 +109,10 @@ doc_events = {
 		"before_insert": "hrms.hr.doctype.attendance_request.attendance_request_miyano.set_default_approver",
 		"validate": "hrms.hr.doctype.attendance_request.attendance_request_miyano.set_default_approver",
 		"after_insert": "hrms.hr.doctype.attendance_request.attendance_request_miyano.assign_to_approver",
-		"before_submit": "hrms.hr.doctype.attendance_request.attendance_request_miyano.guard_submit",
+		"before_submit": [
+			"hrms.hr.doctype.attendance_request.attendance_request_miyano.guard_submit",
+			"hrms.hr.period_lock.guard_attendance_request",
+		],
 		"on_submit": "hrms.hr.doctype.attendance_request.attendance_request_miyano.set_attendance_request_code",
 	},
 	"User": {
@@ -164,6 +167,9 @@ doc_events = {
 			"hrms.hr.doctype.leave_application.leave_attendance_code.validate_leave_type_has_code",
 			"hrms.hr.doctype.leave_application.leave_attendance_code.validate_half_day_period",
 		],
+		# Khoá kỳ: đơn nghỉ ghi lên ngày công có sẵn bằng `db_set`, hook của Attendance không thấy.
+		"before_submit": "hrms.hr.period_lock.guard_leave_application",
+		"before_cancel": "hrms.hr.period_lock.guard_leave_application",
 		"on_submit": "hrms.hr.doctype.leave_application.leave_attendance_code.set_leave_attendance_code",
 	},
 	"Payment Entry": {
