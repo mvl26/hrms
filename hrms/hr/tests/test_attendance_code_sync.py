@@ -58,6 +58,18 @@ class TestAttendanceCodeSync(PerTestRollback, FrappeTestCase):
 		self.assertEqual(hit[0]["old_code"], "V")
 		self.assertEqual(hit[0]["new_code"], "Ô")
 
+	def test_apply_clears_a_stale_lunch_flag(self):
+		"""Ngày đã thành nghỉ ốm mà cờ ăn trưa còn kẹt từ lúc là ngày đi làm → đồng bộ phải dọn luôn.
+
+		Bộ đồng bộ sinh ra để dọn hậu quả của `db_set`; cờ ăn trưa kẹt là một hậu quả y hệt mã kẹt."""
+		att = self._mismatched(f"{self.year}-04-08")
+		frappe.db.set_value("Attendance", att.name, "custom_lunch", 1, update_modified=False)
+
+		rows = preview_sync(self._filters())
+		apply_sync(rows["changes"], reason="Đồng bộ mã công theo loại nghỉ")
+
+		self.assertEqual(frappe.db.get_value("Attendance", att.name, "custom_lunch"), 0)
+
 	def test_preview_writes_nothing(self):
 		att = self._mismatched(f"{self.year}-04-06")
 		preview_sync(self._filters())

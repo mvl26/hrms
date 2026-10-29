@@ -137,6 +137,7 @@ def set_attendance_request_code(doc, method=None):
 	# công hiện "Công = 0" cho một ngày đi công tác. Dùng chung `paid_credit` như cầu nối và bộ đồng
 	# bộ (`work_credit`), không chép luật sang đây.
 	from hrms.hr.doctype.leave_application.leave_attendance_code import work_credit
+	from hrms.vn_payroll.lunch import refresh_lunch_flag
 
 	code = REASON_TO_CODE.get(doc.get("reason"), DEFAULT_CODE)
 	is_half = cint(doc.get("half_day")) and doc.get("half_day_date")
@@ -171,6 +172,9 @@ def set_attendance_request_code(doc, method=None):
 			}
 		for field, value in vals.items():
 			frappe.db.set_value("Attendance", att.name, field, value, update_modified=False)
+		# Mã vừa đổi bằng `db_set` → cờ ăn trưa phải theo mã MỚI (quên chấm công được công nhận thì
+		# có ăn trưa; làm tại nhà / công tác thì không).
+		refresh_lunch_flag(att.name)
 
 
 def approved_request_for(employee: str, date) -> str | None:

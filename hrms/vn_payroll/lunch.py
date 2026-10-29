@@ -219,6 +219,44 @@ def lunch_flag_for_attendance(
 	)
 
 
+def refresh_lunch_flag(attendance: str) -> int | None:
+	"""Tính lại và ghi cờ ăn trưa của MỘT ngày công đã lưu. Trả cờ mới; None nếu field chưa migrate.
+
+	Dành cho các đường đổi mã / trạng thái bằng `db_set` (đơn nghỉ, Yêu cầu chấm công, đồng bộ mã
+	công): `db_set` không chạy `before_validate`, nên `Attendance.set_lunch_flag` không được gọi và
+	cờ kẹt ở giá trị của mã CŨ — ngày đã thành nghỉ phép vẫn tính một bữa, ngày quên chấm công được
+	công nhận vẫn mất bữa. Gọi hàm này NGAY SAU lần ghi đó.
+
+	Thuần hiển thị (`update_modified=False`), cùng luật `lunch_flag_for_attendance` với mọi đường
+	khác. Ô "Ăn trưa" chọn tay vẫn thắng."""
+	meta = frappe.get_meta("Attendance")
+	if not meta.has_field("custom_lunch"):
+		return None
+	fields = ["employee", "attendance_date", "status", "shift", "custom_lunch"]
+	for optional in ("custom_attendance_code", "custom_lunch_override", "custom_auto_filled"):
+		if meta.has_field(optional):
+			fields.append(optional)
+	row = frappe.db.get_value("Attendance", attendance, fields, as_dict=True)
+	if not row:
+		return None
+	flag = (
+		1
+		if lunch_flag_for_attendance(
+			row.employee,
+			row.attendance_date,
+			row.status,
+			row.shift,
+			row.get("custom_attendance_code"),
+			row.get("custom_lunch_override"),
+			row.get("custom_auto_filled"),
+		)
+		else 0
+	)
+	if cint(row.custom_lunch) != flag:
+		frappe.db.set_value("Attendance", attendance, "custom_lunch", flag, update_modified=False)
+	return flag
+
+
 def compute_lunch_flags_for_period(month, year, company: str | None = None) -> dict:
 	"""{attendance_name: 0/1} theo checkin cho cả kỳ — KHÔNG ghi DB (tính lại để làm mới cờ khi
 	checkin về muộn). Tách riêng để test được cả trước khi field custom_lunch lên site."""

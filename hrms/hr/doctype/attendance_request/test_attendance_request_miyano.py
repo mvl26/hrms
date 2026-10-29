@@ -745,3 +745,69 @@ class TestAttendanceRequestWorkCredit(PerTestRollback, FrappeTestCase):
 		# 2094-04-17 là thứ Bảy: ngày nghỉ tuần không sinh công. Dùng thứ Hai kế tiếp.
 		row = self.day_from_request("2094-04-19", "On Duty", existing_absent=False)
 		self.assertEqual(row.custom_work_credit, 1.0)
+
+
+class TestRequestRefreshesLunchFlag(PerTestRollback, FrappeTestCase):
+	"""Phiếu duyệt lên ngày ĐÃ có bản ghi thì cờ ăn trưa phải theo mã MỚI.
+
+	Upstream sửa bản ghi có sẵn bằng `db_set`, nên `before_validate` — nơi cờ ăn trưa được tính —
+	không chạy. Trước bản sửa này cờ kẹt ở giá trị của mã cũ, lệch cả hai chiều: quên chấm công
+	được công nhận mà vẫn mất bữa trưa, làm tại nhà mà vẫn được tính ăn tại công ty."""
+
+	def setUp(self):
+		from erpnext.setup.doctype.employee.test_employee import make_employee
+
+		from hrms.tests.vn_test_utils import default_company
+
+		self.company = default_company()
+		self.emp = make_employee("ar_lunch@wfh.test", company=self.company, date_of_joining="2098-01-01")
+		self.day = "2098-05-07"  # thứ Tư
+
+	def existing_day(self, code, lunch):
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": self.day,
+				"company": self.company,
+				"custom_attendance_code": code,
+			}
+		).insert()
+		att.submit()
+		frappe.db.set_value("Attendance", att.name, "custom_lunch", lunch, update_modified=False)
+		return att.name
+
+	def approve(self, reason):
+		ar = frappe.get_doc(
+			{
+				"doctype": "Attendance Request",
+				"employee": self.emp,
+				"from_date": self.day,
+				"to_date": self.day,
+				"reason": reason,
+				"company": self.company,
+				"custom_approver": frappe.session.user,
+			}
+		)
+		ar.insert()
+		ar.submit()
+
+	def row(self, name):
+		return frappe.db.get_value(
+			"Attendance", name, ["custom_attendance_code", "custom_lunch"], as_dict=True
+		)
+
+	def test_missed_punch_on_an_absent_day_earns_lunch(self):
+		"""Kịch bản R2: ngày bị chấm V, quản lý duyệt "quên chấm công" → X đủ công, có ăn trưa."""
+		att = self.existing_day("V", lunch=0)
+		self.approve("Missed Punch")
+		row = self.row(att)
+		self.assertEqual(row.custom_attendance_code, "X")
+		self.assertEqual(row.custom_lunch, 1)
+
+	def test_work_from_home_on_a_worked_day_loses_lunch(self):
+		att = self.existing_day("1/2X", lunch=1)
+		self.approve("Work From Home")
+		row = self.row(att)
+		self.assertEqual(row.custom_attendance_code, "W")
+		self.assertEqual(row.custom_lunch, 0)
