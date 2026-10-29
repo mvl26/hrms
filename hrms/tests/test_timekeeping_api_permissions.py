@@ -85,6 +85,14 @@ class TestTimekeepingApisAreHrOnly(PerTestRollback, FrappeTestCase):
 		frappe.set_user(HR_USER)
 		self.assertEqual(recompute_lunch_flags(9, 2099, self.company), 0)
 
+	def test_creating_a_day_from_the_review_grid_refuses_a_plain_employee(self):
+		from hrms.hr.attendance_review import create_reviewed_day
+
+		emp = frappe.db.get_value("Employee", {"status": "Active", "company": self.company}, "name")
+		frappe.set_user(PLAIN_USER)
+		with self.assertRaises(frappe.PermissionError):
+			create_reviewed_day(emp, "2099-12-01", "X", "tự chấm công cho mình")
+
 	def test_closing_a_sheet_does_not_need_the_review_role(self):
 		"""`before_submit` của Bảng Công Tháng tự đọc lưới để cảnh báo ô bất thường. Chốt gác chỉ
 		nằm ở cửa API; đường gọi nội bộ không được vỡ theo."""

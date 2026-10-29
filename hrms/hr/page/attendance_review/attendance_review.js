@@ -208,6 +208,10 @@ class AttendanceReview {
 	refresh() {
 		this.pending.clear();
 		this.update_pending_label();
+		// Kỳ của lưới ĐANG HIỆN: ô chưa có bản ghi không có tên Attendance, phải tự dựng ngày từ
+		// đây. Chụp lúc tải chứ không đọc lại bộ lọc lúc bấm — người dùng có thể đã đổi tháng.
+		const f = this.filters();
+		this.period = { year: cint(f.year), month: cint(f.month) };
 		frappe
 			.call({
 				method: "hrms.hr.attendance_review.get_review_grid",
@@ -247,6 +251,7 @@ class AttendanceReview {
 				const title = cell_flags.map((f) => data.flag_labels[f] || f).join(", ");
 				html += `<td class="ar-cell ${cell_flags.length ? "ar-flagged" : ""}"
 					data-attendance="${name || ""}" data-day="${d}" data-employee="${row.employee}"
+					data-flags="${cell_flags.join(",")}"
 					title="${frappe.utils.escape_html(title)}">${frappe.utils.escape_html(symbol)}</td>`;
 			}
 			html += `<td class="ar-total">${row.totals["Tổng công"] ?? 0}</td></tr>`;
@@ -258,18 +263,24 @@ class AttendanceReview {
 
 	edit_cell($cell) {
 		const attendance = $cell.data("attendance");
-		if (!attendance) {
-			frappe.msgprint(__("Ngày này chưa có bản ghi công nên chưa sửa được ở đây."));
+		const flags = String($cell.data("flags") || "").split(",");
+		// Ô chưa có bản ghi chỉ xử lý được khi là NGÀY LÀM VIỆC bị thiếu công (cờ NO_RECORD).
+		// Ngày nghỉ tuần / lễ / ngoài thời gian làm việc cũng không có bản ghi, nhưng đó là đúng.
+		const is_new = !attendance && flags.includes("NO_RECORD");
+		if (!attendance && !is_new) {
+			frappe.msgprint(__("Ngày này không phải ngày làm việc nên không có công để bổ sung."));
 			return;
 		}
 
 		const d = new frappe.ui.Dialog({
-			title: __("Sửa mã công ngày {0}", [$cell.data("day")]),
+			title: is_new
+				? __("Bổ sung công ngày {0}", [$cell.data("day")])
+				: __("Sửa mã công ngày {0}", [$cell.data("day")]),
 			fields: [
 				{
 					fieldtype: "Link",
 					fieldname: "code",
-					label: __("Mã công mới"),
+					label: is_new ? __("Mã công") : __("Mã công mới"),
 					options: "Attendance Code",
 					reqd: 1,
 					default: $cell.text().trim(),
@@ -284,11 +295,26 @@ class AttendanceReview {
 			],
 			primary_action_label: __("Ghi nhận"),
 			primary_action: (values) => {
-				this.pending.set(attendance, {
-					attendance,
-					code: values.code,
-					reason: values.reason,
-				});
+				if (is_new) {
+					const employee = $cell.data("employee");
+					const { year, month } = this.period;
+					const date = `${year}-${String(month).padStart(2, "0")}-${String(
+						$cell.data("day"),
+					).padStart(2, "0")}`;
+					// khoá theo người + ngày: bấm lại cùng ô là sửa lựa chọn, không thêm dòng thứ hai
+					this.pending.set(`${employee}|${date}`, {
+						employee,
+						date,
+						code: values.code,
+						reason: values.reason,
+					});
+				} else {
+					this.pending.set(attendance, {
+						attendance,
+						code: values.code,
+						reason: values.reason,
+					});
+				}
 				$cell.text(values.code).addClass("ar-pending");
 				this.update_pending_label();
 				d.hide();
