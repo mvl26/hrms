@@ -294,7 +294,12 @@ def compute_lunch_flags_for_period(month, year, company: str | None = None) -> d
 def recompute_lunch_flags(month: int | str, year: int | str, company: str | None = None) -> int:
 	"""Tính lại cờ ``custom_lunch`` cho Attendance trong kỳ từ checkin (chạy trước khi chốt lương để
 	bắt checkin về muộn). Trả số bản ghi thay đổi. Chỉ ghi field hiển thị (db_set, update_modified=False)
-	→ không đụng payroll status. No-op nếu field chưa migrate."""
+	→ không đụng payroll status. No-op nếu field chưa migrate.
+
+	Chỉ Nhân sự được gọi."""
+	from hrms.hr.attendance_review import require_timekeeping_role
+
+	require_timekeeping_role()
 	if not frappe.get_meta("Attendance").has_field("custom_lunch"):
 		return 0
 	changed = 0

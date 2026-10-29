@@ -91,6 +91,9 @@ def period_bounds(month, year):
 @frappe.whitelist()
 def preview_sync(filters: str | dict | None = None) -> dict:
 	"""Liệt kê ngày công có mã lệch với status/leave_type. **Không ghi gì.**"""
+	from hrms.hr.attendance_review import require_timekeeping_role
+
+	require_timekeeping_role()
 	if isinstance(filters, str):
 		filters = json.loads(filters)
 	filters = frappe._dict(filters or {})

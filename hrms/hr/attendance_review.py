@@ -33,6 +33,27 @@ FLAG_NO_RECORD = "NO_RECORD"  # ngày làm việc mà không có bản ghi công
 FLAG_CHECKIN_ON_HOLIDAY = "CHECKIN_ON_HOLIDAY"  # ngày nghỉ nhưng có người chấm công
 FLAG_ABSENT = "ABSENT"  # vắng không lý do
 
+# Ai được soát công. `@frappe.whitelist()` mở hàm cho MỌI tài khoản đăng nhập; vai trò khai trên
+# trang Soát công chỉ gác giao diện, gọi thẳng `/api/method/...` là đi vòng qua.
+TIMEKEEPING_ROLES = frozenset({"HR Manager", "HR User", "System Manager"})
+
+
+def require_timekeeping_role():
+	"""Chặn tài khoản không thuộc Nhân sự ở các cửa API đọc/ghi công của CẢ công ty.
+
+	Không dùng `frappe.only_for`: nó trả về ngay khi `frappe.flags.in_test`, nên không test nào
+	kiểm được chốt này. Không dùng `frappe.has_permission("Attendance")`: vai trò Employee có quyền
+	đọc Attendance (của chính mình), còn các hàm ở đây đọc bằng `frappe.get_all` — bỏ qua phân
+	quyền theo bản ghi — nên chốt mức doctype để lọt cả công ty."""
+	if frappe.session.user == "Administrator":
+		return
+	if TIMEKEEPING_ROLES.isdisjoint(frappe.get_roles()):
+		frappe.throw(
+			_("Chỉ Nhân sự mới được soát và điều chỉnh công."),
+			frappe.PermissionError,
+			title=_("Không có quyền"),
+		)
+
 
 def flag_labels() -> dict:
 	"""Nhãn hiển thị của từng cờ bất thường.
@@ -118,10 +139,19 @@ def attendance_names(employees: list, start, end) -> dict:
 
 @frappe.whitelist()
 def get_review_grid(filters: str | dict | None = None) -> dict:
+	"""Cửa API của lưới soát công — chỉ Nhân sự. Nội dung xem `build_review_grid`."""
+	require_timekeeping_role()
+	return build_review_grid(filters)
+
+
+def build_review_grid(filters: str | dict | None = None) -> dict:
 	"""Lưới soát công của một tháng: hàng nhân viên x cột ngày, kèm cờ bất thường từng ô.
 
 	Trả `{rows: [...], flags: {employee: {day: [flag]}}, flag_labels: {...}}`. `rows` chính là
-	`get_sheet_rows` — cùng một nguồn suy diễn với report và Bảng Công Tháng."""
+	`get_sheet_rows` — cùng một nguồn suy diễn với report và Bảng Công Tháng.
+
+	KHÔNG kiểm tra quyền: đây là đường gọi nội bộ (Bảng Công Tháng tự đọc lưới lúc chốt). Cửa API
+	là `get_review_grid`."""
 	if isinstance(filters, str):
 		filters = json.loads(filters)
 	filters = frappe._dict(filters or {})

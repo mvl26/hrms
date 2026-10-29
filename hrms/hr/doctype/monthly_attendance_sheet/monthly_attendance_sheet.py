@@ -55,9 +55,9 @@ class MonthlyAttendanceSheet(Document):
 		khi khoá, nói thẳng còn bao nhiêu ô đang mang cờ bất thường (vắng, thiếu giờ, ngày trống,
 		chỉ 1 lượt chấm, chấm vào ngày nghỉ). Chỉ CẢNH BÁO, không chặn: có những ngày vắng là đúng
 		thật, và người chốt mới là người quyết."""
-		from hrms.hr.attendance_review import flag_labels, get_review_grid
+		from hrms.hr.attendance_review import build_review_grid, flag_labels
 
-		grid = get_review_grid(
+		grid = build_review_grid(
 			{
 				"month": self.month,
 				"year": self.year,
