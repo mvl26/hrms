@@ -350,6 +350,91 @@ def non_working_days_between(employee: str, start, end) -> set[date]:
 	)
 
 
+def working_days_between(employee: str, start, end) -> set[date]:
+	"""Ngày PHẢI ĐI LÀM trong khoảng = theo lịch tuần (kể cả làm bù), TRỪ ngày lễ.
+
+	Khác `scheduled_days_between` đúng ở ngày lễ: `scheduled_*` là mẫu số lương (lễ hưởng lương nên
+	nằm trong), `working_*` là kỳ vọng có mặt (lễ thì không ai phải có mặt). Giờ định mức dùng tập
+	này; đừng dùng lẫn."""
+	return scheduled_days_between(employee, start, end) - public_holidays_between(employee, start, end)
+
+
+# Giờ ca khi nhân viên không có ca, hoặc ca không khai được giờ vào/ra hợp lệ. Đây là LƯỚI AN TOÀN
+# để báo cáo không vỡ, KHÔNG phải chính sách "một ngày công = 8 giờ": chính sách nằm ở Shift Type.
+FALLBACK_SHIFT_HOURS = 8.0
+
+
+def shift_hours_per_day(shift: str | None) -> float:
+	"""Số giờ làm của một ngày theo ca = (giờ ra - giờ vào - phần trùng nghỉ trưa).
+
+	Khung nghỉ trưa đi qua `resolve_lunch_window` của bộ chấm công, để lớp phòng thủ "khung trưa
+	rác" (Frappe điền giờ hiện tại vào ô trống → khung rộng 0 giây) chỉ viết ở một chỗ."""
+	if not shift:
+		return FALLBACK_SHIFT_HOURS
+
+	from hrms.hr.doctype.attendance.vn_day_classifier import resolve_lunch_window
+
+	meta = frappe.get_meta("Shift Type")
+	lunch_fields = [f for f in ("custom_lunch_start", "custom_lunch_end") if meta.has_field(f)]
+	cfg = frappe.db.get_value("Shift Type", shift, ["start_time", "end_time", *lunch_fields], as_dict=True)
+	if not cfg or cfg.start_time is None or cfg.end_time is None or cfg.end_time <= cfg.start_time:
+		return FALLBACK_SHIFT_HOURS
+
+	lunch_start, lunch_end = resolve_lunch_window(cfg.get("custom_lunch_start"), cfg.get("custom_lunch_end"))
+	lunch = max(timedelta(0), min(cfg.end_time, lunch_end) - max(cfg.start_time, lunch_start))
+	return round((cfg.end_time - cfg.start_time - lunch).total_seconds() / 3600.0, 2)
+
+
+def standard_hours_between(employee: str, start, end, exclude_leave: bool = True) -> float:
+	"""GIỜ ĐỊNH MỨC của nhân viên trong khoảng = Σ giờ ca của từng ngày phải đi làm.
+
+	Định mức là *kỳ vọng có mặt*, nên:
+
+	- theo **ca của đúng ngày đó** (đổi ca giữa kỳ là chuyện thường) — không hardcode 8h;
+	- theo **lịch làm việc** (`working_days_between`) — không đọc Holiday List, vì danh sách đó chỉ
+	  còn ngày lễ; đếm "ngày trong tháng trừ số dòng" là tính cả thứ Bảy, Chủ nhật vào định mức;
+	- `exclude_leave`: bỏ những ngày đã nghỉ CÓ ĐƠN (cả ngày → trừ trọn giờ ca; nửa ngày → trừ một
+	  nửa). Không trừ thì người nghỉ phép đúng quy định luôn bị báo thiếu giờ. Ngày **vắng** thì ở
+	  lại trong định mức — đó chính là ngày đáng ra phải có mặt.
+	"""
+	days = working_days_between(employee, start, end)
+	if not days:
+		return 0.0
+
+	runs = shift_runs([employee], start, end).get(employee, [])
+	default_shift = frappe.get_cached_value("Employee", employee, "default_shift")
+	hours_of: dict[str | None, float] = {}
+
+	def hours_on(day) -> float:
+		shift = next((s for (frm, to, s) in runs if frm <= day and (to is None or to >= day)), default_shift)
+		if shift not in hours_of:
+			hours_of[shift] = shift_hours_per_day(shift)
+		return hours_of[shift]
+
+	total = sum(hours_on(d) for d in days)
+
+	if exclude_leave:
+		for att in frappe.get_all(
+			"Attendance",
+			filters={
+				"employee": employee,
+				"docstatus": 1,
+				"attendance_date": ["between", [getdate(start), getdate(end)]],
+				"status": ["in", ["On Leave", "Half Day"]],
+			},
+			fields=["attendance_date", "status", "leave_type"],
+		):
+			day = getdate(att.attendance_date)
+			if day not in days:
+				continue
+			if att.status == "On Leave":
+				total -= hours_on(day)
+			elif att.leave_type:  # nửa ngày nghỉ có đơn; `1/2X` (thiếu giờ, không loại nghỉ) thì không trừ
+				total -= hours_on(day) / 2
+
+	return round(max(total, 0.0), 2)
+
+
 def scheduled_days_map(employees: list[str], start, end) -> dict[str, dict[date, str]]:
 	"""{nhân viên: {ngày: "scheduled" | "rest" | "holiday"}} — bản đồ gộp cho báo cáo/bảng công.
 

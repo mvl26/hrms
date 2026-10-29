@@ -8,7 +8,8 @@ from frappe.query_builder.functions import Count, Extract, Sum
 from frappe.utils import cint, cstr, getdate
 from frappe.utils.nestedset import get_descendants_of
 
-from hrms.hr.working_hours import compute_net_hours, get_standard_hours, get_week_buckets
+from hrms.hr.work_schedule import standard_hours_between
+from hrms.hr.working_hours import compute_net_hours, get_week_buckets
 
 Filters = frappe._dict
 
@@ -458,6 +459,8 @@ def get_rows(
 		else None
 	)
 	total_days = get_total_days_in_month(filters)
+	period_start = getdate(f"{cint(filters.year)}-{cint(filters.month):02d}-01")
+	period_end = getdate(f"{cint(filters.year)}-{cint(filters.month):02d}-{total_days:02d}")
 	# tính cột một lần (tránh dựng lại week buckets mỗi dòng ở summarized view)
 	summarized_columns = get_columns(filters) if filters.summarized_view else None
 
@@ -484,7 +487,7 @@ def get_rows(
 			row.update(entry_exits_summary)
 
 			set_working_hours_on_row(row, emp_day_hours, filters, week_buckets)
-			set_standard_and_variance(row, total_days, holidays)
+			set_standard_and_variance(row, employee, period_start, period_end)
 
 			records.append(row)
 		else:
@@ -497,7 +500,7 @@ def get_rows(
 			)
 			for record in attendance_for_employee:
 				set_working_hours_on_row(record, emp_day_hours, filters, week_buckets)
-				set_standard_and_variance(record, total_days, holidays)
+				set_standard_and_variance(record, employee, period_start, period_end)
 				record.update({"employee": employee, "employee_name": details.employee_name})
 
 			records.extend(attendance_for_employee)
@@ -525,8 +528,12 @@ def set_working_hours_on_row(row: dict, day_hours: dict, filters: Filters, week_
 		row["total_working_hours"] = round(sum(day_hours.values()), 2)
 
 
-def set_standard_and_variance(row: dict, total_days: int, holidays) -> None:
-	standard = get_standard_hours(total_days, len(holidays or []))
+def set_standard_and_variance(row: dict, employee: str, start, end) -> None:
+	"""Giờ định mức + chênh lệch của một dòng — theo ca và lịch làm việc của CHÍNH nhân viên đó.
+
+	Trước đây đếm (số ngày trong tháng - số dòng Holiday List) x 8h; từ khi Holiday List chỉ còn
+	ngày lễ thì công thức đó tính cả thứ Bảy, Chủ nhật vào định mức."""
+	standard = standard_hours_between(employee, start, end)
 	row["standard_hours"] = standard
 	row["variance"] = round(row.get("total_working_hours", 0.0) - standard, 2)
 

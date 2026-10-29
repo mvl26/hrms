@@ -9,6 +9,8 @@ from frappe.utils import cint, flt, get_datetime, getdate, time_diff_in_hours
 from frappe.utils.nestedset import get_descendants_of
 
 LUNCH_BREAK_HOURS = 1.5
+# Chỉ là giá trị dự phòng khi không suy được giờ từ ca — KHÔNG phải chính sách. Giờ định mức thật
+# lấy từ ca của từng ngày, xem `work_schedule.standard_hours_between`.
 STANDARD_HOURS_PER_DAY = 8.0
 FULL_DAY_STATUSES = ("Present", "Work From Home")
 
@@ -340,12 +342,15 @@ def get_hours_by_department(filters):
 
 
 # ---------------------------------------------------------------------------
-# Định mức (standard hours = 8h x số ngày công theo Holiday List)
+# Định mức (standard hours = Σ giờ ca của những ngày phải đi làm — xem work_schedule)
 # ---------------------------------------------------------------------------
 
 
 def get_standard_hours(total_days, num_holidays):
-	"""Giờ định mức = 8h x số ngày công (tổng ngày trừ ngày nghỉ/lễ)."""
+	"""Công thức CŨ: 8h x (tổng ngày - số ngày nghỉ). Không còn nơi nào trong app gọi.
+
+	Giữ lại như một phép tính thuần cho ai cần ước lượng nhanh; định mức thật của nhân viên đi qua
+	`get_standard_hours_map` / `work_schedule.standard_hours_between`."""
 	working_days = max(cint(total_days) - cint(num_holidays), 0)
 	return round(STANDARD_HOURS_PER_DAY * working_days, 2)
 
@@ -361,23 +366,21 @@ def get_effective_days_in_month(year, month):
 	return total
 
 
-def _count_holidays_in_month(holiday_list, year, month, up_to_day=None):
-	if not holiday_list:
-		return 0
-	last_day = up_to_day or monthrange(cint(year), cint(month))[1]
-	first = getdate(f"{year}-{cint(month):02d}-01")
-	last = getdate(f"{year}-{cint(month):02d}-{cint(last_day):02d}")
-	return frappe.db.count("Holiday", {"parent": holiday_list, "holiday_date": ["between", [first, last]]})
-
-
 def get_standard_hours_map(filters, employees=None):
-	"""{employee: standard_hours} theo Holiday List của từng nhân sự Active."""
+	"""{employee: giờ định mức} của tháng, theo CA và LỊCH LÀM VIỆC của từng người.
+
+	Trước đây = (số ngày trong tháng - số dòng Holiday List) x 8h. Từ khi ngày nghỉ tuần được gỡ
+	khỏi Holiday List, công thức đó tính cả thứ Bảy, Chủ nhật vào định mức và cả công ty bị báo
+	thiếu giờ. Nay hỏi thẳng `work_schedule.standard_hours_between` — cùng nguồn với chấm công.
+
+	Tháng hiện tại chỉ tính tới hôm nay (`get_effective_days_in_month`), để KPI giữa tháng không
+	báo mọi người thiếu giờ."""
+	from hrms.hr.work_schedule import standard_hours_between
+
 	filters = prepare_filters(filters)
-	effective_days = get_effective_days_in_month(filters.year, filters.month)
-	company = filters.get("company") or (filters.companies[0] if filters.get("companies") else None)
-	default_holiday_list = (
-		frappe.get_cached_value("Company", company, "default_holiday_list") if company else None
-	)
+	year, month = cint(filters.year), cint(filters.month)
+	start = getdate(f"{year}-{month:02d}-01")
+	end = getdate(f"{year}-{month:02d}-{get_effective_days_in_month(year, month):02d}")
 
 	if employees:
 		emp_filters = {"name": ["in", employees]}
@@ -385,19 +388,11 @@ def get_standard_hours_map(filters, employees=None):
 		emp_filters = {"company": ["in", filters.companies], "status": "Active"}
 	else:
 		return {}
-	emp_rows = frappe.get_all("Employee", filters=emp_filters, fields=["name", "holiday_list"])
 
-	holiday_cache = {}
-	result = {}
-	for emp in emp_rows:
-		hlist = emp.holiday_list or default_holiday_list
-		if hlist not in holiday_cache:
-			holiday_cache[hlist] = _count_holidays_in_month(
-				hlist, filters.year, filters.month, up_to_day=effective_days
-			)
-		result[emp.name] = get_standard_hours(effective_days, holiday_cache[hlist])
-
-	return result
+	return {
+		name: standard_hours_between(name, start, end)
+		for name in frappe.get_all("Employee", filters=emp_filters, pluck="name")
+	}
 
 
 def get_active_employee_count(filters):
