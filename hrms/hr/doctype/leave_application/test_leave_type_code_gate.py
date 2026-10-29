@@ -116,3 +116,24 @@ class TestLeaveTypeCodeGate(PerTestRollback, FrappeTestCase):
 		self.assertEqual(code_for_leave_type("Nghỉ không lương", "Half Day"), "1/2K")
 		self.assertEqual(code_for_leave_type("Nghỉ ốm", "On Leave"), "Ô")
 		self.assertIsNone(code_for_leave_type("Nghỉ ốm", "Half Day"), "Nghỉ ốm chưa có mã nửa ngày")
+
+
+class TestObsoleteLeaveReasonField(FrappeTestCase):
+	"""Ô "Loại nghỉ" phụ (`custom_leave_reason`) là di sản của mô hình "một quỹ phép năm".
+
+	Từ 2026-08-24 mã công là neo và loại nghỉ chọn thẳng ở `leave_type`; không dòng code nào còn
+	đọc ô này. Để nó hiện trên form với mô tả "trừ vào quỹ phép năm" là dẫn HR chọn Nghỉ ốm ở đây
+	và tin rằng đã khai nghỉ ốm. Field giữ lại (dữ liệu cũ còn dùng), chỉ ẩn đi."""
+
+	def field(self):
+		import json
+
+		path = frappe.get_app_path("hrms", "fixtures", "custom_field.json")
+		with open(path, encoding="utf-8") as f:
+			return next(cf for cf in json.load(f) if cf["name"] == "Leave Application-custom_leave_reason")
+
+	def test_the_field_is_hidden_on_the_desk_form(self):
+		self.assertEqual(self.field()["hidden"], 1)
+
+	def test_its_description_no_longer_states_the_old_rule(self):
+		self.assertNotIn("quỹ phép năm", self.field()["description"] or "")
