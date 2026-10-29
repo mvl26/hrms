@@ -336,6 +336,15 @@ def mark_attendance_and_link_log(
 						"modify_half_day_status": 0,
 					},
 				)
+				if attendance.attendance_request:
+					# Nửa kia vừa đổi → mã buổi, số công, ăn trưa, giờ làm phải dựng lại theo đơn.
+					from hrms.hr.doctype.attendance_request.attendance_request_miyano import (
+						set_attendance_request_code,
+					)
+
+					set_attendance_request_code(
+						frappe.get_doc("Attendance Request", attendance.attendance_request)
+					)
 			else:
 				attendance = frappe.new_doc("Attendance")
 				attendance.update(
@@ -378,6 +387,21 @@ def get_existing_half_day_attendance(employee, attendance_date):
 			"status": "Half Day",
 			"modify_half_day_status": 1,
 			"leave_type": ("is", "set"),
+		},
+	)
+
+	# Miyano: ngày nửa buổi do Yêu cầu chấm công sinh ra (sáng ra ngoài) mà chưa có lượt chấm. Lượt
+	# chấm chiều về sau phải GỘP vào đúng ngày đó như nửa ngày nghỉ phép ở trên — không thì nó đâm
+	# vào bản ghi đã có, bị bỏ qua, và buổi chiều đã làm mãi mãi là `K` không lương.
+	attendance_name = attendance_name or frappe.db.exists(
+		"Attendance",
+		{
+			"employee": employee,
+			"attendance_date": attendance_date,
+			"status": "Half Day",
+			"docstatus": 1,
+			"attendance_request": ("is", "set"),
+			"in_time": ("is", "not set"),
 		},
 	)
 

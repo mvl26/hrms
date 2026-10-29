@@ -121,6 +121,16 @@ UNPAID_CODE = "K"  # nửa còn lại KHÔNG làm → nghỉ không lương (nat
 MORNING, AFTERNOON = "Sáng", "Chiều"
 
 
+def other_half_status(att) -> str:
+	"""`half_day_status` của nửa KHÔNG thuộc đơn nửa ngày, suy từ ngày công đang có.
+
+	Có giờ vào/ra và ngày đó là ngày đi làm (Present / Half Day) → lượt chấm đã chứng minh nửa kia
+	có làm → ``Present``. Còn lại (chưa có lượt chấm, hoặc lượt chấm bị chấm Vắng) → ``Absent``,
+	đúng như upstream: chỉ làm nửa ngày theo đơn, nửa kia không lương."""
+	worked = att.get("in_time") and att.get("out_time") and att.get("status") in ("Present", "Half Day")
+	return "Present" if worked else "Absent"
+
+
 def set_attendance_request_code(doc, method=None):
 	"""``on_submit``: sau khi upstream ``create_attendance_records`` sinh/cập nhật Attendance, ghi mã
 	công theo ``reason`` (WFH→W, On Duty→CT, còn lại→X) lên các Attendance của phiếu này.

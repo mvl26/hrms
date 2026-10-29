@@ -4,6 +4,7 @@ from frappe.model.document import Document
 from frappe.utils import add_days, date_diff, format_date, get_link_to_form, getdate
 
 import hrms
+from hrms.hr.doctype.attendance_request.attendance_request_miyano import other_half_status
 from hrms.hr.utils import validate_active_employee, validate_dates
 from hrms.hr.work_schedule import is_working_day
 
@@ -113,13 +114,18 @@ class AttendanceRequest(Document):
 			if doc.attendance_request != self.name:
 				doc.db_set("attendance_request", self.name)
 
+			# Nửa còn lại của ngày nửa buổi: đã có lượt chấm công thì người đó CÓ làm nửa kia (sáng ra
+			# ngoài gặp khách, chiều chấm 13:30-17:30) → Present, payroll không trừ. Upstream luôn ép
+			# Absent, nên buổi chiều ngồi ở công ty bị ghi K và mất nửa ngày lương.
+			other_half = other_half_status(doc) if status == "Half Day" else None
+
 			if old_status != status:
 				doc.db_set({"status": status, "attendance_request": self.name})
 				if status == "Half Day":
-					doc.db_set("half_day_status", "Absent")
+					doc.db_set("half_day_status", other_half)
 					text = _(
 						"Changed the status from {0} to {1} and Status for Other Half to {2} via Attendance Request"
-					).format(frappe.bold(old_status), frappe.bold(status), frappe.bold("Absent"))
+					).format(frappe.bold(old_status), frappe.bold(status), frappe.bold(other_half))
 				else:
 					text = _("Changed the status from {0} to {1} via Attendance Request").format(
 						frappe.bold(old_status), frappe.bold(status)
@@ -134,6 +140,15 @@ class AttendanceRequest(Document):
 						get_link_to_form("Attendance", doc.name),
 					),
 					title=_("Attendance Updated"),
+				)
+			elif other_half and doc.half_day_status != other_half:
+				# Half Day → Half Day: status đứng yên nhưng nửa kia đổi (`1/2X` chấm chiều → đủ ngày).
+				doc.db_set("half_day_status", other_half)
+				doc.add_comment(
+					comment_type="Info",
+					text=_("Changed the Status for Other Half to {0} via Attendance Request").format(
+						frappe.bold(other_half)
+					),
 				)
 		else:
 			# submit a new attendance record
@@ -210,6 +225,11 @@ class AttendanceRequest(Document):
 			# Đơn VẪN đổi thứ khác: mã công hiển thị (CT / X) và liên kết `attendance_request`.
 			# Coi ngày tự sinh là ghi đè được; status không đổi nên lương bất biến.
 			if attendance_doc.get("custom_auto_filled"):
+				return False
+			# Ngày `1/2X` sinh từ lượt chấm nửa buổi cũng là Half Day — đúng status đơn nửa ngày quy
+			# ra — nên upstream chặn luôn đơn "sáng ra ngoài, chiều về công ty". Đơn vẫn đổi nửa kia
+			# sang Present và ghi mã buổi; chỉ coi là không đổi khi ngày đã thuộc chính đơn này.
+			if new_status == "Half Day" and attendance_doc.attendance_request != self.name:
 				return False
 			return True
 		return False

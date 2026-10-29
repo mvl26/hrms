@@ -95,8 +95,18 @@ Muốn tách trên bảng thì phải thêm Attendance Code mới (quyết đị
 
 Nửa ngày (half_day): buổi được yêu cầu mang mã theo reason, buổi còn lại suy TỪ `half_day_status`
 native — `Present` → `X` (đủ công cả ngày), `Absent` → `K` (nửa kia không lương). Buổi nào được yêu
-cầu do người nộp chọn ở `custom_half_day_session` (Sáng/Chiều). **THUẦN HIỂN THỊ**: không đụng
+cầu do người nộp chọn ở `custom_half_day_session` (Sáng/Chiều). Mã công **THUẦN HIỂN THỊ**: không đụng
 `status`/`leave_type`/`half_day_status` → lương bất biến. Vá luôn lỗ "db_set bỏ qua bridge".
+
+**Nửa ngày bên ngoài + nửa ngày ở công ty (sửa 2026-10-29).** Sáng gặp khách theo đơn, chiều chấm
+13:30-17:30. Trước đây: đơn bị chặn "No attendance records to create" (ngày `1/2X` cũng là Half Day nên
+upstream coi là "status không đổi"), và nếu lọt qua thì `half_day_status` bị ép `Absent` → `CT/K`, trừ
+nửa ngày lương cho buổi chiều đã làm. Nay `half_day_status` của nửa kia suy từ ngày công đang có
+(`other_half_status`): có giờ vào/ra + ngày đi làm → **`Present`** ⇒ `CT/X`, 1 công, payroll không trừ;
+chưa có lượt chấm → `Absent` như cũ (`CT/K`). Đơn duyệt TRƯỚC, lượt chấm chiều về SAU: lượt chấm gộp
+vào đúng ngày của đơn (`get_existing_half_day_attendance`, như nửa ngày nghỉ phép) rồi dựng lại mã.
+Đây là thay đổi số công trả lương — HR duyệt 2026-10-29. Ngày nửa-nửa **có ăn trưa**; giờ làm = 4h
+theo đơn + giờ có mặt thật. Test: `hrms/tests/test_half_day_request_with_checkin.py`.
 
 ### 4.6 PWA (bật lại self-service)
 - Khôi phục 3 route `/attendance-requests` (list/new/detail) trong `frontend/src/router/attendance.js`.
