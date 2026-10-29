@@ -39,6 +39,18 @@ frappe.query_reports["Monthly Attendance Report"] = {
 			default: frappe.defaults.get_user_default("Company"),
 		},
 		{
+			// Để trống = cả công ty. Chọn phòng ban thì "Soát công" và "Chốt công tháng" bên dưới
+			// cũng đi theo đúng phòng đó (bảng chốt theo phòng chỉ khoá kỳ của phòng đó).
+			fieldname: "department",
+			label: __("Phòng ban"),
+			fieldtype: "Link",
+			options: "Department",
+			get_query: () => {
+				const company = frappe.query_report.get_filter_value("company");
+				return company ? { filters: { company: company } } : {};
+			},
+		},
+		{
 			fieldname: "include_company_descendants",
 			label: __("Gồm công ty con"),
 			fieldtype: "Check",

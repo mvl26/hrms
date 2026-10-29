@@ -41,6 +41,51 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		self._sheet(month="6", year=2097).insert()
 		self._sheet(month="7", year=2097).insert()  # different month -> no duplicate
 
+	def _department(self, name):
+		existing = frappe.db.get_value("Department", {"department_name": name, "company": self.company})
+		if existing:
+			return existing
+		return (
+			frappe.get_doc({"doctype": "Department", "department_name": name, "company": self.company})
+			.insert()
+			.name
+		)
+
+	def _employee_in(self, email, department):
+		emp = make_employee(email, company=self.company)
+		frappe.db.set_value("Employee", emp, "department", department)
+		return emp
+
+	def test_department_sheet_lists_only_that_department(self):
+		"""Bảng công của phòng A chỉ được chứa người phòng A.
+
+		Khoá kỳ (`period_lock.locking_sheet`) hiểu bảng có phòng ban là "chỉ khoá phòng đó". Bảng mà
+		lại chụp cả công ty thì người phòng B nằm trên một bảng đã ký nhưng ngày công của họ vẫn
+		sửa được — bảng và lương lệch nhau mà không ai được cảnh báo."""
+		dept_a, dept_b = self._department("ZZ Phòng A (test)"), self._department("ZZ Phòng B (test)")
+		emp_a = self._employee_in("mas_dept_a@sheet.test", dept_a)
+		emp_b = self._employee_in("mas_dept_b@sheet.test", dept_b)
+
+		sheet = self._sheet(month="9", year=2097, department=dept_a)
+		sheet.insert()
+		sheet.populate_from_attendance()
+
+		listed = {row.employee for row in sheet.employees}
+		self.assertIn(emp_a, listed)
+		self.assertNotIn(emp_b, listed)
+
+	def test_company_sheet_still_lists_every_department(self):
+		dept_a, dept_b = self._department("ZZ Phòng A (test)"), self._department("ZZ Phòng B (test)")
+		emp_a = self._employee_in("mas_dept_a@sheet.test", dept_a)
+		emp_b = self._employee_in("mas_dept_b@sheet.test", dept_b)
+
+		sheet = self._sheet(month="10", year=2097)
+		sheet.insert()
+		sheet.populate_from_attendance()
+
+		listed = {row.employee for row in sheet.employees}
+		self.assertTrue({emp_a, emp_b} <= listed)
+
 	def _seed_attendance(self, emp, year, month, day, **codes):
 		# Ca 7 ngày: lớp này đo MÃ CÔNG ra cột tổng nào, không đo lịch nghỉ. Không có nó thì ngày
 		# test rơi trúng T7/CN bị loại khỏi cột tổng (đúng luật) và test đỏ vì lý do không liên quan.
