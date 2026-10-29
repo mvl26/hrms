@@ -811,3 +811,66 @@ class TestRequestRefreshesLunchFlag(PerTestRollback, FrappeTestCase):
 		row = self.row(att)
 		self.assertEqual(row.custom_attendance_code, "W")
 		self.assertEqual(row.custom_lunch, 0)
+
+
+class TestHalfDayIsOneDayOnly(PerTestRollback, FrappeTestCase):
+	"""Nửa ngày chỉ có nghĩa khi đơn xin cho ĐÚNG MỘT ngày (Từ ngày = Đến ngày).
+
+	Trước đây form bắt chọn thêm "Half Day Date" dù hai ô ngày phía trên đã chỉ ra đúng một ngày —
+	nhập trùng, và mở đường cho đơn nhiều ngày có một ngày nửa buổi mà không ai nói rõ là buổi nào.
+	Nay: đơn nhiều ngày không được tick nửa ngày; đơn một ngày thì ngày nửa buổi CHÍNH LÀ ngày đó,
+	người dùng chỉ chọn buổi Sáng / Chiều."""
+
+	def setUp(self):
+		from erpnext.setup.doctype.employee.test_employee import make_employee
+
+		from hrms.tests.vn_test_utils import default_company
+
+		self.company = default_company()
+		self.emp = make_employee(
+			"ar_half_one_day@wfh.test", company=self.company, date_of_joining="2098-01-01"
+		)
+
+	def request(self, from_date, to_date, **kw):
+		return frappe.get_doc(
+			{
+				"doctype": "Attendance Request",
+				"employee": self.emp,
+				"company": self.company,
+				"from_date": from_date,
+				"to_date": to_date,
+				"reason": "On Duty",
+				**kw,
+			}
+		)
+
+	def test_a_one_day_half_day_request_takes_its_date_by_itself(self):
+		"""Không nhập Half Day Date — hệ thống lấy đúng ngày của đơn."""
+		ar = self.request("2098-05-06", "2098-05-06", half_day=1, custom_half_day_session="Chiều")
+		ar.insert()
+		self.assertEqual(str(ar.half_day_date), "2098-05-06")
+
+	def test_a_stale_half_day_date_is_overwritten_by_the_request_day(self):
+		ar = self.request("2098-05-06", "2098-05-06", half_day=1, half_day_date="2098-05-07")
+		ar.insert()
+		self.assertEqual(str(ar.half_day_date), "2098-05-06")
+
+	def test_a_multi_day_request_cannot_be_half_day(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "một ngày"):
+			self.request("2098-05-06", "2098-05-08", half_day=1, half_day_date="2098-05-07").insert()
+
+	def test_a_full_day_request_carries_no_half_day_date(self):
+		ar = self.request("2098-05-06", "2098-05-08", half_day=0, half_day_date="2098-05-07")
+		ar.insert()
+		self.assertIsNone(ar.half_day_date)
+
+	def test_the_half_day_date_field_is_not_asked_on_the_form(self):
+		"""Ô Half Day Date ẩn hẳn; ô Half Day chỉ hiện khi Từ ngày = Đến ngày."""
+		# Đọc file JSON của doctype (nguồn sự thật trong repo), không đọc meta trên site: meta chỉ đổi
+		# sau khi nạp lại doctype, mà nạp doctype trong harness là DDL — rò rỉ ra site thật.
+		path = frappe.get_app_path("hrms", "hr", "doctype", "attendance_request", "attendance_request.json")
+		with open(path, encoding="utf-8") as f:
+			fields = {df["fieldname"]: df for df in json.load(f)["fields"]}
+		self.assertEqual(fields["half_day_date"].get("hidden"), 1)
+		self.assertFalse(fields["half_day_date"].get("mandatory_depends_on"))
+		self.assertIn("doc.from_date == doc.to_date", fields["half_day"].get("depends_on") or "")

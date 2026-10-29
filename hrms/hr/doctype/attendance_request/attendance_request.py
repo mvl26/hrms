@@ -21,9 +21,22 @@ class AttendanceRequest(Document):
 		self.validate_no_attendance_to_create()
 
 	def validate_half_day(self):
-		if self.half_day:
-			if not getdate(self.from_date) <= getdate(self.half_day_date) <= getdate(self.to_date):
-				frappe.throw(_("Half day date should be in between from date and to date"))
+		"""Nửa ngày chỉ dành cho đơn ĐÚNG MỘT ngày, và ngày nửa buổi chính là ngày đó.
+
+		Miyano: Từ ngày / Đến ngày đã chỉ ra ngày nào, bắt nhập thêm "Half Day Date" là nhập trùng —
+		và đơn nhiều ngày có một ngày nửa buổi thì không ai nói rõ ngày nào, buổi nào. Buổi Sáng /
+		Chiều chọn ở `custom_half_day_session`."""
+		if not self.half_day:
+			self.half_day_date = None
+			return
+		if getdate(self.from_date) != getdate(self.to_date):
+			frappe.throw(
+				_(
+					"Nửa ngày chỉ áp dụng cho yêu cầu trong một ngày: Từ ngày và Đến ngày phải là cùng một ngày."
+				),
+				title=_("Không thể chọn nửa ngày"),
+			)
+		self.half_day_date = self.from_date
 
 	def validate_no_attendance_to_create(self):
 		attendance_warnings = self.get_attendance_warnings()

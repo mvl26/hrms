@@ -40,10 +40,19 @@ const formFields = createResource({
 	params: { doctype: "Attendance Request" },
 	auto: true,
 	transform(data) {
-		if (props.id) return data
-		return data.filter(
-			(field) => !["employee", "employee_name", "status", "company"].includes(field.fieldname)
-		)
+		const fields = props.id
+			? data
+			: data.filter(
+					(field) => !["employee", "employee_name", "status", "company"].includes(field.fieldname)
+			  )
+		// Miyano: ngày nửa buổi luôn là ngày của đơn (đơn nửa ngày chỉ được trong MỘT ngày) nên không
+		// hỏi lại; chỉ hỏi buổi Sáng / Chiều. FormView không đọc `depends_on`, nên tự bật/tắt ở dưới.
+		return fields.map((field) => {
+			if (field.fieldname === "half_day_date") field.hidden = true
+			if (field.fieldname === "half_day") field.hidden = true
+			if (field.fieldname === "custom_half_day_session") field.hidden = true
+			return field
+		})
 	},
 })
 
@@ -75,10 +84,32 @@ watch(
 )
 
 watch(
-	() => attendanceRequest.value.half_day,
-	(half_day) => {
-		const half_day_date = formFields.data.find((field) => field.fieldname === "half_day_date")
-		half_day_date.hidden = !half_day
+	() => [
+		attendanceRequest.value.from_date,
+		attendanceRequest.value.to_date,
+		attendanceRequest.value.half_day,
+		formFields.data,
+	],
+	([from_date, to_date, half_day, fields]) => {
+		if (!fields) return
+		const one_day = Boolean(from_date) && from_date === to_date
+		const field = (name) => fields.find((f) => f.fieldname === name)
+
+		// nửa ngày chỉ có nghĩa với đơn một ngày: nhiều ngày thì ẩn và bỏ tick
+		if (field("half_day")) field("half_day").hidden = !one_day
+		if (!one_day && half_day) attendanceRequest.value.half_day = 0
+
+		const is_half = one_day && Boolean(half_day)
+		attendanceRequest.value.half_day_date = is_half ? from_date : null
+
+		const session = field("custom_half_day_session")
+		if (session) {
+			session.hidden = !is_half
+			session.reqd = is_half
+			if (is_half && !attendanceRequest.value.custom_half_day_session) {
+				attendanceRequest.value.custom_half_day_session = "Sáng"
+			}
+		}
 	}
 )
 
