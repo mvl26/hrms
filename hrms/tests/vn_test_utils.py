@@ -54,8 +54,8 @@ def default_company() -> str:
 def ensure_short_hours_code() -> str:
 	"""Đảm bảo mã `1/2X` (làm nửa ngày do thiếu giờ) có mặt cho test cần nó.
 
-	`1/2X` đi kèm `hrms/fixtures/attendance_code.json` nên site đã `bench migrate` thì hàm này là
-	no-op. Site chưa sync fixtures (hoặc `test_site` của CI dựng từ đầu) thì tạo tạm trong chính
+	`1/2X` đi kèm `hrms/seed_data/attendance_code.json` nên site đã `bench migrate` thì hàm này là
+	no-op. Site chưa gieo (hoặc `test_site` của CI dựng từ đầu) thì tạo tạm trong chính
 	transaction của test — harness rollback dọn sạch sau đó. Đây là DML thuần, không phải DDL, nên
 	không có nguy cơ rò rỉ như khi tạo Custom Field.
 	"""

@@ -383,6 +383,7 @@ class ShiftType(Document):
 
 	def mark_absent_for_half_day_dates(self, employee):
 		from hrms.hr.attendance_exempt import is_exempt_working_day
+		from hrms.hr.period_lock import is_period_locked
 
 		half_day_attendances = frappe.get_all(
 			"Attendance",
@@ -394,6 +395,11 @@ class ShiftType(Document):
 			timestamp = datetime.combine(attendance.attendance_date, start_time)
 			shift_details = get_employee_shift(employee, timestamp, True)
 			if shift_details and shift_details.shift_type.name == self.name:
+				if is_period_locked(employee, attendance.attendance_date):
+					# Kỳ đã chốt: `half_day_status` là thứ payroll đọc để trừ 0,5 ngày. Ép Absent ở
+					# đây là đổi lương của một kỳ đã ký bằng `set_value`, không hook nào gác.
+					continue
+
 				if is_exempt_working_day(employee, attendance.attendance_date):
 					# Nửa còn lại của người miễn chấm công là CÔNG, không phải vắng vì thiếu lượt
 					# chấm. `get_half_absent_days` đọc `half_day_status` để trừ 0,5 → ép Absent ở đây

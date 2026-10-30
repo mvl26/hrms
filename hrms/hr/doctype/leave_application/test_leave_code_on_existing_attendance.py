@@ -170,3 +170,29 @@ class TestLeaveCodeOnExistingAttendance(PerTestRollback, FrappeTestCase):
 			"V",
 			"không tra được mã thì phải giữ nguyên, không bịa",
 		)
+
+	def test_approved_leave_clears_a_stale_lunch_flag(self):
+		"""Ngày làm thiếu giờ (`1/2X`, có ăn trưa) rồi được duyệt nghỉ phép cả ngày → hết ăn trưa.
+
+		Đơn nghỉ ghi bằng `db_set` nên `before_validate` — nơi cờ ăn trưa được tính — không chạy.
+		Cờ kẹt ở giá trị của mã CŨ và công ty trả thừa một bữa cho ngày không ai có mặt."""
+		date = f"{self.year}-03-17"
+		self._alloc("Nghỉ phép năm", 12)
+		att = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": date,
+				"company": self.company,
+				"custom_attendance_code": "1/2X",
+			}
+		)
+		att.insert(ignore_permissions=True)
+		att.submit()
+		# như khi hai dấu chấm phủ giờ nghỉ trưa (08:30 → 17:30 vẫn là 1/2X nhưng có ăn trưa)
+		frappe.db.set_value("Attendance", att.name, "custom_lunch", 1, update_modified=False)
+
+		self._approve_leave("Nghỉ phép năm", date)
+
+		self.assertEqual(self._att_row(date).custom_attendance_code, "P")
+		self.assertEqual(frappe.db.get_value("Attendance", att.name, "custom_lunch"), 0)

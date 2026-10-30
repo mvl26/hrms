@@ -51,6 +51,10 @@ kèm đếm bản ghi trước/sau để phát hiện rò rỉ.
 
 ### Task 1: `work_schedule` biết tính GIỜ
 
+> **2026-10-13:** xong `working_days_between`, `shift_hours_per_day`, `standard_hours_between`
+> (test ở `hrms/hr/tests/test_standard_hours.py`). **`half_day_window` CHƯA làm** — chỉ để hiển thị,
+> không ai dùng tới. Chưa commit.
+
 **Files:**
 - Modify: `hrms/hr/work_schedule.py`
 - Modify: `hrms/hr/tests/test_work_schedule.py`
@@ -61,7 +65,7 @@ kèm đếm bản ghi trước/sau để phát hiện rò rỉ.
   - `shift_hours_per_day(shift: str | None) -> float` — `(end − start − nghỉ trưa)` của ca
   - `half_day_window(employee, date, period: str) -> tuple | None` — `("morning"|"afternoon")`
 
-- [ ] **Step 1: Viết test đỏ**
+- [x] **Step 1: Viết test đỏ**
 
 ```python
 def test_working_days_excludes_public_holidays(self):
@@ -95,11 +99,11 @@ def test_half_day_window_is_none_on_a_rest_day(self):
 	self.assertIsNone(half_day_window(self.employee, SATURDAY, "morning"))
 ```
 
-- [ ] **Step 2: Chạy harness → FAIL** (`ImportError: cannot import name 'working_days_between'`)
-- [ ] **Step 3: Cài đặt.** `working_days_between` = `scheduled_days_between − public_holidays_between`.
+- [x] **Step 2: Chạy harness → FAIL** (`ImportError: cannot import name 'working_days_between'`)
+- [x] **Step 3: Cài đặt.** `working_days_between` = `scheduled_days_between − public_holidays_between`.
       `shift_hours_per_day` dùng lại `resolve_lunch_window` của `vn_day_classifier` (đừng viết lại
       lớp phòng thủ khung trưa rác). `half_day_window` trả `None` khi `is_rest_day`.
-- [ ] **Step 4: Chạy harness → PASS**
+- [x] **Step 4: Chạy harness → PASS**
 - [ ] **Step 5: Commit**
 
 ```bash
@@ -124,7 +128,7 @@ git commit -m "feat(hr): work_schedule tinh duoc gio lam viec cua ca"
 - Consumes: `working_days_between`, `shift_hours_per_day` (Task 1)
 - Produces: `standard_hours_between(employee, start, end, exclude_leave=True) -> float`
 
-- [ ] **Step 1: Viết test đỏ**
+- [x] **Step 1: Viết test đỏ**
 
 ```python
 def test_standard_hours_for_july_2027(self):
@@ -153,14 +157,14 @@ def test_employee_on_a_six_day_shift_has_more_standard_hours(self):
 	"""Hai người cùng Holiday List, khác ca -> khác định mức. Chứng minh định mức đi theo CA."""
 ```
 
-- [ ] **Step 2: Chạy harness → FAIL**
-- [ ] **Step 3: Cài đặt.** `get_standard_hours_map` gọi `standard_hours_between`; xoá
+- [x] **Step 2: Chạy harness → FAIL**
+- [x] **Step 3: Cài đặt.** `get_standard_hours_map` gọi `standard_hours_between`; xoá
       `_count_holidays_in_month`; `STANDARD_HOURS_PER_DAY` chỉ còn là fallback khi ca không khai giờ,
       docstring nói rõ nó là fallback **chứ không phải chính sách**.
       `set_standard_and_variance` nhận `employee` thay vì `holidays`.
-- [ ] **Step 4: Chạy harness → PASS**; baseline `test_working_hours` +
+- [x] **Step 4: Chạy harness → PASS**; baseline `test_working_hours` +
       `test_monthly_attendance_sheet` trước/sau bằng `git stash`
-- [ ] **Step 5: Chạy cổng bất biến lương + đối soát 6 phiếu thật** → phải vẫn 0 lệch
+- [x] **Step 5: Chạy cổng bất biến lương + đối soát 6 phiếu thật** → phải vẫn 0 lệch
 - [ ] **Step 6: Commit**
 
 ```bash

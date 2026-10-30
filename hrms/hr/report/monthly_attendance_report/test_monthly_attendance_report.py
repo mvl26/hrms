@@ -845,8 +845,12 @@ class TestDayKindsFromWorkSchedule(PerTestRollback, FrappeTestCase):
 			filters={"parent": hl, "holiday_date": ["between", ["2026-07-01", "2026-07-31"]]},
 			fields=["holiday_date", "weekly_off"],
 		)
+		# Cửa thoát phải xét CÒN DÒNG NGHỈ TUẦN hay không, chứ không phải Holiday List rỗng: sau khi
+		# di trú (patch `remove_weekly_off_from_holiday_list`, chạy 2026-09-14) danh sách vẫn còn 12
+		# ngày lễ thật, nên `rows` không rỗng — điều kiện cũ không mở cửa và test so cuối tuần với
+		# `scheduled` rồi đỏ, dù đó chính là trạng thái ĐÍCH mà bước chuyển nhắm tới.
+		if not any(r.weekly_off for r in rows):
+			self.skipTest("lịch đã di trú xong — Holiday List không còn dòng nghỉ tuần để đối chiếu")
 		old = {getdate(r.holiday_date): ("rest" if r.weekly_off else "holiday") for r in rows}
-		if not old:
-			self.skipTest("lịch đã di trú xong — không còn dòng cũ để đối chiếu")
 		for day, kind in self.kinds().items():
 			self.assertEqual(kind, old.get(day, "scheduled"), f"lệch ở ngày {day}")

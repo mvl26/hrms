@@ -1,10 +1,16 @@
 # Copyright (c) 2026, Miyano Việt Nam.
 """Integrity tests for the seeded VN timekeeping master data (Leave Type anchors +
-Attendance Codes). These assert the fixtures shipped by the app resolve correctly."""
+Attendance Codes).
+
+The flag/mapping tables below pin what the app SHIPS in `hrms/seed_data/`, not what the site holds:
+after the first seed those records belong to HR (they may move `P` to their own leave type), so a
+site-side assertion of the defaults would just re-encode the overwrite this repo stopped doing. On
+the site we only check what must always hold — every code's leave type exists."""
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from hrms.setup_vn_defaults import seed_records
 from hrms.tests.isolation import PerTestRollback
 
 # VN Leave Type anchors — name -> expected flags (is_lwp, is_compensatory, is_ppl, fraction).
@@ -48,6 +54,7 @@ VN_ATTENDANCE_CODES = {
 	"1/2K": ("Không lương", 0.5, 0, "Half Day", "Nghỉ không lương"),
 	"V": ("Vắng", 0.0, 0, "Absent", None),  # vắng không lý do — hiển thị cho ngày Absent
 	"CT": ("Công", 1.0, 1, "Work From Home", None),  # đi công tác — tính công, paid
+	"W": ("Công", 1.0, 1, "Work From Home", None),  # làm tại nhà (Yêu cầu chấm công WFH)
 	# nghỉ việc riêng có lương (Điều 115) tách 3: kết hôn 3 ngày, con kết hôn 1 ngày, tang 3 ngày
 	"KH": ("Việc riêng", 0.0, 1, "On Leave", "Nghỉ kết hôn"),
 	"R1": ("Việc riêng", 0.0, 1, "On Leave", "Nghỉ con kết hôn"),
@@ -57,19 +64,15 @@ VN_ATTENDANCE_CODES = {
 
 class TestAttendanceCodeFixtures(PerTestRollback, FrappeTestCase):
 	def test_vn_leave_type_anchors_exist(self):
+		seeded = {r["name"]: r for r in seed_records("leave_type")}
+		self.assertEqual(set(seeded), set(VN_LEAVE_TYPES))
 		for name, flags in VN_LEAVE_TYPES.items():
-			self.assertTrue(frappe.db.exists("Leave Type", name), f"Missing Leave Type: {name}")
-			row = frappe.db.get_value(
-				"Leave Type",
-				name,
-				["is_lwp", "is_compensatory", "is_ppl", "fraction_of_daily_salary_per_leave"],
-				as_dict=True,
-			)
-			self.assertEqual(int(row.is_lwp), flags["is_lwp"], f"{name}.is_lwp")
-			self.assertEqual(int(row.is_compensatory), flags["is_compensatory"], f"{name}.is_compensatory")
-			self.assertEqual(int(row.is_ppl), flags.get("is_ppl", 0), f"{name}.is_ppl")
+			row = seeded[name]
+			self.assertEqual(int(row["is_lwp"]), flags["is_lwp"], f"{name}.is_lwp")
+			self.assertEqual(int(row["is_compensatory"]), flags["is_compensatory"], f"{name}.is_compensatory")
+			self.assertEqual(int(row["is_ppl"]), flags.get("is_ppl", 0), f"{name}.is_ppl")
 			self.assertEqual(
-				float(row.fraction_of_daily_salary_per_leave or 0),
+				float(row["fraction_of_daily_salary_per_leave"] or 0),
 				flags.get("fraction", 0.0),
 				f"{name}: phần lương công ty trả cho ngày nghỉ này",
 			)
@@ -95,25 +98,28 @@ class TestAttendanceCodeFixtures(PerTestRollback, FrappeTestCase):
 
 	def test_vn_attendance_codes_resolve(self):
 		valid_status = {"Present", "Absent", "Half Day", "On Leave", "Work From Home"}
+		seeded = {r["name"]: r for r in seed_records("attendance_code")}
+		seeded_leave_types = {r["name"] for r in seed_records("leave_type")}
+		self.assertEqual(set(seeded), set(VN_ATTENDANCE_CODES))
 		for code, (category, wf, is_paid, status, leave_type) in VN_ATTENDANCE_CODES.items():
-			self.assertTrue(frappe.db.exists("Attendance Code", code), f"Missing Attendance Code: {code}")
-			row = frappe.db.get_value(
-				"Attendance Code",
-				code,
-				["category", "work_fraction", "is_paid", "maps_to_status", "leave_type"],
-				as_dict=True,
-			)
-			self.assertEqual(row.category, category, f"{code}.category")
-			self.assertEqual(float(row.work_fraction), wf, f"{code}.work_fraction")
-			self.assertEqual(int(row.is_paid), is_paid, f"{code}.is_paid")
-			self.assertIn(row.maps_to_status, valid_status, f"{code}.maps_to_status")
-			self.assertEqual(row.maps_to_status, status, f"{code}.maps_to_status")
-			# every code that names a leave_type must point at one that actually exists
+			row = seeded[code]
+			self.assertEqual(row["category"], category, f"{code}.category")
+			self.assertEqual(float(row["work_fraction"]), wf, f"{code}.work_fraction")
+			self.assertEqual(int(row["is_paid"]), is_paid, f"{code}.is_paid")
+			self.assertIn(row["maps_to_status"], valid_status, f"{code}.maps_to_status")
+			self.assertEqual(row["maps_to_status"], status, f"{code}.maps_to_status")
+			self.assertEqual(row.get("leave_type") or None, leave_type, f"{code}.leave_type")
 			if leave_type:
-				self.assertEqual(row.leave_type, leave_type, f"{code}.leave_type")
-				self.assertTrue(
-					frappe.db.exists("Leave Type", row.leave_type),
-					f"{code} -> missing Leave Type {row.leave_type}",
-				)
-			else:
-				self.assertIn(row.leave_type, (None, ""), f"{code} should have no leave_type")
+				self.assertIn(leave_type, seeded_leave_types, f"{code} -> leave type not seeded")
+
+	def test_site_codes_point_at_existing_leave_types(self):
+		"""Trên site, mã trỏ loại nghỉ NÀO là việc của HR — nhưng loại đó phải có thật."""
+		for code, leave_type in frappe.get_all(
+			"Attendance Code",
+			filters={"leave_type": ("is", "set")},
+			fields=["name", "leave_type"],
+			as_list=True,
+		):
+			self.assertTrue(
+				frappe.db.exists("Leave Type", leave_type), f"{code} -> missing Leave Type {leave_type}"
+			)

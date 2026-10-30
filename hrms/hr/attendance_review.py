@@ -33,6 +33,27 @@ FLAG_NO_RECORD = "NO_RECORD"  # ngày làm việc mà không có bản ghi công
 FLAG_CHECKIN_ON_HOLIDAY = "CHECKIN_ON_HOLIDAY"  # ngày nghỉ nhưng có người chấm công
 FLAG_ABSENT = "ABSENT"  # vắng không lý do
 
+# Ai được soát công. `@frappe.whitelist()` mở hàm cho MỌI tài khoản đăng nhập; vai trò khai trên
+# trang Soát công chỉ gác giao diện, gọi thẳng `/api/method/...` là đi vòng qua.
+TIMEKEEPING_ROLES = frozenset({"HR Manager", "HR User", "System Manager"})
+
+
+def require_timekeeping_role():
+	"""Chặn tài khoản không thuộc Nhân sự ở các cửa API đọc/ghi công của CẢ công ty.
+
+	Không dùng `frappe.only_for`: nó trả về ngay khi `frappe.flags.in_test`, nên không test nào
+	kiểm được chốt này. Không dùng `frappe.has_permission("Attendance")`: vai trò Employee có quyền
+	đọc Attendance (của chính mình), còn các hàm ở đây đọc bằng `frappe.get_all` — bỏ qua phân
+	quyền theo bản ghi — nên chốt mức doctype để lọt cả công ty."""
+	if frappe.session.user == "Administrator":
+		return
+	if TIMEKEEPING_ROLES.isdisjoint(frappe.get_roles()):
+		frappe.throw(
+			_("Chỉ Nhân sự mới được soát và điều chỉnh công."),
+			frappe.PermissionError,
+			title=_("Không có quyền"),
+		)
+
 
 def flag_labels() -> dict:
 	"""Nhãn hiển thị của từng cờ bất thường.
@@ -118,10 +139,19 @@ def attendance_names(employees: list, start, end) -> dict:
 
 @frappe.whitelist()
 def get_review_grid(filters: str | dict | None = None) -> dict:
+	"""Cửa API của lưới soát công — chỉ Nhân sự. Nội dung xem `build_review_grid`."""
+	require_timekeeping_role()
+	return build_review_grid(filters)
+
+
+def build_review_grid(filters: str | dict | None = None) -> dict:
 	"""Lưới soát công của một tháng: hàng nhân viên x cột ngày, kèm cờ bất thường từng ô.
 
 	Trả `{rows: [...], flags: {employee: {day: [flag]}}, flag_labels: {...}}`. `rows` chính là
-	`get_sheet_rows` — cùng một nguồn suy diễn với report và Bảng Công Tháng."""
+	`get_sheet_rows` — cùng một nguồn suy diễn với report và Bảng Công Tháng.
+
+	KHÔNG kiểm tra quyền: đây là đường gọi nội bộ (Bảng Công Tháng tự đọc lưới lúc chốt). Cửa API
+	là `get_review_grid`."""
 	if isinstance(filters, str):
 		filters = json.loads(filters)
 	filters = frappe._dict(filters or {})
@@ -263,9 +293,72 @@ def apply_correction(attendance: str, code: str, reason: str | None = None) -> d
 
 
 @frappe.whitelist()
+def create_reviewed_day(employee: str, date: str, code: str, reason: str | None = None) -> dict:
+	"""Tạo ngày công cho một ô `NO_RECORD` — ngày làm việc mà máy không sinh ra bản ghi nào.
+
+	Cùng một cửa với `apply_correction`: bắt lý do, tôn trọng khoá kỳ (hook `before_insert` của
+	Attendance), và ghi `Attendance Correction Log` với vế "trước" để trống. Không có hàm này thì HR
+	phải sang Mark Attendance — đường không bắt lý do, không để lại vết.
+
+	Chỉ nhận ngày LÀM VIỆC chưa có bản ghi. Ngày đã có bản ghi thì đi `apply_correction`; ngày nghỉ
+	tuần / lễ thì không phải ô thiếu công, và mọi đường nhập tay khác cũng bỏ qua những ngày đó."""
+	require_timekeeping_role()
+	if not reason or not reason.strip():
+		frappe.throw(_("Phải nhập lý do điều chỉnh."))
+	if not frappe.db.exists("Attendance Code", code):
+		frappe.throw(_("Mã công {0} không tồn tại.").format(code))
+
+	from hrms.hr.work_schedule import is_working_day
+
+	day = getdate(date)
+	existing = frappe.db.get_value(
+		"Attendance", {"employee": employee, "attendance_date": day, "docstatus": ["<", 2]}, "name"
+	)
+	if existing:
+		frappe.throw(
+			_("Ngày {0} đã có bản ghi công {1} — hãy sửa bản ghi đó thay vì tạo mới.").format(
+				frappe.utils.formatdate(day), existing
+			)
+		)
+	if not is_working_day(employee, day):
+		frappe.throw(
+			_("Ngày {0} không phải ngày làm việc của nhân viên này.").format(frappe.utils.formatdate(day))
+		)
+
+	doc = frappe.get_doc(
+		{
+			"doctype": "Attendance",
+			"employee": employee,
+			"attendance_date": day,
+			"company": frappe.db.get_value("Employee", employee, "company"),
+			"custom_attendance_code": code,
+		}
+	)
+	doc.insert()  # `before_insert` → khoá kỳ; `before_validate` → cầu nối mã công + cờ ăn trưa
+	doc.submit()
+
+	before = {}
+	after = payroll_snapshot(doc)
+	after["custom_work_credit"] = flt(doc.get("custom_work_credit"))
+
+	from hrms.hr.doctype.attendance_correction_log.attendance_correction_log import log_correction
+
+	log = log_correction(doc, before, after, reason.strip())
+	return {"attendance": doc.name, "log": log, "before": before, "after": after}
+
+
+@frappe.whitelist()
 def apply_corrections_bulk(corrections: str | list) -> dict:
-	"""Áp nhiều điều chỉnh trong một lượt. `corrections` là list `{attendance, code, reason}`."""
+	"""Áp nhiều điều chỉnh trong một lượt.
+
+	`corrections` là list; mỗi phần tử là `{attendance, code, reason}` (sửa ngày đã có bản ghi) hoặc
+	`{employee, date, code, reason}` (tạo ngày công cho ô chưa có bản ghi)."""
 	if isinstance(corrections, str):
 		corrections = json.loads(corrections)
-	results = [apply_correction(c["attendance"], c["code"], c.get("reason")) for c in corrections]
+	results = [
+		apply_correction(c["attendance"], c["code"], c.get("reason"))
+		if c.get("attendance")
+		else create_reviewed_day(c["employee"], c["date"], c["code"], c.get("reason"))
+		for c in corrections
+	]
 	return {"applied": len(results), "results": results}

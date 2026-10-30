@@ -300,6 +300,11 @@ def get_employees(filters: Filters, start, end) -> list:
 	companies = _company_filter(filters)
 	if companies:
 		conds.append(["Employee", "company", "in", companies])
+	# Khớp ĐÚNG phòng ban, không kéo theo phòng con: `period_lock.locking_sheet` hiểu bảng có phòng
+	# ban là "chỉ khoá nhân viên thuộc phòng đó". Bảng chụp rộng hơn phạm vi nó khoá thì có người
+	# nằm trên bảng đã ký mà ngày công vẫn sửa được.
+	if filters.get("department"):
+		conds.append(["Employee", "department", "=", filters.department])
 
 	rows = frappe.get_all(
 		"Employee",

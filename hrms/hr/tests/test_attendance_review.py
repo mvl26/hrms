@@ -273,3 +273,120 @@ class TestApplyCorrectionLunchFlag(PerTestRollback, FrappeTestCase):
 
 		apply_correction(att.name, "X", "bổ sung theo biên bản")
 		self.assertEqual(self.lunch(att), 0)
+
+
+class TestCreateDayFromReview(PerTestRollback, FrappeTestCase):
+	"""Ô "ngày làm việc không có bản ghi" phải xử lý được NGAY trên lưới soát công.
+
+	Lưới gắn cờ `NO_RECORD` nhưng trước đây chỉ sửa được ô đã có bản ghi; gặp ô trống HR phải bỏ
+	sang Mark Attendance — đường đó không bắt lý do và không để lại vết nào. `create_reviewed_day`
+	là cùng một cửa: bắt lý do, tôn trọng khoá kỳ, ghi `Attendance Correction Log`."""
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		ensure_short_hours_code()
+		cls.emp = test_employee()
+		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
+
+	def setUp(self):
+		from hrms.tests.work_calendar_fixture import MON_TO_FRI, set_company_weekdays
+
+		set_company_weekdays(MON_TO_FRI)  # 2099-12-01 là thứ Ba, 2099-12-05 là thứ Bảy
+
+	def day(self, date):
+		return frappe.db.get_value(
+			"Attendance",
+			{"employee": self.emp, "attendance_date": date, "docstatus": ["<", 2]},
+			["name", "docstatus", "status", "custom_attendance_code", "custom_work_credit"],
+			as_dict=True,
+		)
+
+	def test_it_creates_a_submitted_day_with_the_chosen_code(self):
+		from hrms.hr.attendance_review import create_reviewed_day
+
+		create_reviewed_day(self.emp, "2099-12-01", "X", "quên chấm công, quản lý xác nhận")
+
+		row = self.day("2099-12-01")
+		self.assertEqual(row.docstatus, 1)
+		self.assertEqual(row.status, "Present")
+		self.assertEqual(row.custom_attendance_code, "X")
+		self.assertEqual(row.custom_work_credit, 1.0)
+
+	def test_the_new_day_leaves_a_trace(self):
+		from hrms.hr.attendance_review import create_reviewed_day
+
+		out = create_reviewed_day(self.emp, "2099-12-02", "V", "không đi làm, không báo")
+
+		log = frappe.get_all(
+			"Attendance Correction Log",
+			filters={"attendance": out["attendance"]},
+			fields=["old_code", "new_code", "old_status", "new_status", "reason"],
+		)
+		self.assertEqual(len(log), 1)
+		self.assertFalse(log[0].old_code)
+		self.assertFalse(log[0].old_status)
+		self.assertEqual(log[0].new_code, "V")
+		self.assertEqual(log[0].new_status, "Absent")
+		self.assertEqual(log[0].reason, "không đi làm, không báo")
+
+	def test_a_reason_is_required(self):
+		from hrms.hr.attendance_review import create_reviewed_day
+
+		for bad in (None, "", "   "):
+			with self.assertRaises(frappe.exceptions.ValidationError):
+				create_reviewed_day(self.emp, "2099-12-03", "X", bad)
+		self.assertIsNone(self.day("2099-12-03"))
+
+	def test_a_day_that_already_has_a_record_is_refused(self):
+		"""Ngày đã có bản ghi thì phải đi đường SỬA (`apply_correction`), không tạo chồng lên."""
+		from hrms.hr.attendance_review import create_reviewed_day
+
+		create_reviewed_day(self.emp, "2099-12-04", "X", "bổ sung lần đầu")
+		with self.assertRaises(frappe.exceptions.ValidationError):
+			create_reviewed_day(self.emp, "2099-12-04", "V", "tạo chồng")
+		self.assertEqual(self.day("2099-12-04").custom_attendance_code, "X")
+
+	def test_a_rest_day_is_refused(self):
+		"""Thứ Bảy không phải ngày làm việc: ô đó không mang cờ NO_RECORD, không có gì để bổ sung."""
+		from hrms.hr.attendance_review import create_reviewed_day
+
+		with self.assertRaises(frappe.exceptions.ValidationError):
+			create_reviewed_day(self.emp, "2099-12-05", "X", "làm thêm thứ Bảy")
+		self.assertIsNone(self.day("2099-12-05"))
+
+	def test_a_locked_period_is_refused(self):
+		from hrms.hr.attendance_review import create_reviewed_day
+
+		frappe.get_doc(
+			{"doctype": "Monthly Attendance Sheet", "company": self.company, "month": "12", "year": 2099}
+		).insert().submit()
+		with self.assertRaises(frappe.exceptions.ValidationError):
+			create_reviewed_day(self.emp, "2099-12-07", "X", "bổ sung sau khi đã chốt")
+		self.assertIsNone(self.day("2099-12-07"))
+
+	def test_bulk_save_handles_new_days_and_edits_together(self):
+		"""Lưới gom mọi ô chờ lưu vào MỘT lần bấm — có ô sửa, có ô tạo mới."""
+		from hrms.hr.attendance_review import apply_corrections_bulk
+
+		existing = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": "2099-12-08",
+				"company": self.company,
+				"status": "Absent",
+			}
+		).insert()
+		existing.submit()
+
+		out = apply_corrections_bulk(
+			[
+				{"attendance": existing.name, "code": "X", "reason": "quên chấm công"},
+				{"employee": self.emp, "date": "2099-12-09", "code": "X", "reason": "máy chấm hỏng"},
+			]
+		)
+
+		self.assertEqual(out["applied"], 2)
+		self.assertEqual(self.day("2099-12-08").custom_attendance_code, "X")
+		self.assertEqual(self.day("2099-12-09").custom_attendance_code, "X")

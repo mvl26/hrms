@@ -160,3 +160,84 @@ class TestCheckinOutsideSchedule(PerTestRollback, FrappeTestCase):
 			"working_hours": reloaded.working_hours,
 		}
 		self.assertEqual(dict(before), after, "cờ ghi nhận đã chạm vào mã công — không được phép")
+
+
+class TestOutsideScheduleFollowsTheFlexShift(PerTestRollback, FrappeTestCase):
+	"""Ca trượt: khung "trong giờ" dịch theo dấu chấm ĐẦU TIÊN của ngày, tối đa ± biên trượt.
+
+	Trước bản sửa này cờ dùng khung cố định 08:00-17:00 dù ca đã bật giờ linh hoạt: tới lúc 07:00
+	(hợp lệ theo ca trượt) bị gắn "Ngoài giờ", và người vào 09:00 về 17:30 — vẫn còn đang trong
+	giờ phải làm — cũng bị gắn. Cờ này là nền cho OT, sai ở đây là số giờ làm thêm sai từ gốc.
+	"""
+
+	def setUp(self):
+		self.employee = test_employee("outside_flex@codes.com")
+		self.shift = "_Test Ca Truot Ngoai Lich"
+		if not frappe.db.exists("Shift Type", self.shift):
+			frappe.get_doc(
+				{
+					"doctype": "Shift Type",
+					"__newname": self.shift,
+					"start_time": "8:0:0",
+					"end_time": "17:0:0",
+				}
+			).insert(ignore_permissions=True)
+		frappe.db.set_value(
+			"Shift Type", self.shift, {"custom_flexible_shift": 1, "custom_flex_band_minutes": 180}
+		)
+		for idx, day in enumerate(MON_TO_FRI, start=1):
+			frappe.get_doc(
+				{
+					"doctype": "Assignment Rule Day",
+					"parent": self.shift,
+					"parenttype": "Shift Type",
+					"parentfield": "custom_working_days",
+					"day": day,
+					"idx": idx,
+				}
+			).insert(ignore_permissions=True)
+		frappe.db.set_value("Employee", self.employee, "default_shift", self.shift)
+		frappe.clear_cache(doctype="Employee")
+		frappe.clear_cache(doctype="Shift Type")
+
+	def checkin(self, timestamp, log_type="IN"):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Employee Checkin",
+				"employee": self.employee,
+				"time": timestamp,
+				"log_type": log_type,
+				"skip_auto_attendance": 1,
+			}
+		)
+		doc.insert(ignore_permissions=True)
+		return doc
+
+	def test_arriving_early_within_the_band_is_inside_the_shift(self):
+		log = self.checkin(f"{WORKING_DAY} 07:00:00")
+		self.assertEqual(log.custom_outside_schedule, 0)
+
+	def test_leaving_at_the_slid_end_is_inside_the_shift(self):
+		"""Vào 09:00 thì ca trượt thành 09:00-18:00; về 17:30 vẫn đang trong giờ phải làm."""
+		self.checkin(f"{WORKING_DAY} 09:00:00")
+		log = self.checkin(f"{WORKING_DAY} 17:30:00", log_type="OUT")
+		self.assertEqual(log.custom_outside_schedule, 0)
+
+	def test_staying_past_the_slid_end_is_flagged(self):
+		"""Vào 08:00 thì ca vẫn 08:00-17:00; ở tới 20:30 là ngoài giờ thật."""
+		self.checkin(f"{WORKING_DAY} 08:00:00")
+		log = self.checkin(f"{WORKING_DAY} 20:30:00", log_type="OUT")
+		self.assertEqual(log.custom_outside_schedule, 1)
+		self.assertEqual(log.custom_outside_reason, "Ngoài giờ")
+
+	def test_arriving_before_the_band_is_flagged(self):
+		"""Biên trượt 3h: sớm nhất ca bắt đầu 05:00. Tới 04:30 là trước cả khung đã trượt hết cỡ."""
+		log = self.checkin(f"{WORKING_DAY} 04:30:00")
+		self.assertEqual(log.custom_outside_schedule, 1)
+		self.assertEqual(log.custom_outside_reason, "Ngoài giờ")
+
+	def test_a_zero_band_turns_sliding_off(self):
+		frappe.db.set_value("Shift Type", self.shift, "custom_flex_band_minutes", 0)
+		frappe.clear_cache(doctype="Shift Type")
+		log = self.checkin(f"{WORKING_DAY} 07:00:00")
+		self.assertEqual(log.custom_outside_schedule, 1)

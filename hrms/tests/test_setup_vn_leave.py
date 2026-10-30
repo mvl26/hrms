@@ -12,7 +12,7 @@ from frappe.utils import getdate
 from hrms.tests.isolation import PerTestRollback
 
 ANNUAL_LEAVE = "Nghỉ phép năm"
-FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "..", "fixtures", "leave_type.json")
+FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "..", "seed_data", "leave_type.json")
 
 
 def load_fixture_types():

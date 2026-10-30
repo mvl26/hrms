@@ -123,6 +123,9 @@ Hai dòng cuối là toàn bộ phần mới:
 - **Half Day không checkin → 0**: giữ đúng nguyên tắc "theo checkin" — không có dấu thì không chứng
   minh được là ở lại qua trưa. (User chốt 2026-08-27.)
 - **CT/W không bao giờ tính**: giữ nguyên tinh thần §2 — ăn ngoài, và công tác đã có Expense Claim.
+  **Ngoại lệ (2026-10-29): ngày nửa-nửa** — một buổi theo giấy tờ (CT / W / X của đơn), buổi kia đi
+  làm ở công ty, cả hai buổi đều là mã đi làm (`HALF_HALF_WORK_CODES`) → **có ăn trưa**, kể cả khi dấu
+  chấm không phủ giờ trưa. Một buổi `K` thì không. CT / W cả ngày vẫn 0.
 
 ## 5.5 Ba đường ghi phải cùng dùng luật đó
 

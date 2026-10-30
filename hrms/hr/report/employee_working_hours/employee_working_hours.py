@@ -10,8 +10,10 @@ phần giờ nằm trong khung ca (`vn_day_classifier.counted_hours`, đúng con
 với ca thường là `compute_net_hours`. Hai cột phải KHÁC nhau khi có người ở lại ngoài khung ca —
 bằng nhau tức cột đối chiếu đã hỏng.
 
-Ngày không có giờ vào/ra (WFH, yêu cầu chấm công, nhập tay) không phải ngày làm ở văn phòng → 0 giờ
-và không vào mẫu số TB. Xem `docs/spec/employee-working-hours-report.md`.
+Ngày làm theo GIẤY TỜ (Yêu cầu chấm công WFH / on-duty / làm từ xa / quên chấm, Công Tác — mã CT/W)
+tính đủ giờ ca cho phần đơn phủ, cộng giờ có mặt thật của phần còn lại (user chốt 2026-10-29): sáng
+gặp khách + chiều chấm 13:30-17:30 = 4h + 4h = 8h. Ngày nhập tay không giấy tờ, không giờ vào/ra → 0
+giờ và không vào mẫu số TB. Xem `docs/spec/employee-working-hours-report.md`.
 """
 
 import frappe
@@ -20,10 +22,14 @@ from frappe.utils import cint, get_datetime, get_first_day, get_last_day, getdat
 
 from hrms.hr.working_hours import (
 	NON_PRESENCE_STATUSES,
+	ShiftHours,
+	attendance_request_map,
 	compute_net_hours,
 	credited_hours,
+	day_hours,
 	get_lunch_window_map,
 	get_split_shift_config_map,
+	off_site_fields,
 	office_day_fraction,
 	presence_hours,
 )
@@ -106,6 +112,7 @@ def get_daily_rows(filters, employees=None):
 			Attendance.in_time,
 			Attendance.out_time,
 			Attendance.working_hours,
+			*(Attendance[f] for f in off_site_fields()),
 		)
 		.where(
 			(Attendance.docstatus == 1)
@@ -119,8 +126,12 @@ def get_daily_rows(filters, employees=None):
 	if filters.get("shift"):
 		query = query.where(Attendance.shift == filters.shift)
 
+	records = query.run(as_dict=True)
+	requests = attendance_request_map(r.get("attendance_request") for r in records)
+	shift_hours = ShiftHours()
+
 	rows = []
-	for record in query.run(as_dict=True):
+	for record in records:
 		employee = employee_map[record.employee]
 		lunch_start, lunch_end = lunch_windows.get(record.shift or "", (None, None))
 		hours = 0.0
@@ -138,6 +149,10 @@ def get_daily_rows(filters, employees=None):
 			credited = credited_hours(record.in_time, record.out_time, record.attendance_date, split_cfg)
 		else:
 			credited = compute_net_hours(record.status, record.in_time, record.out_time, record.working_hours)
+		if record.status not in NON_PRESENCE_STATUSES:
+			# phần ngày làm theo giấy tờ (đơn WFH / on-duty / quên chấm, Công Tác) tính đủ giờ ca
+			hours = day_hours(record, hours, requests, shift_hours)
+			credited = day_hours(record, credited, requests, shift_hours)
 		rows.append(
 			{
 				"employee": record.employee,

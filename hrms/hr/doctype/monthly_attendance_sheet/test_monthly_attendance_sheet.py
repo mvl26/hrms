@@ -41,6 +41,51 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		self._sheet(month="6", year=2097).insert()
 		self._sheet(month="7", year=2097).insert()  # different month -> no duplicate
 
+	def _department(self, name):
+		existing = frappe.db.get_value("Department", {"department_name": name, "company": self.company})
+		if existing:
+			return existing
+		return (
+			frappe.get_doc({"doctype": "Department", "department_name": name, "company": self.company})
+			.insert()
+			.name
+		)
+
+	def _employee_in(self, email, department):
+		emp = make_employee(email, company=self.company)
+		frappe.db.set_value("Employee", emp, "department", department)
+		return emp
+
+	def test_department_sheet_lists_only_that_department(self):
+		"""Bảng công của phòng A chỉ được chứa người phòng A.
+
+		Khoá kỳ (`period_lock.locking_sheet`) hiểu bảng có phòng ban là "chỉ khoá phòng đó". Bảng mà
+		lại chụp cả công ty thì người phòng B nằm trên một bảng đã ký nhưng ngày công của họ vẫn
+		sửa được — bảng và lương lệch nhau mà không ai được cảnh báo."""
+		dept_a, dept_b = self._department("ZZ Phòng A (test)"), self._department("ZZ Phòng B (test)")
+		emp_a = self._employee_in("mas_dept_a@sheet.test", dept_a)
+		emp_b = self._employee_in("mas_dept_b@sheet.test", dept_b)
+
+		sheet = self._sheet(month="9", year=2097, department=dept_a)
+		sheet.insert()
+		sheet.populate_from_attendance()
+
+		listed = {row.employee for row in sheet.employees}
+		self.assertIn(emp_a, listed)
+		self.assertNotIn(emp_b, listed)
+
+	def test_company_sheet_still_lists_every_department(self):
+		dept_a, dept_b = self._department("ZZ Phòng A (test)"), self._department("ZZ Phòng B (test)")
+		emp_a = self._employee_in("mas_dept_a@sheet.test", dept_a)
+		emp_b = self._employee_in("mas_dept_b@sheet.test", dept_b)
+
+		sheet = self._sheet(month="10", year=2097)
+		sheet.insert()
+		sheet.populate_from_attendance()
+
+		listed = {row.employee for row in sheet.employees}
+		self.assertTrue({emp_a, emp_b} <= listed)
+
 	def _seed_attendance(self, emp, year, month, day, **codes):
 		# Ca 7 ngày: lớp này đo MÃ CÔNG ra cột tổng nào, không đo lịch nghỉ. Không có nó thì ngày
 		# test rơi trúng T7/CN bị loại khỏi cột tổng (đúng luật) và test đỏ vì lý do không liên quan.
@@ -311,6 +356,36 @@ class TestMonthlyAttendanceSheet(PerTestRollback, FrappeTestCase):
 		self.assertIn("Chú thích", html)  # symbol legend
 		self.assertIn("Tổng<br>công", html)  # cột công duy nhất: số ngày công ty trả lương
 		self.assertNotIn("Công<br>đi làm", html)  # bảng chỉ mang MỘT con số công
+
+	def test_print_format_has_a_marriage_leave_column(self):
+		"""Bảng lưu `marriage_leave` (mã KH) thành cột riêng từ 2026-08-04, nhưng bản in thì không
+		có cột đó: ngày nghỉ kết hôn nằm trong Tổng công mà không dòng nào trên bản ký giải thích."""
+		import json
+
+		emp = frappe.db.get_value("Employee", {"company": self.company, "status": "Active"}, "name")
+		if not emp:
+			self.skipTest("no employee in company")
+		# Bản in đọc từ DB; nạp nội dung của FILE vào (rollback sau test) để đo đúng thứ sẽ lên site.
+		path = frappe.get_app_path(
+			"hrms", "hr", "print_format", "monthly_attendance_sheet", "monthly_attendance_sheet.json"
+		)
+		with open(path, encoding="utf-8") as f:
+			frappe.db.set_value("Print Format", "Monthly Attendance Sheet", "html", json.load(f)["html"])
+
+		Y, M = 2096, 12
+		self._seed_attendance(emp, Y, M, 3, custom_attendance_code="KH")
+		sheet = self._sheet(month=str(M), year=Y)
+		sheet.insert()
+		sheet.populate_from_attendance()
+		sheet.save()
+		row = next(r for r in sheet.employees if r.employee == emp)
+		self.assertEqual(row.marriage_leave, 1.0, "tiền đề: bảng có ghi nhận ngày KH")
+
+		html = frappe.get_print(
+			"Monthly Attendance Sheet", sheet.name, print_format="Monthly Attendance Sheet"
+		)
+		self.assertIn("<th>KH</th>", html)
+		self.assertIn('<td class="bct-kh">1.0</td>', html)
 
 
 class TestSubmitWarnsAboutUnreviewedDays(PerTestRollback, FrappeTestCase):

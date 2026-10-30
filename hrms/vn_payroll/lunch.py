@@ -28,6 +28,11 @@ LUNCH_ELIGIBLE_STATUS = ("Present", "Half Day")
 # tự gán `X` cho status Present và `1/2X` cho Half Day khi HR không điền mã.
 LUNCH_CODES = ("X", "1/2X")
 
+# Ngày NỬA-NỬA: một buổi làm bên ngoài theo giấy tờ (Yêu cầu chấm công / Công Tác) và buổi kia đi làm
+# ở công ty — sáng gặp khách, chiều chấm 13:30-17:30. Có ăn trưa (user chốt 2026-10-29) dù dấu chấm
+# không phủ giờ trưa. Chỉ khi CẢ HAI buổi đều là mã đi làm; một buổi `K` (nửa kia không làm) thì không.
+HALF_HALF_WORK_CODES = ("X", "CT", "W")
+
 # Ô "Ăn trưa" trên phiếu chấm công: người chọn thì máy không đè lại nữa (spec §5.3).
 LUNCH_OVERRIDE_AUTO = "Tự động"
 LUNCH_OVERRIDE_YES = "Có"
@@ -114,6 +119,11 @@ def lone_punch_covers_lunch(punch, log_type: str | None, lunch_start: int, lunch
 	return minutes < lunch_start
 
 
+def is_half_half_work_day(morning_code: str | None, afternoon_code: str | None) -> bool:
+	"""Hai buổi đều là mã đi làm — một buổi theo giấy tờ, một buổi ở công ty (xem `HALF_HALF_WORK_CODES`)."""
+	return morning_code in HALF_HALF_WORK_CODES and afternoon_code in HALF_HALF_WORK_CODES
+
+
 def effective_lunch_flag(
 	status: str | None,
 	code: str | None,
@@ -123,6 +133,8 @@ def effective_lunch_flag(
 	auto_filled: bool = False,
 	auto_lunch_when_exempt: bool = False,
 	log_types: list | None = None,
+	morning_code: str | None = None,
+	afternoon_code: str | None = None,
 ) -> int:
 	"""Cờ ăn trưa cuối cùng của MỘT ngày — nguồn luật duy nhất cho cả ba đường ghi (spec §5.4).
 
@@ -138,6 +150,8 @@ def effective_lunch_flag(
 
 	if status not in LUNCH_ELIGIBLE_STATUS:
 		return 0
+	if status == "Half Day" and is_half_half_work_day(morning_code, afternoon_code):
+		return 1
 	if (code or "") not in LUNCH_CODES:
 		return 0
 
@@ -195,6 +209,8 @@ def lunch_flag_for_attendance(
 	code: str | None = None,
 	override: str | None = None,
 	auto_filled: bool = False,
+	morning_code: str | None = None,
+	afternoon_code: str | None = None,
 ) -> bool:
 	"""Cờ ăn trưa của MỘT Attendance — đọc dấu chấm của đúng ngày rồi áp ``effective_lunch_flag``.
 
@@ -215,8 +231,56 @@ def lunch_flag_for_attendance(
 			auto_filled=bool(cint(auto_filled)),
 			auto_lunch_when_exempt=employee_auto_lunch_when_exempt(employee) if auto_filled else False,
 			log_types=[r.log_type for r in _rows],
+			morning_code=morning_code,
+			afternoon_code=afternoon_code,
 		)
 	)
+
+
+def refresh_lunch_flag(attendance: str) -> int | None:
+	"""Tính lại và ghi cờ ăn trưa của MỘT ngày công đã lưu. Trả cờ mới; None nếu field chưa migrate.
+
+	Dành cho các đường đổi mã / trạng thái bằng `db_set` (đơn nghỉ, Yêu cầu chấm công, đồng bộ mã
+	công): `db_set` không chạy `before_validate`, nên `Attendance.set_lunch_flag` không được gọi và
+	cờ kẹt ở giá trị của mã CŨ — ngày đã thành nghỉ phép vẫn tính một bữa, ngày quên chấm công được
+	công nhận vẫn mất bữa. Gọi hàm này NGAY SAU lần ghi đó.
+
+	Thuần hiển thị (`update_modified=False`), cùng luật `lunch_flag_for_attendance` với mọi đường
+	khác. Ô "Ăn trưa" chọn tay vẫn thắng."""
+	meta = frappe.get_meta("Attendance")
+	if not meta.has_field("custom_lunch"):
+		return None
+	fields = ["employee", "attendance_date", "status", "shift", "custom_lunch"]
+	for optional in (
+		"custom_attendance_code",
+		"custom_lunch_override",
+		"custom_auto_filled",
+		"custom_morning_code",
+		"custom_afternoon_code",
+	):
+		if meta.has_field(optional):
+			fields.append(optional)
+	row = frappe.db.get_value("Attendance", attendance, fields, as_dict=True)
+	if not row:
+		return None
+	flag = (
+		1
+		if lunch_flag_for_attendance(
+			row.employee,
+			row.attendance_date,
+			row.status,
+			row.shift,
+			row.get("custom_attendance_code"),
+			row.get("custom_lunch_override"),
+			row.get("custom_auto_filled"),
+			row.get("custom_morning_code"),
+			row.get("custom_afternoon_code"),
+		)
+		else 0
+	)
+	if cint(row.custom_lunch) != flag:
+		frappe.db.set_value("Attendance", attendance, "custom_lunch", flag, update_modified=False)
+	return flag
 
 
 def compute_lunch_flags_for_period(month, year, company: str | None = None) -> dict:
@@ -230,7 +294,13 @@ def compute_lunch_flags_for_period(month, year, company: str | None = None) -> d
 	meta = frappe.get_meta("Attendance")
 	fields = ["name", "employee", "attendance_date", "status", "shift"]
 	# Mã công quyết định loại trừ CT/W; ô "Ăn trưa" là lựa chọn tay mà lượt tính lại KHÔNG được xoá.
-	for optional in ("custom_attendance_code", "custom_lunch_override", "custom_auto_filled"):
+	for optional in (
+		"custom_attendance_code",
+		"custom_lunch_override",
+		"custom_auto_filled",
+		"custom_morning_code",
+		"custom_afternoon_code",
+	):
 		if meta.has_field(optional):
 			fields.append(optional)
 
@@ -246,6 +316,8 @@ def compute_lunch_flags_for_period(month, year, company: str | None = None) -> d
 				a.get("custom_attendance_code"),
 				a.get("custom_lunch_override"),
 				a.get("custom_auto_filled"),
+				a.get("custom_morning_code"),
+				a.get("custom_afternoon_code"),
 			)
 			else 0
 		)
@@ -256,12 +328,28 @@ def compute_lunch_flags_for_period(month, year, company: str | None = None) -> d
 def recompute_lunch_flags(month: int | str, year: int | str, company: str | None = None) -> int:
 	"""Tính lại cờ ``custom_lunch`` cho Attendance trong kỳ từ checkin (chạy trước khi chốt lương để
 	bắt checkin về muộn). Trả số bản ghi thay đổi. Chỉ ghi field hiển thị (db_set, update_modified=False)
-	→ không đụng payroll status. No-op nếu field chưa migrate."""
+	→ không đụng payroll status. No-op nếu field chưa migrate.
+
+	Chỉ Nhân sự được gọi, và KHÔNG chạm kỳ đã chốt: số buổi ăn trưa đi vào khoản ăn trưa trên phiếu
+	lương, mà bảng công đã ký thì đã chụp con số đó rồi."""
+	from hrms.hr.attendance_review import require_timekeeping_role
+	from hrms.hr.period_lock import is_period_locked
+
+	require_timekeeping_role()
 	if not frappe.get_meta("Attendance").has_field("custom_lunch"):
 		return 0
 	changed = 0
+	# Bảng Công Tháng luôn phủ trọn tháng, nên trong một kỳ mỗi nhân viên chỉ có một câu trả lời.
+	locked = {}
 	for name, flag in compute_lunch_flags_for_period(month, year, company).items():
-		if cint(frappe.db.get_value("Attendance", name, "custom_lunch")) != flag:
+		row = frappe.db.get_value(
+			"Attendance", name, ["custom_lunch", "employee", "attendance_date"], as_dict=True
+		)
+		if row.employee not in locked:
+			locked[row.employee] = is_period_locked(row.employee, row.attendance_date)
+		if locked[row.employee]:
+			continue
+		if cint(row.custom_lunch) != flag:
 			frappe.db.set_value("Attendance", name, "custom_lunch", flag, update_modified=False)
 			changed += 1
 	return changed
@@ -277,7 +365,12 @@ def backfill_lunch_flags(dry_run: int = 1) -> dict:
 	dry = cint(dry_run)
 	meta = frappe.get_meta("Attendance")
 	fields = ["name", "employee", "attendance_date", "status", "shift", "custom_lunch"]
-	for optional in ("custom_attendance_code", "custom_lunch_override"):
+	for optional in (
+		"custom_attendance_code",
+		"custom_lunch_override",
+		"custom_morning_code",
+		"custom_afternoon_code",
+	):
 		if meta.has_field(optional):
 			fields.append(optional)
 	atts = frappe.get_all("Attendance", filters={"docstatus": 1}, fields=fields)
@@ -292,6 +385,8 @@ def backfill_lunch_flags(dry_run: int = 1) -> dict:
 				a.shift,
 				a.get("custom_attendance_code"),
 				a.get("custom_lunch_override"),
+				morning_code=a.get("custom_morning_code"),
+				afternoon_code=a.get("custom_afternoon_code"),
 			)
 			else 0
 		)

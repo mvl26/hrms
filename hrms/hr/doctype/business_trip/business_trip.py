@@ -1,7 +1,10 @@
 # Copyright (c) 2026, Miyano Việt Nam.
 """Business Trip (Business Trip) — a multi-person trip request driven by a Frappe Workflow
-(Nháp -> Chờ COO duyệt -> COO đã duyệt -> Đã ra QĐ -> Hoàn tất). Desk-only; never touches
-Attendance or payroll. Trip expenses are separate per-traveler Expense Claims linked back here."""
+(Nháp -> Chờ COO duyệt -> COO đã duyệt -> Đã ra QĐ -> Hoàn tất). Desk-only.
+
+Khi COO duyệt, chuyến ghi ngày công `CT` cho từng người đi (`create_travel_attendance`) — ngày chưa
+có bản ghi thì tạo mới, ngày đang là X tự sinh hoặc Vắng thì đổi thành CT. Chi phí chuyến đi là các
+Expense Claim riêng của từng người, gắn ngược về đây."""
 
 import frappe
 from frappe import _
@@ -84,22 +87,31 @@ class BusinessTrip(Document):
 	# --- attendance integration (đi công tác → mã CT) ---
 	def create_travel_attendance(self):
 		"""On approval, mark each traveler's working days in the trip window as 'CT' (đi công tác).
-		Skips holidays/weekends and days that already have an Attendance record. CT maps to native
-		Work From Home (a paid working day) via the attendance-code bridge — payroll-neutral."""
+
+		Bỏ qua ngày nghỉ tuần / lễ. Ngày CHƯA có bản ghi thì tạo mới; ngày đã có bản ghi thì chỉ ghi
+		đè khi bản ghi đó không mang thông tin thật nào (xem `overwritable_attendance`). CT ứng với
+		status native Work From Home — một ngày công được trả lương.
+
+		Kỳ đã chốt thì chặn TRƯỚC khi ghi bất cứ ngày nào: ngày có sẵn được đổi bằng `db_set`, đường
+		không đi qua hook khoá kỳ của Attendance."""
 		from frappe.utils import add_days, getdate
 
+		from hrms.hr.period_lock import guard_range_not_locked
 		from hrms.hr.work_schedule import is_working_day
 
 		if not frappe.db.exists("Attendance Code", "CT"):
 			return
 		start, end = getdate(self.from_date), getdate(self.to_date)
 		for t in self.travelers:
+			guard_range_not_locked(t.employee, start, end)
+
+		for t in self.travelers:
 			day = start
 			while day <= end:
 				if is_working_day(t.employee, day):
-					auto_filled = self.auto_filled_attendance(t.employee, day)
-					if auto_filled:
-						self.convert_auto_filled_to_trip(auto_filled)
+					overwritable = self.overwritable_attendance(t.employee, day)
+					if overwritable:
+						self.convert_to_trip(overwritable)
 					elif not self.has_attendance(t.employee, day):
 						att = frappe.get_doc(
 							{
@@ -120,7 +132,7 @@ class BusinessTrip(Document):
 		return frappe.db.get_value(
 			"Attendance",
 			{"employee": employee, "attendance_date": date, "docstatus": ["<", 2]},
-			["name", "custom_auto_filled", "in_time", "out_time"],
+			["name", "status", "leave_type", "custom_auto_filled", "in_time", "out_time"],
 			as_dict=True,
 		)
 
@@ -135,23 +147,67 @@ class BusinessTrip(Document):
 			return row.name
 		return None
 
-	def convert_auto_filled_to_trip(self, attendance: str):
-		"""X (tự sinh) -> CT trên bản ghi ĐÃ SUBMIT.
+	def overwritable_attendance(self, employee, date) -> str | None:
+		"""Bản ghi mà chuyến công tác được phép đổi thành CT, hoặc None.
+
+		Hai loại, đều là "máy điền vì không có dấu chấm", không phải thông tin thật:
+
+		- **X tự sinh** của người miễn chấm công (`auto_filled_attendance`);
+		- **Vắng (V)** không có giờ vào/ra và không gắn loại nghỉ — job chấm vắng chạy trước khi
+		  chuyến được duyệt nên ngày đi công tác bị ghi vắng. Đây đúng là việc đơn nghỉ đã làm từ
+		  trước tới giờ (`V` → `P`).
+
+		Ngày có giờ vào/ra thật, ngày nghỉ phép, ngày từ Yêu cầu chấm công: giữ nguyên."""
+		row = self.attendance_row(employee, date)
+		if not row or row.in_time or row.out_time:
+			return None
+		if cint(row.custom_auto_filled):
+			return row.name
+		if row.status == "Absent" and not row.leave_type:
+			return row.name
+		return None
+
+	def convert_to_trip(self, attendance: str):
+		"""Đổi một bản ghi ĐÃ SUBMIT (X tự sinh hoặc V) thành CT.
 
 		Dùng `db_set` chứ không `save`: không field mã công nào có `allow_on_submit`, `save` sẽ ném
 		lỗi. Đây đúng khuôn mà `leave_application.create_or_update_attendance` đang dùng.
-		`custom_work_credit` không đổi (X và CT đều `work_fraction = 1.0`), và `Present ->
-		Work From Home` không đụng lương (payroll chỉ trừ theo Absent / Half Day / leave_type LWP)."""
+
+		Với X tự sinh: `Present -> Work From Home` không đụng lương. Với V: `Absent -> Work From
+		Home` CÓ đổi lương — ngày đó từ không lương thành có lương, đúng với việc người đó đi công
+		tác. `db_set` không chạy `before_validate`, nên số công và cờ ăn trưa phải ghi tường minh."""
+		from hrms.hr.doctype.leave_application.leave_attendance_code import work_credit
 		from hrms.hr.period_lock import is_period_locked
+		from hrms.vn_payroll.lunch import refresh_lunch_flag
 
 		doc = frappe.get_doc("Attendance", attendance)
 		if is_period_locked(doc.employee, doc.attendance_date):
 			return
-		doc.db_set({"custom_attendance_code": "CT", "status": "Work From Home", "custom_auto_filled": 0})
+		was_absent = doc.status == "Absent"
+		doc.db_set(
+			{
+				"custom_attendance_code": "CT",
+				"custom_morning_code": None,
+				"custom_afternoon_code": None,
+				"custom_work_credit": work_credit("CT"),
+				"status": "Work From Home",
+				"half_day_status": None,
+				"custom_auto_filled": 0,
+			}
+		)
+		refresh_lunch_flag(doc.name)
 		doc.add_comment(
 			"Comment",
-			_("Chuyển công tự sinh (miễn chấm công) sang CT theo Công Tác {0}").format(self.name),
+			(
+				_("Chuyển ngày vắng (V) sang CT theo Công Tác {0}")
+				if was_absent
+				else _("Chuyển công tự sinh (miễn chấm công) sang CT theo Công Tác {0}")
+			).format(self.name),
 		)
+
+	def convert_auto_filled_to_trip(self, attendance: str):
+		"""Tên cũ của `convert_to_trip` — giữ lại cho tài liệu và code đang trỏ tới."""
+		self.convert_to_trip(attendance)
 
 	# --- expense claim (per-traveler payment) ---
 	@frappe.whitelist()

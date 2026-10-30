@@ -136,7 +136,12 @@ def set_leave_attendance_code(doc, method=None):
 
 	THUẦN HIỂN THỊ: chỉ đặt mã qua ``db_set`` — không đụng status/leave_type/half_day_status nên
 	lương không đổi. Ngày nghỉ nửa ngày dùng token đơn (1/2P).
+
+	Cờ ăn trưa được tính lại ngay sau khi ghi mã (``refresh_lunch_flag``): ngày vừa thành nghỉ thì
+	không còn bữa trưa tại công ty.
 	"""
+	from hrms.vn_payroll.lunch import refresh_lunch_flag
+
 	leave_type = doc.get("leave_type")
 	full_code = code_for_leave_type(leave_type, "On Leave")
 	half_code = code_for_leave_type(leave_type, "Half Day")
@@ -166,3 +171,4 @@ def set_leave_attendance_code(doc, method=None):
 			},
 			update_modified=False,
 		)
+		refresh_lunch_flag(att.name)

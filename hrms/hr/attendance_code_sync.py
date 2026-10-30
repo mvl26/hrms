@@ -12,7 +12,7 @@ dữ liệu đã lệch từ trước**.
 **Xem trước rồi mới áp** — đây là dữ liệu lương thật, không tự ý sửa hàng loạt.
 
 THUẦN HIỂN THỊ: chỉ ghi ``custom_attendance_code`` / ``custom_morning_code`` /
-``custom_afternoon_code`` / ``custom_work_credit``. Ba field payroll đọc (``status``,
+``custom_afternoon_code`` / ``custom_work_credit`` và cờ ăn trưa ``custom_lunch`` (tính lại theo mã mới). Ba field payroll đọc (``status``,
 ``leave_type``, ``half_day_status``) **không bao giờ** bị chạm → lương bất biến theo cấu trúc.
 """
 
@@ -91,6 +91,9 @@ def period_bounds(month, year):
 @frappe.whitelist()
 def preview_sync(filters: str | dict | None = None) -> dict:
 	"""Liệt kê ngày công có mã lệch với status/leave_type. **Không ghi gì.**"""
+	from hrms.hr.attendance_review import require_timekeeping_role
+
+	require_timekeeping_role()
 	if isinstance(filters, str):
 		filters = json.loads(filters)
 	filters = frappe._dict(filters or {})
@@ -166,6 +169,7 @@ def apply_sync(rows: str | list, reason: str | None = None) -> dict:
 	from hrms.hr.attendance_review import payroll_snapshot
 	from hrms.hr.doctype.attendance_correction_log.attendance_correction_log import log_correction
 	from hrms.hr.period_lock import locking_sheet
+	from hrms.vn_payroll.lunch import refresh_lunch_flag
 
 	applied, skipped = [], []
 	for r in rows or []:
@@ -197,6 +201,7 @@ def apply_sync(rows: str | list, reason: str | None = None) -> dict:
 			},
 			update_modified=False,
 		)
+		refresh_lunch_flag(name)
 		doc.custom_attendance_code = want
 		after = payroll_snapshot(doc)
 		after["custom_work_credit"] = credit

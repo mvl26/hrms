@@ -103,6 +103,8 @@ class Attendance(Document):
 				self.get("custom_attendance_code"),
 				override,
 				self.get("custom_auto_filled"),
+				self.get("custom_morning_code"),
+				self.get("custom_afternoon_code"),
 			)
 			else 0
 		)

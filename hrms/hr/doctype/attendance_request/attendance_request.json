@@ -78,16 +78,20 @@
   },
   {
    "default": "0",
+   "depends_on": "eval:doc.from_date && doc.to_date && doc.from_date == doc.to_date",
+   "description": "Chỉ chọn được khi Từ ngày và Đến ngày là cùng một ngày; buổi Sáng / Chiều chọn ở ô Buổi.",
    "fieldname": "half_day",
    "fieldtype": "Check",
    "label": "Half Day"
   },
   {
    "depends_on": "half_day",
+   "description": "Tự lấy theo Từ ngày khi chọn nửa ngày.",
    "fieldname": "half_day_date",
    "fieldtype": "Date",
+   "hidden": 1,
    "label": "Half Day Date",
-   "mandatory_depends_on": "half_day"
+   "read_only": 1
   },
   {
    "fieldname": "reason_section",
@@ -129,15 +133,15 @@
   },
   {
    "default": "0",
+   "description": "Gồm cả ngày KHÔNG phải đi làm — nghỉ cuối tuần lẫn ngày lễ. Bật thì phiếu sinh công cho cả những ngày đó; tick nhầm là sinh ra ngày công thừa.",
    "fieldname": "include_holidays",
    "fieldtype": "Check",
-   "label": "Include Non-Working Days",
-   "description": "Gồm cả ngày KHÔNG phải đi làm — nghỉ cuối tuần lẫn ngày lễ. Bật thì phiếu sinh công cho cả những ngày đó; tick nhầm là sinh ra ngày công thừa."
+   "label": "Include Non-Working Days"
   }
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2023-12-20 16:18:31.864719",
+ "modified": "2026-10-29 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "HR",
  "name": "Attendance Request",
