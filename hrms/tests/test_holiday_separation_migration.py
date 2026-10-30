@@ -82,6 +82,25 @@ class TestHolidaySeparationMigration(PerTestRollback, FrappeTestCase):
 		for name in slips:
 			self.assertEqual(payroll_numbers(name), before[name], f"phiếu {name} lệch sau di trú")
 
+	def test_a_stale_draft_slip_does_not_abort_the_migration(self):
+		"""Phiếu nháp tạo TRƯỚC khi chấm công được sửa mang số cũ — đó không phải lệch do di trú.
+
+		Lỗi thật trên site 2026-10-30: phiếu lưu `absent_days` 7 nhưng tính lại ra 0, patch đem số
+		LƯU so với số TÍNH LẠI nên abort cả lượt migrate.
+		"""
+		self.set_company_weekdays(MON_TO_FRI)
+		slip = frappe.get_all("Salary Slip", filters={"docstatus": 0}, pluck="name", limit=1)
+		if not slip:
+			self.skipTest("site chưa có phiếu lương nháp nào")
+		fresh = payroll_numbers(slip[0])
+		frappe.db.set_value(
+			"Salary Slip",
+			slip[0],
+			{"absent_days": fresh["absent_days"] + 7, "payment_days": fresh["payment_days"] - 7},
+			update_modified=False,
+		)
+		execute()  # không throw
+
 	def test_weekly_off_rows_are_gone_and_public_holidays_stay(self):
 		self.set_company_weekdays(MON_TO_FRI)
 		lists = live_holiday_lists()

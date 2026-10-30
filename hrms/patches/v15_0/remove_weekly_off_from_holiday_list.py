@@ -86,10 +86,9 @@ def execute():
 
 	guard_work_schedule_is_configured(lists)
 
-	before = {
-		s.name: {f: flt(s.get(f)) for f in FIELDS}
-		for s in frappe.get_all("Salary Slip", fields=["name", *FIELDS])
-	}
+	# Mốc TRƯỚC phải tính lại qua đúng đường của mốc SAU, không đọc số lưu trên phiếu: phiếu nháp
+	# tạo trước khi chấm công được sửa mang số cũ, đem so sẽ abort vì một lệch chẳng do di trú gây ra.
+	before = {name: payroll_numbers(name) for name in frappe.get_all("Salary Slip", pluck="name")}
 
 	frappe.db.delete("Holiday", {"parent": ("in", lists), "weekly_off": 1})
 
