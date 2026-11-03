@@ -327,7 +327,8 @@ Phân bổ hạch toán:   SUMIF theo TK (6421 - QLDN / 6411 - bán hàng), đ�
 |---|---|---|---|---|---|---|
 | Chính thức toàn thời gian, NET | 1 | Có (21,5% + 10,5%) | Có | Có (35k/ngày) | Quy đổi bậc (B6) → lũy tiến 5 bậc (B7) | Tạ Trường Xuân |
 | Thử việc | **0,85** | Không | Có (nếu đăng ký) | Có | Như chính thức | Phan Thị Thu Lan, Nguyễn Yến Chi |
-| Bán thời gian, cư trú | 1 | Không | Không | Không | O/0,9 × 10% | Vũ Văn Tiến Tuyền |
+| Bán thời gian, cư trú, **có đăng ký giảm trừ** (HĐLĐ từ 3 tháng) — từ 09/2026 | 1 | Không | Có | Không | Như chính thức (B6 → B7) | Mẫu 09/2026 dòng 6 |
+| Bán thời gian, cư trú, không đăng ký giảm trừ | 1 | Không | Không | Không | O/0,9 × 10% | Vũ Văn Tiến Tuyền |
 | Bán thời gian, không cư trú (nước ngoài) | 1 | Không | Không | Không | O/0,8 × 20% | Koshioka Hiroshi |
 | Khoán | 1 | Không | Không | Không | Không khấu trừ (Q = 0) | Nguyễn Thị Khương |
 | Chuyên gia | 1 | Không | Không | Không | O/0,9 × 10% trên toàn bộ | Chu Văn Hiếu (lớn) |
@@ -335,4 +336,20 @@ Phân bổ hạch toán:   SUMIF theo TK (6421 - QLDN / 6411 - bán hàng), đ�
 
 ---
 
-*Tài liệu chuẩn hóa ngày 28/07/2026, trích xuất nguyên trạng công thức từ file bảng lương 06.2026.*
+## 7. BỔ SUNG THEO MẪU BẢNG LƯƠNG 09/2026 (`docs/Salary_template_clean.xlsx`)
+
+- **Khoản thu nhập HR nhập theo kỳ** — Hỗ trợ điện thoại (K), Hỗ trợ xăng xe, đi lại (L), Thưởng KPI (M),
+  Thưởng Lễ/Tết (N): cộng vào tổng thu nhập, **chịu thuế** (thu nhập quy đổi chỉ loại ăn trưa J), cộng
+  vào thực lĩnh. Mọi loại lao động đều nhận được Thưởng Lễ/Tết; với Khoán vẫn không khấu trừ thuế.
+- **KPCĐ (X)** = ROUND(Lương đóng BHXH × 2%, 0), chỉ Chính thức, công ty chịu: không trừ thực lĩnh,
+  không vào thu nhập chịu thuế kê khai. Tổng chi phí công ty = T + Q + S + R + KPCĐ.
+- **Bảo hiểm chỉ cho Chính thức** — thử việc có ghi Lương đóng BHXH vẫn R = S = KPCĐ = 0 (mẫu dòng 4).
+- **Bán thời gian có đăng ký giảm trừ** tính như chính thức (xem bảng §6).
+
+Ví dụ (mẫu dòng 1): lương 30tr, BHXH 30tr, 2 NPT, ăn trưa 1tr, điện thoại 500k, xăng xe 2tr, Lễ/Tết 1tr
+→ tổng 34.500.000; quy đổi 34,5tr − 27,9tr − 1tr = 5.600.000 → tính thuế 5.894.737 → thuế 294.737;
+BH 6.450.000 + 3.150.000; KPCĐ 600.000; thực lĩnh 34.500.000; thu nhập chịu thuế 36.944.737.
+
+---
+
+*Tài liệu chuẩn hóa ngày 28/07/2026, trích xuất nguyên trạng công thức từ file bảng lương 06.2026; §7 bổ sung 30/10/2026 theo mẫu 09/2026.*

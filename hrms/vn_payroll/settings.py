@@ -3,7 +3,7 @@
 
 import frappe
 
-from hrms.vn_payroll.mvl import MVLConfig
+from hrms.vn_payroll.mvl import MVLConfig, default_config
 
 
 def config_from_settings() -> MVLConfig:
@@ -25,4 +25,8 @@ def config_from_settings() -> MVLConfig:
 		probation_coef=s.probation_coefficient,
 		tax_brackets=tax,
 		grossup_brackets=grossup,
+		# chưa migrate field → dùng mặc định thay vì 0 (deploy lệch không được im lặng bỏ KPCĐ)
+		union_fee_rate=default_config().union_fee_rate
+		if s.get("union_fee_rate") is None
+		else s.union_fee_rate,
 	)

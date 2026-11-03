@@ -44,7 +44,7 @@ from hrms.miyano_xlsx import (
 )
 from hrms.payroll.report.mvl_salary_register.mvl_salary_register import TOTAL_LABEL, execute
 
-SHEET_TITLE = "BẢNG THANH TOÁN TIỀN LƯƠNG"
+SHEET_TITLE = "BẢNG LƯƠNG"  # mẫu 09/2026 ô A5
 
 # Tên tab của sheet (Excel giới hạn 31 ký tự) — ngắn hơn tiêu đề in trên giấy.
 SHEET_NAME = "Bảng lương"
@@ -70,7 +70,7 @@ DRAFT_WARNING = "GỒM CẢ PHIẾU NHÁP — CHƯA CHỐT"
 
 TOTAL_FILL = PatternFill("solid", start_color="FFF1F5F9")
 TOTAL_FONT = Font(bold=True)
-HEADER_HEIGHT = 46  # nhãn cột dài ("TN chịu thuế kê khai (U)") cần ba dòng ở bề rộng này
+HEADER_HEIGHT = 46  # nhãn cột dài ("Lương thực lĩnh chưa trừ thuế TNCN, BHXH") cần ba dòng ở bề rộng này
 
 # Bề rộng tối thiểu của cột tiền: đủ chỗ cho `28,584,783` mà không phải nới tay.
 MIN_MONEY_WIDTH = 15.0
@@ -110,6 +110,7 @@ def build_workbook(
 		subtitle_line(filters),
 		title_row=HEADER_ROW - 3,  # tên bảng, kỳ lương, rồi một dòng trống trước tiêu đề bảng
 	)
+	write_standard_days(ws, columns, body)
 	write_header(ws, columns)
 	end_row = write_rows(ws, columns, body, total, FIRST_DATA_ROW)
 	set_widths(ws, columns)
@@ -146,6 +147,26 @@ def split_total_row(data: list[dict]) -> tuple[list[dict], dict | None]:
 	body = [r for r in data if r and r.get("employee")]
 	totals = [r for r in data if r and not r.get("employee") and r.get("employee_name")]
 	return body, (totals[-1] if totals else None)
+
+
+def write_standard_days(ws, columns: list[dict], body: list[dict]) -> None:
+	"""Dòng "Số công làm việc chuẩn:" ngay trên tiêu đề bảng, như mẫu 09/2026 (nhãn E7, số H7).
+
+	Nhãn bắt đầu ở cột Hệ số lương và gộp tới sát cột Số công; con số nằm đúng trên cột Số công để
+	người soát so ngay từng dòng. Vị trí tìm theo fieldname, không neo chữ cột. Công chuẩn của mọi
+	phiếu trong kỳ là một (đặt từ lịch tuần cả kỳ); vẫn lấy max để không phụ thuộc thứ tự dòng.
+	Kỳ không có phiếu thì không ghi."""
+	days = [r.get("standard_days") for r in body if r.get("standard_days")]
+	fields = [c.get("fieldname") for c in columns]
+	if not days or "coefficient" not in fields or "worked_days" not in fields:
+		return
+	row = HEADER_ROW - 1
+	label_col, days_col = fields.index("coefficient") + 1, fields.index("worked_days") + 1
+	ws.cell(row, label_col, _("Số công làm việc chuẩn:")).font = TOTAL_FONT
+	if days_col - 1 > label_col:
+		ws.merge_cells(start_row=row, start_column=label_col, end_row=row, end_column=days_col - 1)
+	cell = ws.cell(row, days_col, max(days))
+	cell.font, cell.alignment = TOTAL_FONT, CENTER
 
 
 def write_header(ws, columns: list[dict]) -> None:

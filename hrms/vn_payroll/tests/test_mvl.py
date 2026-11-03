@@ -140,3 +140,66 @@ class TestMVLCore(unittest.TestCase):
 		self.assertEqual(r1.P, _round(9_500_000 / 0.95))
 		r2 = compute_mvl(MVLInput("Chính thức", 9_500_001, 0, 0, False, 0, 22, 22), self.cfg)
 		self.assertEqual(r2.P, _round((9_500_001 - 500_000) / 0.9))
+
+
+class TestTemplate092026(unittest.TestCase):
+	"""Oracle = mẫu `docs/Salary_template_clean.xlsx` (09/2026): mỗi dòng là một loại phiếu lương.
+
+	22/22 công. Khoản HR nhập (Lễ/Tết, KPI, điện thoại, xăng xe) chịu thuế như nhau nên vào engine
+	qua một `bonus` duy nhất; tách cột chỉ ở component."""
+
+	def setUp(self):
+		self.cfg = default_config()
+
+	def test_template_row4_probation(self):
+		# Thử việc 0,85 — mẫu nhập G = 10tr nhưng KHÔNG đóng BH (V/W/X = 0), U không cộng S
+		r = compute_mvl(
+			MVLInput("Thử việc", 10_000_000, 10_000_000, 0, True, 20, 22, 22, bonus=2_000_000), self.cfg
+		)
+		self.assertEqual((r.I, r.J, r.K), (8_500_000, 700_000, 11_200_000))
+		self.assertEqual((r.Q, r.R, r.S), (0, 0, 0))
+		self.assertEqual(r.T, 11_200_000)
+		self.assertEqual(r.U, 10_500_000)
+
+	def test_template_row6_parttime_registered(self):
+		# Bán thời gian cư trú CÓ đăng ký giảm trừ (HĐLĐ từ 3 tháng) → giảm trừ + lũy tiến như mẫu (chốt
+		# 2026-10-30): 5,5tr < 21,7tr giảm trừ → O = 0 → thuế 0
+		r = compute_mvl(MVLInput("Bán thời gian", 5_000_000, 0, 1, True, 0, 22, 22, bonus=500_000), self.cfg)
+		self.assertEqual((r.I, r.J, r.K), (5_000_000, 0, 5_500_000))
+		self.assertEqual((r.N, r.O, r.Q), (21_700_000, 0, 0))
+		self.assertEqual((r.R, r.S), (0, 0))
+		self.assertEqual((r.T, r.U), (5_500_000, 5_500_000))
+
+	def test_parttime_tax_follows_registration_flag(self):
+		def tax(register, resident=True, dependents=0):
+			inp = MVLInput(
+				"Bán thời gian", 20_000_000, 0, dependents, register, 0, 22, 22, is_resident=resident
+			)
+			return compute_mvl(inp, self.cfg)
+
+		# có đăng ký → O = 20tr - 15,5tr = 4,5tr → /0,95 → 4.736.842 → 5% = 236.842 (lũy tiến)
+		self.assertEqual(tax(True).Q, 236_842)
+		# không đăng ký → khấu trừ 10% trên O/0,9 (quy tắc 06/2026), không giảm trừ
+		self.assertEqual((tax(False).N, tax(False).Q), (0, 2_222_222))
+		# không cư trú → luôn 20%, bỏ qua cờ đăng ký và người phụ thuộc
+		nr = tax(True, resident=False, dependents=1)
+		self.assertEqual((nr.N, nr.Q), (0, 5_000_000))
+
+	def test_khoan_chuyen_gia_ignore_family_deduction(self):
+		# §4.4-4.5: không áp dụng giảm trừ dù SSA có tick / có người phụ thuộc
+		k = compute_mvl(MVLInput("Khoán", 20_000_000, 0, 1, True, 0, 22, 22), self.cfg)
+		self.assertEqual((k.N, k.Q), (0, 0))
+		cg = compute_mvl(MVLInput("Chuyên gia", 30_000_000, 0, 1, True, 0, 22, 22), self.cfg)
+		self.assertEqual((cg.N, cg.O, cg.Q), (0, 30_000_000, 3_333_333))
+
+	def test_union_fee_only_for_official(self):
+		# mẫu 09/2026 cột X: KPCĐ = ROUND(G x 2%), chỉ người đóng BH (dòng 1 / 2 / 5)
+		for g, expected in ((30_000_000, 600_000), (10_000_000, 200_000), (8_000_000, 160_000)):
+			r = compute_mvl(MVLInput("Chính thức", 10_000_000, g, 0, True, 0, 22, 22), self.cfg)
+			self.assertEqual(r.X, expected, g)
+		tv = compute_mvl(MVLInput("Thử việc", 10_000_000, 10_000_000, 0, True, 0, 22, 22), self.cfg)
+		self.assertEqual(tv.X, 0)
+		self.cfg.union_fee_rate = 0
+		self.assertEqual(
+			compute_mvl(MVLInput("Chính thức", 1, 30_000_000, 0, True, 0, 22, 22), self.cfg).X, 0
+		)

@@ -9,9 +9,10 @@ from erpnext.setup.doctype.employee.test_employee import make_employee
 from hrms import hooks
 from hrms.tests.isolation import PerTestRollback
 from hrms.tests.vn_test_utils import default_company
-from hrms.vn_payroll.setup_mvl import ensure_mvl_defaults
+from hrms.vn_payroll.setup_mvl import REAL_EARNINGS, ensure_mvl_defaults
 from hrms.vn_payroll.tests.test_salary_slip_mvl import (
 	ensure_fiscal_year_2099,
+	make_additional_salary,
 	make_slip,
 	make_ssa,
 	mark_full_month,
@@ -122,3 +123,40 @@ class TestMVLPackaging(PerTestRollback, FrappeTestCase):
 			"kê khai (U)",
 		):
 			self.assertIn(label, html, label)
+
+
+class TestPayslipPrintFormat0926(PerTestRollback, FrappeTestCase):
+	"""Phiếu in theo mẫu 09/2026: đủ khoản HR nhập + KPCĐ, cộng dồn nhiều row cùng component."""
+
+	def setUp(self):
+		super().setUp()
+		frappe.flags.skip_sheet_gate = True
+		self.addCleanup(lambda: frappe.flags.pop("skip_sheet_gate", None))
+		# print format chuẩn chỉ đồng bộ từ JSON khi migrate → nạp trong transaction của test
+		frappe.reload_doc("hr", "print_format", "phieu_luong_mvl", force=True)
+
+	def test_print_format_lists_every_paid_component(self):
+		html = frappe.db.get_value("Print Format", "Phiếu lương MVL", "html")
+		for comp in (*REAL_EARNINGS, "KPCĐ - Công ty"):
+			self.assertIn(f'"{comp}"', html, comp)
+
+	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
+	def test_payslip_prints_allowances_and_sums_rows(self):
+		ensure_fiscal_year_2099()
+		ensure_mvl_defaults()
+		emp = make_employee("mvl_print_0926@codes.com", company=default_company())
+		make_ssa(emp, base=10_000_000, custom_salary_type="Chính thức", custom_bhxh_salary=10_000_000)
+		mark_full_month(emp)
+		make_additional_salary(emp, "Hỗ trợ điện thoại", 500_000)
+		ss = make_slip(emp)
+		make_additional_salary(emp, "Tiền thưởng", 1_234_000)
+		for row in ss.earnings:
+			if row.salary_component == "Tiền thưởng" and not row.additional_salary:
+				row.amount = 1_000_000
+		ss.save()
+		ss.submit()
+		html = frappe.get_print("Salary Slip", ss.name, print_format="Phiếu lương MVL")
+		self.assertIn("Hỗ trợ điện thoại", html)
+		self.assertNotIn("Hỗ trợ xăng xe", html)  # = 0 → ẩn
+		self.assertIn("2.234.000" if "2.234.000" in html else "2,234,000", html)  # 1tr gõ tay + 1.234tr AS
+		self.assertIn("KPCĐ", html)

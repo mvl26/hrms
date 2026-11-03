@@ -17,6 +17,7 @@
   "insurance_company_rate",
   "column_break_ins",
   "insurance_employee_rate",
+  "union_fee_rate",
   "tax_section",
   "tax_brackets",
   "grossup_section",
@@ -98,6 +99,14 @@
    "reqd": 1
   },
   {
+   "default": "0.02",
+   "description": "Kinh phí công đoàn công ty chịu, tính trên Lương đóng BHXH, chỉ loại Chính thức (2%). Không trừ vào lương người lao động.",
+   "fieldname": "union_fee_rate",
+   "fieldtype": "Float",
+   "label": "KPCĐ - Công ty (%)",
+   "precision": "3"
+  },
+  {
    "fieldname": "tax_section",
    "fieldtype": "Section Break",
    "label": "Biểu thuế TNCN lũy tiến từng phần"
@@ -123,7 +132,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-07-24 11:00:00.000000",
+ "modified": "2026-10-30 16:00:00.000000",
  "modified_by": "Administrator",
  "module": "HR",
  "name": "MVL Payroll Settings",

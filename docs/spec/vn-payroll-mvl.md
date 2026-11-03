@@ -26,6 +26,30 @@ khi cài), **sửa được trên giao diện**. Số liệu riêng từng nhân
 5. **Đóng gói:** Salary Components + Salary Structure "MVL Việt Nam" + custom fields + settings mặc
    định qua fixtures/`ensure_defaults`. Sửa được trên UI, re-sync mỗi migrate (không ghi đè giá trị NV).
 
+## Mẫu bảng lương 09/2026 (`docs/Salary_template_clean.xlsx`) — bổ sung 2026-10-30
+
+Mỗi dòng của mẫu là một loại phiếu: dòng 1, 2, 3, 5 = Chính thức; dòng 4 = Thử việc; dòng 6 = Bán thời
+gian. Kế hoạch triển khai: `docs/tasks/plan-miyano-payslip-types.md`. Quyết định:
+
+- **D1 — Thuế part time theo cờ "Đăng ký giảm trừ" trên SSA.** Cư trú + có đăng ký (HĐLĐ từ 3 tháng) →
+  giảm trừ gia cảnh + quy đổi bậc + lũy tiến như Chính thức (dòng 6). Cư trú không đăng ký → khấu trừ
+  10% (O/0,9). Không cư trú → 20% (O/0,8), bỏ qua cờ. Khoán / Chuyên gia không bao giờ giảm trừ.
+- **D2 — Hỗ trợ điện thoại, xăng xe:** chịu thuế, mức cố định tháng (không chia theo công), nhập bằng
+  **Additional Salary định kỳ**.
+- **D3 — KPCĐ** = ROUND(G × `union_fee_rate`, mặc định 2%), chỉ Chính thức, công ty chịu: không trừ net,
+  không vào U; hạch toán Nợ 6421 (qua gương chi phí) / Có 3382.
+- **D4 — Ăn trưa nằm trong thực lĩnh** (Y = O như mẫu); quỹ canteen ngoài hệ thống.
+- **D5 — Thưởng KPI, Thưởng (Lễ/Tết)** nhập theo kỳ bằng Additional Salary hoặc gõ trên phiếu; engine cộng
+  **mọi** row của các component HR nhập (`HR_ENTERED_COMPONENTS`) vào K, chịu thuế như nhau.
+- **Bảo hiểm (R, S) và KPCĐ chỉ tính cho Chính thức**, kể cả khi SSA thử việc có nhập Lương đóng BHXH.
+
+Component mới: `Hỗ trợ điện thoại`, `Hỗ trợ xăng xe`, `Thưởng KPI` (Earning, chịu thuế, cộng net, Nợ
+6421) và `KPCĐ - Công ty` (Deduction, không trừ net, Có 3382). `Tiền thưởng` giữ tên, hiển thị là
+"Thưởng (Lễ/Tết)". Báo cáo `MVL Salary Register` và file Excel theo đúng cột A–Z + tiêu đề "BẢNG LƯƠNG"
++ dòng "Số công làm việc chuẩn" của mẫu.
+
+Khác mẫu có chủ ý: mẫu ghi ăn trưa dòng 1 là 1.000.000 cố định; hệ thống chỉ tính số buổi × đơn giá.
+
 ## Data model
 
 ### `MVL Payroll Settings` (Single) — tham số chuẩn, sửa trên UI
