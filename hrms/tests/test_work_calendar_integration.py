@@ -86,8 +86,7 @@ class TestMarkAttendanceSuggestions(WorkCalendarIntegrationBase):
 		from hrms.hr.doctype.attendance.attendance import get_unmarked_days
 
 		days = [
-			getdate(d)
-			for d in get_unmarked_days(self.employee, MONTH_START, MONTH_END, exclude_holidays=1)
+			getdate(d) for d in get_unmarked_days(self.employee, MONTH_START, MONTH_END, exclude_holidays=1)
 		]
 		self.assertNotIn(getdate(SATURDAY), days)
 		self.assertNotIn(getdate(WEDNESDAY_HOLIDAY), days)
