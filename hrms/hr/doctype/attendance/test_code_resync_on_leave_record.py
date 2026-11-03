@@ -28,7 +28,8 @@ class TestCodeResyncOnLeaveRecord(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.year = 2097
+		# 4-8 và 11-14/5/2093 đều là thứ Hai-Sáu; năm cũ (2097) rơi T7/CN → đơn nghỉ bị chặn "là ngày nghỉ"
+		cls.year = 2093
 		cls.emp = test_employee()
 		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
 
@@ -370,6 +371,7 @@ class TestPayrollUnmovedByCodeResync(PerTestRollback, FrappeTestCase):
 		# Ba con số lương đọc từ chấm công. Giá trị này BẰNG ĐÚNG bản chưa sửa (đã đối chiếu
 		# bằng cách stash bản sửa và chạy lại chính test này) — nghỉ phép năm là nghỉ CÓ LƯƠNG,
 		# nửa còn lại đi làm, nên ngày đó vẫn trả đủ và không tính vắng, không tính LWP.
-		self.assertEqual(ss.payment_days, 30)
+		# 22 = đủ mọi ngày thứ Hai-Sáu của 6/2099 (mẫu số theo lịch tuần từ 2026-08-30, trước đó là 30).
+		self.assertEqual(ss.payment_days, 22)
 		self.assertEqual(ss.absent_days, 0)
 		self.assertEqual(ss.leave_without_pay, 0)

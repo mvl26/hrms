@@ -388,7 +388,7 @@ class ShiftType(Document):
 		half_day_attendances = frappe.get_all(
 			"Attendance",
 			filters={"employee": employee, "status": "Half Day", "modify_half_day_status": 1},
-			fields=["name", "attendance_date"],
+			fields=["name", "attendance_date", "leave_type"],
 		)
 		start_time = get_time(self.start_time)
 		for attendance in half_day_attendances:
@@ -398,6 +398,12 @@ class ShiftType(Document):
 				if is_period_locked(employee, attendance.attendance_date):
 					# Kỳ đã chốt: `half_day_status` là thứ payroll đọc để trừ 0,5 ngày. Ép Absent ở
 					# đây là đổi lương của một kỳ đã ký bằng `set_value`, không hook nào gác.
+					continue
+
+				if attendance.leave_type:
+					# Nửa nghỉ theo đơn + nửa kia không lượt chấm = COI NHƯ ĐI LÀM (HR chốt 2026-07-28).
+					# Ép Absent ở đây làm phiếu lương trừ thêm 0,5 ngày trong khi bảng công vẫn ghi đủ
+					# công của mã 1/2P / 1/2K. Lượt chấm đến sau vẫn gộp vào nhờ cờ còn nguyên.
 					continue
 
 				if is_exempt_working_day(employee, attendance.attendance_date):

@@ -108,6 +108,19 @@ vào đúng ngày của đơn (`get_existing_half_day_attendance`, như nửa ng
 Đây là thay đổi số công trả lương — HR duyệt 2026-10-29. Ngày nửa-nửa **có ăn trưa**; giờ làm = 4h
 theo đơn + giờ có mặt thật. Test: `hrms/tests/test_half_day_request_with_checkin.py`.
 
+**Nghỉ nửa ngày (đơn nghỉ) + làm nửa kia theo đơn (sửa 2026-10-30).** Sáng nghỉ không lương, chiều
+làm remote. Hai lỗi đã sửa:
+- Job hằng giờ `mark_absent_for_half_day_dates` ép nửa còn lại của ngày nghỉ nửa buổi thành `Absent`
+  khi nửa đó không có lượt chấm → phiếu lương trừ thêm 0,5 ngày trong khi bảng công vẫn ghi đủ công
+  của `1/2P` / `1/2K`. Nay bỏ qua ngày có `leave_type`, đúng quy ước 2026-07-28 "nửa nghỉ + nửa kia
+  không chấm công = coi như đi làm".
+- Đã có đơn nghỉ nửa ngày thì Yêu cầu chấm công cho buổi CÒN LẠI bị chặn ("No attendance records to
+  create"). Nay `works_other_half_of_leave` cho qua khi đơn nửa ngày rơi vào buổi khác buổi nghỉ;
+  trùng đúng buổi, hoặc đơn nghỉ cả ngày, vẫn bị chặn. Ngày giữ mã/số công của đơn nghỉ (`1/2K` 0,5;
+  `1/2P` 1), nửa kia `Present`, giờ làm = nửa giờ ca theo đơn. Huỷ Yêu cầu chấm công chỉ gỡ liên kết
+  + giờ, không huỷ ngày của đơn nghỉ.
+Test: `hrms/tests/test_half_day_leave_other_half.py`.
+
 ### 4.6 PWA (bật lại self-service)
 - Khôi phục 3 route `/attendance-requests` (list/new/detail) trong `frontend/src/router/attendance.js`.
 - Tile "Yêu cầu chấm công" ở `Home.vue` + mục "Recent Attendance Requests" ở `attendance/Dashboard.vue`.

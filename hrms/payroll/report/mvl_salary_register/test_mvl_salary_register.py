@@ -6,12 +6,13 @@ from frappe.tests.utils import FrappeTestCase, change_settings
 
 from erpnext.setup.doctype.employee.test_employee import make_employee
 
-from hrms.payroll.report.mvl_salary_register.mvl_salary_register import execute
+from hrms.payroll.report.mvl_salary_register.mvl_salary_register import execute, get_columns
 from hrms.tests.isolation import PerTestRollback
 from hrms.tests.vn_test_utils import default_company
 from hrms.vn_payroll.setup_mvl import ensure_mvl_defaults
 from hrms.vn_payroll.tests.test_salary_slip_mvl import (
 	ensure_fiscal_year_2099,
+	make_additional_salary,
 	make_slip,
 	make_ssa,
 	mark_full_month,
@@ -48,31 +49,6 @@ class TestBangLuongMVL(PerTestRollback, FrappeTestCase):
 
 		columns, data = execute(frappe._dict({"company": default_company(), "month": 6, "year": 2099}))
 		labels = [c["label"] for c in columns]
-		# CỘT GIỐNG HỆT Excel, đúng thứ tự: Mã NV, Họ tên, Loại, NET/GROSS, E, F, G, H, I ... T, U
-		expected = [
-			"Mã NV",
-			"Họ tên",
-			"Loại",
-			"NET/GROSS",
-			"Hệ số (E)",
-			"Lương ngày công (F)",
-			"Lương đóng BHXH (G)",
-			"Số công (H)",
-			"Lương thực tế (I)",
-			"Phụ cấp ăn trưa (J)",
-			"Tổng thu nhập (K)",
-			"Giảm trừ bản thân (L)",
-			"Số người phụ thuộc (M)",
-			"Tổng giảm trừ (N)",
-			"Thu nhập quy đổi (O)",
-			"Thu nhập tính thuế (P)",
-			"Thuế TNCN (Q)",
-			"BH công ty (R)",
-			"BH NLĐ (S)",
-			"Thực lĩnh (T)",
-			"TN chịu thuế kê khai (U)",
-		]
-		self.assertEqual(labels, expected)
 		# KHÔNG còn cột thừa của ERP
 		for gone in ("Công chuẩn", "Chi phí công ty"):
 			self.assertNotIn(gone, labels)
@@ -83,11 +59,64 @@ class TestBangLuongMVL(PerTestRollback, FrappeTestCase):
 		self.assertEqual(row["work_i"], 25_000_000)  # I đi làm đủ
 		self.assertEqual(row["tax_q"], 173_684)  # Q
 		self.assertEqual(row["ins_company_r"], 5_375_000)  # R
+		self.assertEqual(row["union_fee"], 500_000)  # KPCĐ = 25tr x 2%
 		self.assertEqual(row["net_t"], ss.net_pay)  # T
+		# không phải cột: dòng "Số công làm việc chuẩn" của file Excel đọc từ đây
+		self.assertEqual(row["standard_days"], ss.total_working_days)
 
 		total = data[-1]
 		self.assertEqual(total["employee_name"], "TỔNG CỘNG")
 		self.assertGreaterEqual(total["net_t"], row["net_t"])
+		self.assertGreaterEqual(total["union_fee"], 500_000)
+
+	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
+	def test_holiday_bonus_column_is_shown_and_totalled(self):
+		# trước đây báo cáo không có cột thưởng → I + J ≠ K trên giấy khi có thưởng
+		ensure_fiscal_year_2099()
+		ensure_mvl_defaults()
+		emp = make_employee("blmvl_bonus@codes.com", company=default_company())
+		make_ssa(emp, base=5_000_000, custom_salary_type="Bán thời gian")
+		mark_full_month(emp)
+		make_additional_salary(emp, "Tiền thưởng", 500_000)
+		make_slip(emp, salary_type="Bán thời gian").submit()
+
+		_columns, data = execute(frappe._dict({"company": default_company(), "month": 6, "year": 2099}))
+		row = next(r for r in data if r.get("employee") == emp)
+		self.assertEqual(row["holiday_bonus"], 500_000)
+		self.assertEqual(row["work_i"] + row["lunch_j"] + row["holiday_bonus"], row["gross_k"])
+		self.assertGreaterEqual(data[-1]["holiday_bonus"], 500_000)
+
+	def test_columns_follow_template_09_2026(self):
+		# nhãn cột = nguyên văn hàng 8 của docs/Salary_template_clean.xlsx (cột A STT ↔ Mã NV trên màn hình)
+		expected = [
+			"Mã NV",
+			"Họ tên",
+			"Loại Hợp đồng",
+			"Loại Hợp đồng (Status)",
+			"Hệ số lương",
+			"Lương tháng",
+			"Lương đóng BHXH",
+			"Số công làm việc",
+			"Lương thực tế",
+			"Phụ cấp ăn trưa",
+			"Hỗ trợ điện thoại",
+			"Hỗ trợ xăng xe, đi lại",
+			"Thưởng KPI",
+			"Thưởng (Lễ/Tết)",
+			"Lương thực lĩnh chưa trừ thuế TNCN, BHXH",
+			"Giảm trừ bản thân",
+			"Số người phụ thuộc",
+			"Tổng các khoản giảm trừ",
+			"Thu nhập làm căn cứ quy đổi",
+			"Thu nhập tính thuế",
+			"Thuế TNCN/PIT",
+			"Bảo hiểm công ty trả",
+			"Bảo hiểm NLĐ trả",
+			"KPCĐ",
+			"Thực lĩnh sau khi trừ TNCN, BHXH",
+			"Thu nhập chịu thuế",
+		]
+		self.assertEqual([c["label"] for c in get_columns()], expected)
 
 	def test_empty_when_no_period(self):
 		self.assertEqual(execute(frappe._dict({"company": default_company()}))[1], [])

@@ -6,6 +6,9 @@ from hrms.tests.isolation import PerTestRollback
 from hrms.vn_payroll.setup_mvl import (
 	COMPONENT_ACCOUNT_NUMBERS,
 	COMPONENTS,
+	FIELD_DESCRIPTIONS,
+	HR_ENTERED_COMPONENTS,
+	REAL_EARNINGS,
 	SALARY_TYPES,
 	STRUCTURES,
 	ensure_mvl_defaults,
@@ -40,6 +43,38 @@ class TestSetupMVL(PerTestRollback, FrappeTestCase):
 		# thử việc không có BHXH ở deductions
 		tv = {r.salary_component for r in frappe.get_doc("Salary Structure", "Thử việc").deductions}
 		self.assertNotIn("BHXH - NLĐ (nộp thay)", tv)
+
+	def test_parttime_structure_shows_family_deduction(self):
+		# part time có đăng ký giảm trừ được trừ gia cảnh (chốt 2026-10-30) → phiếu/báo cáo phải hiện được;
+		# khoán / chuyên gia thì không bao giờ
+		comps = lambda name: set(STRUCTURES[name][2])  # noqa: E731
+		for c in ("Giảm trừ bản thân", "Tổng giảm trừ gia cảnh"):
+			self.assertIn(c, comps("Bán thời gian"))
+			self.assertNotIn(c, comps("Khoán"))
+			self.assertNotIn(c, comps("Chuyên gia"))
+
+	def test_every_type_can_receive_holiday_bonus(self):
+		# mẫu 09/2026: cả part time (dòng 6) cũng có Thưởng (Lễ/Tết)
+		for name, (_stype, earnings, _deductions) in STRUCTURES.items():
+			self.assertIn("Tiền thưởng", earnings, name)
+
+	def test_allowances_and_kpi_are_taxable_hr_entered_and_accounted(self):
+		# mẫu 09/2026 cột K, L, M: chịu thuế (S chỉ loại J), cộng thực lĩnh, HR nhập theo kỳ, Nợ 6421.
+		# Thiếu TK GL thì Payroll Entry không dựng được bút toán ("Please set account").
+		spec = {c[0]: c for c in COMPONENTS}
+		for comp in ("Hỗ trợ điện thoại", "Hỗ trợ xăng xe", "Thưởng KPI"):
+			self.assertEqual(spec[comp][1:], ("Earning", 1, 0), comp)
+			self.assertIn(comp, REAL_EARNINGS)
+			self.assertIn(comp, HR_ENTERED_COMPONENTS)
+			self.assertEqual(COMPONENT_ACCOUNT_NUMBERS.get(comp), "6421", comp)
+			for structure in ("Chính thức", "Thử việc"):
+				self.assertIn(comp, STRUCTURES[structure][1], f"{structure}:{comp}")
+
+	def test_union_fee_posts_to_3382_and_stays_out_of_net(self):
+		spec = {c[0]: c for c in COMPONENTS}
+		self.assertEqual(spec["KPCĐ - Công ty"][1:], ("Deduction", 0, 1))  # không trừ net
+		self.assertEqual(COMPONENT_ACCOUNT_NUMBERS.get("KPCĐ - Công ty"), "3382")  # Có 3382, vào JV
+		self.assertIn("KPCĐ - Công ty", STRUCTURES["Chính thức"][2])
 
 	def test_only_nonmoney_params_are_slip_fields(self):
 		ensure_mvl_defaults()
@@ -98,3 +133,16 @@ class TestSetupMVL(PerTestRollback, FrappeTestCase):
 		# không nhân đôi bậc thuế
 		s = frappe.get_single("MVL Payroll Settings")
 		self.assertEqual(len(s.tax_brackets), 5)
+
+	def test_field_help_follows_current_tax_rules_on_installed_site(self):
+		# Site đã cài thì guard của ensure_custom_fields bỏ qua create_custom_fields — mô tả cũ (luật
+		# part time trước 30/10) kẹt lại mãi. Mô tả là metadata, phải tự đồng bộ mỗi lần migrate.
+		ensure_mvl_defaults()
+		name = "Salary Structure Assignment-custom_is_resident"
+		frappe.db.set_value("Custom Field", name, "description", "mô tả cũ")
+		ensure_mvl_defaults()
+		for (doctype, fieldname), text in FIELD_DESCRIPTIONS.items():
+			self.assertEqual(
+				frappe.db.get_value("Custom Field", f"{doctype}-{fieldname}", "description"), text, fieldname
+			)
+		self.assertIn("lũy tiến", FIELD_DESCRIPTIONS[("Salary Structure Assignment", "custom_is_resident")])

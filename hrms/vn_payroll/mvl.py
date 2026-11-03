@@ -18,6 +18,9 @@ def _round(x) -> float:
 
 # Loại nhân sự trả NET có đầy đủ phụ cấp ăn + giảm trừ + gross-up bậc.
 NET_FULLTIME_TYPES = ("Chính thức", "Thử việc")
+# Loại DUY NHẤT đóng bảo hiểm bắt buộc (+ KPCĐ). Chặn ở đây chứ không dựa vào việc cấu trúc thiếu
+# component: thử việc có nhập Lương đóng BHXH thì R/S vẫn lọt vào U và vào gương chi phí (mẫu 09/2026 dòng 4).
+INSURED_TYPES = ("Chính thức",)
 
 
 @dataclass
@@ -46,6 +49,7 @@ class MVLConfig:
 	probation_coef: float
 	tax_brackets: list  # [(threshold_upto, rate, subtract)] lũy tiến trên P (bậc cuối threshold=inf)
 	grossup_brackets: list  # [(threshold_upto, subtract, divisor)] quy đổi NET→gross trên O
+	union_fee_rate: float = 0.02  # KPCĐ công ty chịu, trên G, chỉ INSURED_TYPES (mẫu 09/2026 cột X)
 
 
 @dataclass
@@ -61,6 +65,7 @@ class MVLResult:
 	S: float = 0.0  # BH người lao động (công ty nộp thay khi NET)
 	T: float = 0.0  # thực lĩnh
 	U: float = 0.0  # thu nhập chịu thuế kê khai
+	X: float = 0.0  # KPCĐ công ty trả — chi phí công ty, không trừ net, không vào U
 
 
 def default_config() -> MVLConfig:
@@ -86,6 +91,7 @@ def default_config() -> MVLConfig:
 			(79_500_000, 9_500_000, 0.7),
 			(float("inf"), 14_500_000, 0.65),
 		],
+		union_fee_rate=0.02,
 	)
 
 
@@ -109,6 +115,13 @@ def _progressive_tax(p: float, brackets: list) -> float:
 
 def _coefficient(salary_type: str, cfg: MVLConfig) -> float:
 	return cfg.probation_coef if salary_type == "Thử việc" else 1.0
+
+
+def _parttime_registered(inp: MVLInput) -> bool:
+	"""Bán thời gian cư trú CÓ đăng ký giảm trừ (tức HĐLĐ từ 3 tháng) → tính như chính thức: giảm trừ
+	gia cảnh + quy đổi bậc + lũy tiến (mẫu 09/2026 dòng 6; chốt 2026-10-30). Không đăng ký thì khấu trừ
+	10% như quy tắc 06/2026; người không cư trú luôn 20%, cờ đăng ký không có nghĩa."""
+	return inp.salary_type == "Bán thời gian" and inp.is_resident and inp.register_personal_deduction
 
 
 def compute_mvl(inp: MVLInput, cfg: MVLConfig) -> MVLResult:
@@ -135,18 +148,22 @@ def compute_mvl(inp: MVLInput, cfg: MVLConfig) -> MVLResult:
 	r.J = _round(inp.lunch_days * cfg.lunch_rate) if is_net_fulltime else 0.0
 	r.K = r.I + r.J + _round(inp.bonus)
 
-	# Bước 4 — giảm trừ gia cảnh; Bước 5 — thu nhập làm căn cứ quy đổi
+	# Bước 4 — giảm trừ gia cảnh (chỉ loại tính lũy tiến); Bước 5 — thu nhập làm căn cứ quy đổi
+	progressive = is_net_fulltime or _parttime_registered(inp)
 	r.N = (
-		cfg.personal_deduction if inp.register_personal_deduction else 0.0
-	) + cfg.dependent_deduction * inp.dependents
+		(cfg.personal_deduction if inp.register_personal_deduction else 0.0)
+		+ cfg.dependent_deduction * inp.dependents
+		if progressive
+		else 0.0
+	)
 	r.O = max(r.K - r.N - r.J, 0.0)
 
 	# Bước 6-7 — quy đổi + thuế, phân nhánh theo loại nhân sự
-	if is_net_fulltime:
+	if progressive:
 		r.P = _grossup(r.O, cfg.grossup_brackets)
 		r.Q = _progressive_tax(r.P, cfg.tax_brackets)
 	elif inp.salary_type == "Bán thời gian":
-		# cư trú → khấu trừ 10% (quy đổi /0,9); không cư trú (người nước ngoài) → 20% (quy đổi /0,8)
+		# cư trú không đăng ký → khấu trừ 10% (quy đổi /0,9); không cư trú (người nước ngoài) → 20% (/0,8)
 		if inp.is_resident:
 			r.P = _round(r.O / 0.9)
 			r.Q = _round(r.P * 0.10)
@@ -163,8 +180,10 @@ def compute_mvl(inp: MVLInput, cfg: MVLConfig) -> MVLResult:
 		r.Q = 0.0
 
 	# Bước 8 — bảo hiểm; Bước 9 — thực lĩnh + kê khai
-	r.R = _round(inp.bhxh_salary * cfg.ins_company)
-	r.S = _round(inp.bhxh_salary * cfg.ins_employee)
+	if inp.salary_type in INSURED_TYPES:
+		r.R = _round(inp.bhxh_salary * cfg.ins_company)
+		r.S = _round(inp.bhxh_salary * cfg.ins_employee)
+		r.X = _round(inp.bhxh_salary * cfg.union_fee_rate)
 	r.T = r.K
 	r.U = r.K + r.Q + r.S - r.J
 	return r

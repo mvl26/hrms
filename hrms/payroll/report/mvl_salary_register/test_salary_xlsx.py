@@ -54,12 +54,14 @@ def sample_rows():
 		ins_employee_s=3_150_000.0,
 		net_t=25_994_783.0,
 		declared_u=28_584_783.0,
+		standard_days=22,
 	)
 	b = frappe._dict(a, employee="HR-EMP-00002", employee_name="Lê Văn Cường", work_type="Thử việc")
 	total = frappe._dict(employee_name=TOTAL_LABEL)
 	for key in a:
 		if key not in ("employee", "employee_name", "work_type", "pay_mode"):
 			total[key] = (a[key] or 0) + (b[key] or 0)
+	total.pop("standard_days")  # dòng tổng không có công chuẩn
 	return [a, b, total]
 
 
@@ -81,6 +83,17 @@ class TestSalaryXlsx(PerTestRollback, FrappeTestCase):
 		self.assertEqual(ws.cell(HEADER_ROW - 3, 1).alignment.horizontal, "center")
 		# dòng ngay trên tiêu đề bảng để trống
 		self.assertIsNone(ws.cell(HEADER_ROW - 1, 1).value)
+
+	def test_title_is_bang_luong(self):
+		# mẫu 09/2026 ô A5
+		self.assertEqual(build().cell(HEADER_ROW - 3, 1).value, "BẢNG LƯƠNG")
+
+	def test_standard_days_sits_above_worked_days_column(self):
+		# mẫu 09/2026: "Số công làm việc chuẩn:" ở E7, số công ở H7 — ngay trên cột "Số công làm việc"
+		ws = build()
+		self.assertTrue(ws["E7"].value.startswith("Số công làm việc chuẩn"))
+		self.assertEqual(ws["H7"].value, 22)
+		self.assertEqual(ws.cell(HEADER_ROW, 8).value, "Số công làm việc")
 
 	def test_first_column_is_stt_not_employee_id(self):
 		"""Bản in cần số thứ tự; `HR-EMP-00001` chỉ tốn chỗ."""

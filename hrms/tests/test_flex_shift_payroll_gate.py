@@ -66,7 +66,24 @@ def reclassify(name: str):
 	                     restore_code_driven_half_day_status
 
 	Bỏ pha `validate` thì mọi ngày `1/2X` đọc thành 1,0 công thay vì 0,5 — cổng sẽ báo "xê dịch"
-	cho dữ liệu vốn đang đúng. Chính chặng giữa mới quyết định số tiền, nên nó phải có mặt ở đây."""
+	cho dữ liệu vốn đang đúng. Chính chặng giữa mới quyết định số tiền, nên nó phải có mặt ở đây.
+
+	Ngày do Yêu cầu chấm công sinh ra thì PHIẾU là nguồn của mã, không phải đồng hồ: nửa ngày WFH
+	sáng + chiều chấm công là `W`/`X` = 1,0 công, chấm lại theo giờ vào/ra (chỉ buổi chiều) sẽ ra
+	`1/2X`. Đường thật không bao giờ làm thế — mọi lần dựng lại đều đi qua phiếu
+	(`reapply_attendance_request` → `set_attendance_request_code`) — nên cổng dựng lại đúng đường đó."""
+	if request := frappe.db.get_value("Attendance", name, "attendance_request"):
+		from hrms.hr.doctype.attendance_request.attendance_request_miyano import set_attendance_request_code
+
+		frappe.db.set_value(
+			"Attendance",
+			name,
+			{"custom_attendance_code": None, "custom_morning_code": None, "custom_afternoon_code": None},
+			update_modified=False,
+		)
+		set_attendance_request_code(frappe.get_doc("Attendance Request", request))
+		return frappe.get_doc("Attendance", name)
+
 	doc = frappe.get_doc("Attendance", name)
 	doc.custom_attendance_code = None
 	doc.custom_morning_code = None

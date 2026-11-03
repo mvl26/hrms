@@ -14,7 +14,9 @@ from frappe.utils import add_days, cint, flt, getdate, rounded
 from hrms.vn_payroll.lunch import lunch_days_for_period
 from hrms.vn_payroll.mvl import MVLInput, compute_mvl
 from hrms.vn_payroll.settings import config_from_settings
-from hrms.vn_payroll.setup_mvl import BONUS_COMPONENT, REAL_EARNINGS, salary_type_of
+from hrms.vn_payroll.setup_mvl import HR_ENTERED_COMPONENTS, REAL_EARNINGS, salary_type_of
+
+UNION_FEE_COMPONENT = "KPCĐ - Công ty"
 
 # Khoản THẬT cộng vào net (NET). GROSS thêm thuế + BHXH NLĐ vào deduction.
 GROSS_DEDUCTIONS = ("Thuế TNCN (nộp thay)", "BHXH - NLĐ (nộp thay)")
@@ -27,17 +29,19 @@ def component_values(inp, cfg, r) -> dict:
 		"Lương đóng BHXH": inp.bhxh_salary,  # G
 		"Lương theo công": r.I,
 		"Phụ cấp ăn trưa": r.J,
-		# gương chi phí (hạch toán): thuế + BHXH (NLĐ+DN) công ty nộp thay → Nợ 6421; KHÔNG cộng net
-		"Chi phí thuế & BHXH DN nộp thay": r.Q + r.S + r.R,
+		# gương chi phí (hạch toán): thuế + BHXH (NLĐ+DN) + KPCĐ công ty nộp/chịu → Nợ 6421; KHÔNG cộng net
+		"Chi phí thuế & BHXH DN nộp thay": r.Q + r.S + r.R + r.X,
 		"Tổng thu nhập": r.K,
 		"Thu nhập quy đổi": r.O,
 		"Thu nhập tính thuế": r.P,
 		"Thu nhập chịu thuế kê khai": r.U,
-		"Giảm trừ bản thân": cfg.personal_deduction if inp.register_personal_deduction else 0.0,  # L
+		# L — theo engine chứ không theo cờ SSA: loại không được giảm trừ (r.N = 0) thì cờ tick cũng vô nghĩa
+		"Giảm trừ bản thân": cfg.personal_deduction if inp.register_personal_deduction and r.N else 0.0,
 		"Tổng giảm trừ gia cảnh": r.N,
 		"Thuế TNCN (nộp thay)": r.Q,
 		"BHXH - NLĐ (nộp thay)": r.S,
 		"BHXH - Công ty": r.R,
+		UNION_FEE_COMPONENT: r.X,
 	}
 
 
@@ -212,7 +216,7 @@ def apply_mvl(doc, method=None):
 		lunch_days=lunch_days,
 		standard_days=standard_days,
 		worked_days=flt(doc.payment_days),
-		bonus=_bonus_amount(doc),  # HR tự điền, engine đọc chứ không ghi đè
+		bonus=hr_entered_amount(doc),  # HR tự nhập, engine đọc chứ không ghi đè
 		# chuyển thử việc → chính thức giữa kỳ: công giai đoạn thử việc tính hệ số 0.85
 		probation_worked_days=probation_worked_days(doc, salary_type),
 		# Bán thời gian: cư trú (10%) hay không cư trú/nước ngoài (20%) — mặc định cư trú nếu chưa migrate field
@@ -222,14 +226,21 @@ def apply_mvl(doc, method=None):
 	)
 	cfg = config_from_settings()
 	r = compute_mvl(inp, cfg)
+	# KPCĐ chỉ vào gương chi phí khi phiếu CÓ row KPCĐ để đối ứng Có 3382. Code mới chạy trước migrate
+	# (cấu trúc chưa có row) mà vẫn cộng X thì bút toán dư X ở Nợ 6421 / Có 334, không ai báo.
+	if not any(row.salary_component == UNION_FEE_COMPONENT for row in doc.deductions):
+		r.X = 0.0
 	_set_component_amounts(doc, inp, component_values(inp, cfg, r))
 	_set_totals(doc)
 	_set_breakdown_fields(doc, inp, cfg, lunch_days)
 
 
-def _bonus_amount(doc) -> float:
-	"""Tiền thưởng HR tự điền trên phiếu — engine đọc để tính thuế, KHÔNG bị ghi đè."""
-	return next((flt(row.amount) for row in doc.earnings if row.salary_component == BONUS_COMPONENT), 0.0)
+def hr_entered_amount(doc) -> float:
+	"""Tổng các khoản HR tự nhập trên phiếu — engine đọc để tính thuế, KHÔNG ghi đè.
+
+	Cộng MỌI row chứ không lấy row đầu: một component có thể vừa có row gõ tay vừa có row riêng của
+	Additional Salary (`overwrite_salary_structure_amount = 0` thêm row mới thay vì ghi đè)."""
+	return sum(flt(row.amount) for row in doc.earnings if row.salary_component in HR_ENTERED_COMPONENTS)
 
 
 def _set_component_amounts(doc, inp, values):

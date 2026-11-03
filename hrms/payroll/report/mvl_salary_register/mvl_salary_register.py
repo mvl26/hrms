@@ -1,13 +1,11 @@
 # Copyright (c) 2026, Miyano Việt Nam.
-"""Bảng lương MVL — CỘT GIỐNG HỆT file Excel gốc (docs/Cong_thuc_tinh_luong_MVL.md).
+"""Bảng lương MVL — CỘT GIỐNG HỆT mẫu `docs/Salary_template_clean.xlsx` (09/2026), hàng 8.
 
 Đọc thẳng Salary Slip ĐÃ SUBMIT dùng MỘT trong các cấu trúc MVL (mỗi loại lương một cấu trúc) trong kỳ.
 Mỗi cột tiền là một Salary Component → chỉ gom theo hàng (nhân viên) x cột. Read-only, có dòng TỔNG CỘNG.
 
-Thứ tự cột đúng như Excel: Mã NV (ID, không bỏ được) · Họ tên · Loại (Toàn/Bán thời gian) · NET/GROSS ·
-Hệ số E · Lương ngày công F · Lương đóng BHXH G · Số công H · Lương thực tế I · Phụ cấp ăn J ·
-Tổng thu nhập K · Giảm trừ bản thân L · Số phụ thuộc M · Tổng giảm trừ N · TN quy đổi O · TN tính thuế P ·
-Thuế TNCN Q · BH công ty R · BH NLĐ S · Thực lĩnh T · TN chịu thuế kê khai U.
+Thứ tự và nhãn cột đúng như mẫu (A STT ↔ Mã NV trên màn hình, B…Z). Fieldname giữ chữ cột của bảng
+06/2026 (`work_i`, `gross_k`, …) vì bộ xuất Excel và test đọc theo fieldname; chỉ nhãn theo mẫu mới.
 """
 
 import frappe
@@ -24,25 +22,30 @@ TOTAL_LABEL = "TỔNG CỘNG"
 COLUMNS = [
 	("employee", "Mã NV", "Link", None, 110),
 	("employee_name", "Họ tên", "Data", None, 150),
-	("work_type", "Loại", "Data", None, 100),
-	("pay_mode", "NET/GROSS", "Data", None, 80),
-	("coefficient", "Hệ số (E)", "Float", None, 65),
-	("base_f", "Lương ngày công (F)", "Currency", "Lương ngày công", 120),
-	("bhxh_g", "Lương đóng BHXH (G)", "Currency", "Lương đóng BHXH", 120),
-	("worked_days", "Số công (H)", "Float", None, 75),
-	("work_i", "Lương thực tế (I)", "Currency", "Lương theo công", 120),
-	("lunch_j", "Phụ cấp ăn trưa (J)", "Currency", "Phụ cấp ăn trưa", 110),
-	("gross_k", "Tổng thu nhập (K)", "Currency", "Tổng thu nhập", 120),
-	("personal_l", "Giảm trừ bản thân (L)", "Currency", "Giảm trừ bản thân", 120),
-	("dependents", "Số người phụ thuộc (M)", "Int", None, 90),
-	("deduction_n", "Tổng giảm trừ (N)", "Currency", "Tổng giảm trừ gia cảnh", 120),
-	("converted_o", "Thu nhập quy đổi (O)", "Currency", "Thu nhập quy đổi", 120),
-	("taxable_p", "Thu nhập tính thuế (P)", "Currency", "Thu nhập tính thuế", 120),
-	("tax_q", "Thuế TNCN (Q)", "Currency", "Thuế TNCN (nộp thay)", 110),
-	("ins_company_r", "BH công ty (R)", "Currency", "BHXH - Công ty", 110),
-	("ins_employee_s", "BH NLĐ (S)", "Currency", "BHXH - NLĐ (nộp thay)", 110),
-	("net_t", "Thực lĩnh (T)", "Currency", None, 130),
-	("declared_u", "TN chịu thuế kê khai (U)", "Currency", "Thu nhập chịu thuế kê khai", 130),
+	("work_type", "Loại Hợp đồng", "Data", None, 100),
+	("pay_mode", "Loại Hợp đồng (Status)", "Data", None, 80),
+	("coefficient", "Hệ số lương", "Float", None, 65),
+	("base_f", "Lương tháng", "Currency", "Lương ngày công", 120),
+	("bhxh_g", "Lương đóng BHXH", "Currency", "Lương đóng BHXH", 120),
+	("worked_days", "Số công làm việc", "Float", None, 75),
+	("work_i", "Lương thực tế", "Currency", "Lương theo công", 120),
+	("lunch_j", "Phụ cấp ăn trưa", "Currency", "Phụ cấp ăn trưa", 110),
+	("phone", "Hỗ trợ điện thoại", "Currency", "Hỗ trợ điện thoại", 110),
+	("fuel", "Hỗ trợ xăng xe, đi lại", "Currency", "Hỗ trợ xăng xe", 110),
+	("kpi_bonus", "Thưởng KPI", "Currency", "Thưởng KPI", 110),
+	("holiday_bonus", "Thưởng (Lễ/Tết)", "Currency", "Tiền thưởng", 110),
+	("gross_k", "Lương thực lĩnh chưa trừ thuế TNCN, BHXH", "Currency", "Tổng thu nhập", 130),
+	("personal_l", "Giảm trừ bản thân", "Currency", "Giảm trừ bản thân", 120),
+	("dependents", "Số người phụ thuộc", "Int", None, 90),
+	("deduction_n", "Tổng các khoản giảm trừ", "Currency", "Tổng giảm trừ gia cảnh", 120),
+	("converted_o", "Thu nhập làm căn cứ quy đổi", "Currency", "Thu nhập quy đổi", 120),
+	("taxable_p", "Thu nhập tính thuế", "Currency", "Thu nhập tính thuế", 120),
+	("tax_q", "Thuế TNCN/PIT", "Currency", "Thuế TNCN (nộp thay)", 110),
+	("ins_company_r", "Bảo hiểm công ty trả", "Currency", "BHXH - Công ty", 110),
+	("ins_employee_s", "Bảo hiểm NLĐ trả", "Currency", "BHXH - NLĐ (nộp thay)", 110),
+	("union_fee", "KPCĐ", "Currency", "KPCĐ - Công ty", 100),
+	("net_t", "Thực lĩnh sau khi trừ TNCN, BHXH", "Currency", None, 130),
+	("declared_u", "Thu nhập chịu thuế", "Currency", "Thu nhập chịu thuế kê khai", 130),
 ]
 
 
@@ -100,6 +103,7 @@ def get_data(filters):
 			"custom_coefficient",
 			"custom_dependents_slip",
 			"payment_days",
+			"total_working_days",
 			"net_pay",
 		],
 		order_by="employee",
@@ -119,6 +123,8 @@ def get_data(filters):
 			pay_mode=pay_mode(s.custom_salary_type),
 			coefficient=s.custom_coefficient,
 			worked_days=s.payment_days,
+			# không phải cột: bộ xuất Excel in dòng "Số công làm việc chuẩn" từ đây
+			standard_days=s.total_working_days,
 			dependents=s.custom_dependents_slip,
 			net_t=flt(s.net_pay),
 		)
@@ -135,7 +141,9 @@ def get_data(filters):
 
 
 def component_amounts(slip_names):
-	"""{slip: {component: amount}} cho mọi Salary Detail của các slip."""
+	"""{slip: {component: tổng amount}} cho mọi Salary Detail của các slip.
+
+	Cộng dồn: một component có thể có nhiều row trên cùng phiếu (row gõ tay + row Additional Salary)."""
 	rows = frappe.get_all(
 		"Salary Detail",
 		filters={"parent": ["in", slip_names], "parenttype": "Salary Slip"},
@@ -143,5 +151,6 @@ def component_amounts(slip_names):
 	)
 	out = {}
 	for r in rows:
-		out.setdefault(r.parent, {})[r.salary_component] = r.amount
+		per_slip = out.setdefault(r.parent, {})
+		per_slip[r.salary_component] = flt(per_slip.get(r.salary_component)) + flt(r.amount)
 	return out

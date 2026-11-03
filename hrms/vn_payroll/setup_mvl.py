@@ -21,7 +21,11 @@ COMPONENTS = [
 	("Lương đóng BHXH", "Earning", 0, 1),  # G
 	("Lương theo công", "Earning", 1, 0),  # I — thật, cộng lương
 	("Phụ cấp ăn trưa", "Earning", 0, 0),  # J — thật, miễn thuế
-	("Tiền thưởng", "Earning", 1, 0),  # HR tự điền — thật, chịu thuế, cộng lương
+	("Tiền thưởng", "Earning", 1, 0),  # Thưởng (Lễ/Tết), HR nhập — thật, chịu thuế, cộng lương
+	# mẫu 09/2026 cột K, L, M — HR nhập (Additional Salary; điện thoại / xăng xe dạng định kỳ), chịu thuế
+	("Hỗ trợ điện thoại", "Earning", 1, 0),
+	("Hỗ trợ xăng xe", "Earning", 1, 0),
+	("Thưởng KPI", "Earning", 1, 0),
 	# GƯƠNG CHI PHÍ (hạch toán): đưa thuế TNCN + BHXH công ty nộp thay vào Nợ 6421 của bút toán accrual,
 	# KHÔNG cộng net (dnit=1). = Q + S + R. Cân đối để 334 (phải trả NLĐ) ra đúng net K. Xem COMPONENT_ACCOUNT_NUMBERS.
 	("Chi phí thuế & BHXH DN nộp thay", "Earning", 0, 1),
@@ -34,13 +38,23 @@ COMPONENTS = [
 	("Thuế TNCN (nộp thay)", "Deduction", 0, 1),  # Q — công ty nộp thay
 	("BHXH - NLĐ (nộp thay)", "Deduction", 0, 1),  # S
 	("BHXH - Công ty", "Deduction", 0, 1),  # R
+	("KPCĐ - Công ty", "Deduction", 0, 1),  # mẫu 09/2026 cột X — công ty chịu, không trừ net
 ]
 EARNINGS = [c[0] for c in COMPONENTS if c[1] == "Earning"]
 DEDUCTIONS = [c[0] for c in COMPONENTS if c[1] == "Deduction"]
 # Khoản THẬT cộng vào net (NET mode). GROSS thêm Thuế/BHXH NLĐ vào deduction — xử lý ở apply_mvl.
-REAL_EARNINGS = ("Lương theo công", "Phụ cấp ăn trưa", "Tiền thưởng")
-# Component HR TỰ ĐIỀN — engine đọc chứ KHÔNG ghi đè.
-BONUS_COMPONENT = "Tiền thưởng"
+REAL_EARNINGS = (
+	"Lương theo công",
+	"Phụ cấp ăn trưa",
+	"Hỗ trợ điện thoại",
+	"Hỗ trợ xăng xe",
+	"Thưởng KPI",
+	"Tiền thưởng",
+)
+# Component HR TỰ NHẬP theo kỳ (gõ trên phiếu hoặc Additional Salary) — engine đọc chứ KHÔNG ghi đè.
+# Mẫu 09/2026 tính thuế mọi khoản này như nhau (vào O, chịu thuế), nên engine nhận TỔNG của chúng.
+# "Tiền thưởng" = cột Thưởng (Lễ/Tết) của mẫu; giữ tên cũ vì phiếu và bút toán đã dùng.
+HR_ENTERED_COMPONENTS = ("Tiền thưởng", "Hỗ trợ điện thoại", "Hỗ trợ xăng xe", "Thưởng KPI")
 
 # MỖI LOẠI lương = MỘT Salary Structure riêng, gắn cho NV tương ứng. Thành phần mỗi cấu trúc chỉ gồm
 # đúng các cột XUẤT HIỆN cho loại đó trên bảng Excel: NET toàn thời gian (chính thức/thử việc) có đủ ăn
@@ -51,6 +65,7 @@ BONUS_COMPONENT = "Tiền thưởng"
 _PARTTIME_LIKE = [
 	"Lương ngày công",
 	"Lương theo công",
+	"Tiền thưởng",  # Thưởng (Lễ/Tết) — mẫu 09/2026 dòng 6
 	"Chi phí thuế & BHXH DN nộp thay",  # gương chi phí cho bút toán accrual (= Q, parttime/chuyên gia không BHXH)
 	"Tổng thu nhập",
 	"Thu nhập quy đổi",
@@ -65,6 +80,9 @@ STRUCTURES = {
 			"Lương đóng BHXH",
 			"Lương theo công",
 			"Phụ cấp ăn trưa",
+			"Hỗ trợ điện thoại",
+			"Hỗ trợ xăng xe",
+			"Thưởng KPI",
 			"Tiền thưởng",
 			"Chi phí thuế & BHXH DN nộp thay",  # gương chi phí (= Q+S+R) cho bút toán accrual
 			"Tổng thu nhập",
@@ -78,6 +96,7 @@ STRUCTURES = {
 			"Thuế TNCN (nộp thay)",
 			"BHXH - NLĐ (nộp thay)",
 			"BHXH - Công ty",
+			"KPCĐ - Công ty",
 		],
 	),
 	"Thử việc": (
@@ -86,6 +105,9 @@ STRUCTURES = {
 			"Lương ngày công",
 			"Lương theo công",
 			"Phụ cấp ăn trưa",
+			"Hỗ trợ điện thoại",
+			"Hỗ trợ xăng xe",
+			"Thưởng KPI",
 			"Tiền thưởng",
 			"Chi phí thuế & BHXH DN nộp thay",  # gương chi phí (= Q, thử việc không BHXH)
 			"Tổng thu nhập",
@@ -95,8 +117,13 @@ STRUCTURES = {
 		],
 		["Giảm trừ bản thân", "Tổng giảm trừ gia cảnh", "Thuế TNCN (nộp thay)"],  # thử việc không đóng BHXH
 	),
-	# Bán thời gian: khấu trừ 10% (cư trú) hoặc 20% (không cư trú) — chọn qua cờ Cư trú trên SSA.
-	"Bán thời gian": ("Bán thời gian", _PARTTIME_LIKE, ["Thuế TNCN (nộp thay)"]),
+	# Bán thời gian: cư trú + đăng ký giảm trừ → giảm trừ + lũy tiến như chính thức; còn lại khấu trừ 10%
+	# (cư trú) / 20% (không cư trú) — chọn qua cờ trên SSA. Có cột giảm trừ để phiếu hiện được N.
+	"Bán thời gian": (
+		"Bán thời gian",
+		_PARTTIME_LIKE,
+		["Giảm trừ bản thân", "Tổng giảm trừ gia cảnh", "Thuế TNCN (nộp thay)"],
+	),
 	# Khoán: trọn gói, KHÔNG khấu trừ thuế → không cần cột kê khai U. Gương chi phí = 0 (Q=0) nhưng vẫn có
 	# để cấu trúc đồng nhất (bút toán ra Nợ 6421 = I / Có 334 = I).
 	"Khoán": (
@@ -104,6 +131,7 @@ STRUCTURES = {
 		[
 			"Lương ngày công",
 			"Lương theo công",
+			"Tiền thưởng",
 			"Chi phí thuế & BHXH DN nộp thay",
 			"Tổng thu nhập",
 			"Thu nhập quy đổi",
@@ -120,16 +148,21 @@ _TYPE_TO_STRUCTURE = {row[0]: name for name, row in STRUCTURES.items()}
 # ---- HẠCH TOÁN (bút toán accrual lương qua Payroll Entry) ----
 # Chỉ các component dưới đây vào bút toán (map TK GL per company); MỌI component khác bị loại khỏi JV
 # (do_not_include_in_accounts=1 — chúng chỉ là cột hiển thị/tham chiếu, đưa vào sẽ nhân trùng).
-# Mô hình NET gross-up (doc §9): Nợ 6421 = I+J+thưởng + (Q+S+R) ; Có 3335 = Q ; Có 3383 = S+R ;
-# phần dư của JV về Có 334 (payroll payable) = K = net thực trả. TK theo account_number VAS của Miyano.
+# Mô hình NET gross-up (doc §9): Nợ 6421 = I+J+phụ cấp+thưởng + (Q+S+R+KPCĐ) ; Có 3335 = Q ;
+# Có 3383 = S+R ; Có 3382 = KPCĐ ; phần dư của JV về Có 334 (payroll payable) = K = net thực trả.
+# TK theo account_number VAS của Miyano.
 COMPONENT_ACCOUNT_NUMBERS = {
 	"Lương theo công": "6421",  # chi phí nhân viên quản lý (Nợ)
 	"Phụ cấp ăn trưa": "6421",
 	"Tiền thưởng": "6421",
+	"Hỗ trợ điện thoại": "6421",
+	"Hỗ trợ xăng xe": "6421",
+	"Thưởng KPI": "6421",
 	"Chi phí thuế & BHXH DN nộp thay": "6421",  # gương chi phí thuế/BHXH nộp thay (Nợ)
 	"Thuế TNCN (nộp thay)": "3335",  # thuế TNCN phải nộp (Có)
 	"BHXH - NLĐ (nộp thay)": "3383",  # BHXH phải nộp (Có)
 	"BHXH - Công ty": "3383",
+	"KPCĐ - Công ty": "3382",  # kinh phí công đoàn phải nộp (Có); chi phí đã nằm trong gương 6421
 }
 # Danh sách loại lương (giữ cho custom field Select trên SSA — chỉ để hiển thị, apply_mvl suy từ cấu trúc)
 SALARY_TYPES = "\n".join(row[0] for row in STRUCTURES.values())
@@ -242,6 +275,45 @@ OBSOLETE_SLIP_FIELDS = [
 ]
 
 
+# Mô tả hiển thị dưới các ô MVL. Một nguồn cho cả lúc tạo field lẫn lúc đồng bộ: site đã cài thì
+# guard của `ensure_custom_fields` không chạy lại `create_custom_fields`, nên đổi luật mà chỉ sửa chữ
+# trong danh sách field thì HR vẫn đọc hướng dẫn cũ (`sync_field_descriptions`).
+FIELD_DESCRIPTIONS = {
+	("Salary Structure Assignment", "custom_bhxh_salary"): (
+		"Chỉ Chính thức đóng BHXH và KPCĐ theo mức này; loại khác bỏ qua ô này. Để trống → không đóng."
+	),
+	("Salary Structure Assignment", "custom_register_personal_deduction"): (
+		"Tick → được giảm trừ bản thân. Với Bán thời gian cư trú, tick còn chuyển sang giảm trừ gia cảnh"
+		" + thuế lũy tiến như chính thức; bỏ tick → khấu trừ 10%. Khoán / Chuyên gia bỏ qua ô này."
+	),
+	("Salary Structure Assignment", "custom_lunch_days_override"): (
+		"Để trống → dùng số công thực tế (payment_days)."
+	),
+	("Salary Structure Assignment", "custom_is_resident"): (
+		"Chỉ dùng cho Bán thời gian: tick = cư trú → theo ô Đăng ký giảm trừ (lũy tiến hoặc khấu trừ 10%);"
+		" bỏ tick = không cư trú / người nước ngoài → khấu trừ 20%."
+	),
+}
+
+
+def ssa_help(fieldname: str) -> str:
+	return FIELD_DESCRIPTIONS[("Salary Structure Assignment", fieldname)]
+
+
+def sync_field_descriptions():
+	"""Đưa mô tả của field đã tồn tại về `FIELD_DESCRIPTIONS`. Chỉ ghi metadata (không DDL) → an toàn
+	mỗi lần migrate và trong test."""
+	changed = set()
+	for (doctype, fieldname), text in FIELD_DESCRIPTIONS.items():
+		name = f"{doctype}-{fieldname}"
+		row = frappe.db.get_value("Custom Field", name, ["name", "description"], as_dict=True)
+		if row and row.description != text:
+			frappe.db.set_value("Custom Field", name, "description", text)
+			changed.add(doctype)
+	for doctype in changed:
+		frappe.clear_cache(doctype=doctype)
+
+
 def ensure_custom_fields():
 	# create_custom_fields / delete đều chạy ALTER TABLE (DDL) → ImplicitCommitError trong transaction
 	# của test. Guard: đã đúng trạng thái (mọi field MỚI có + field tiền cũ đã gỡ) thì thôi. Chỉ đụng schema
@@ -278,7 +350,7 @@ def ensure_custom_fields():
 					"fieldname": "custom_bhxh_salary",
 					"fieldtype": "Currency",
 					"label": "Lương đóng BHXH (G)",
-					"description": "Để trống → không đóng BHXH (thử việc, parttime, khoán).",
+					"description": ssa_help("custom_bhxh_salary"),
 					"insert_after": "custom_salary_type",
 				},
 				{
@@ -291,13 +363,14 @@ def ensure_custom_fields():
 					"fieldname": "custom_register_personal_deduction",
 					"fieldtype": "Check",
 					"label": "Đăng ký giảm trừ bản thân",
+					"description": ssa_help("custom_register_personal_deduction"),
 					"insert_after": "custom_dependents",
 				},
 				{
 					"fieldname": "custom_lunch_days_override",
 					"fieldtype": "Int",
 					"label": "Số ngày ăn (nếu khác số công)",
-					"description": "Để trống → dùng số công thực tế (payment_days).",
+					"description": ssa_help("custom_lunch_days_override"),
 					"insert_after": "custom_register_personal_deduction",
 				},
 				{
@@ -305,7 +378,7 @@ def ensure_custom_fields():
 					"fieldtype": "Check",
 					"default": "1",
 					"label": "Cá nhân cư trú",
-					"description": "Chỉ dùng cho Bán thời gian: tick = cư trú (khấu trừ 10%); bỏ tick = không cư trú/người nước ngoài (20%).",
+					"description": ssa_help("custom_is_resident"),
 					"insert_after": "custom_lunch_days_override",
 				},
 			],
@@ -346,6 +419,11 @@ def ensure_settings():
 					"divisor": divisor,
 				},
 			)
+	# Seed KPCĐ khi CHƯA CÓ dòng nào — không dùng `if not s.union_fee_rate`: số 0 là HR cố ý không thu.
+	if s.meta.has_field("union_fee_rate") and not frappe.db.sql(
+		"select 1 from `tabSingles` where doctype = %s and field = 'union_fee_rate'", s.doctype
+	):
+		s.union_fee_rate = cfg.union_fee_rate
 	s.save(ignore_permissions=True)
 
 
@@ -424,6 +502,7 @@ def ensure_mvl_defaults():
 	"""Điểm vào duy nhất: gọi khi after_install / after_migrate và trong test."""
 	ensure_components()
 	ensure_custom_fields()
+	sync_field_descriptions()
 	ensure_structures()
 	ensure_component_accounts()
 	ensure_settings()

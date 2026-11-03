@@ -121,6 +121,51 @@ UNPAID_CODE = "K"  # nửa còn lại KHÔNG làm → nghỉ không lương (nat
 MORNING, AFTERNOON = "Sáng", "Chiều"
 
 
+def works_other_half_of_leave(doc, date) -> bool:
+	"""Đơn nửa ngày này rơi vào buổi CÒN LẠI của đơn nghỉ nửa ngày đã duyệt (sáng nghỉ không lương,
+	chiều làm remote). Upstream bỏ qua mọi ngày có đơn nghỉ — kể cả nửa ngày — nên đơn bị chặn và
+	nửa đi làm không có giấy tờ nào. Trùng đúng buổi đã nghỉ, hoặc đơn nghỉ cả ngày → vẫn bỏ qua."""
+	if not (cint(doc.get("half_day")) and getdate(doc.get("half_day_date")) == getdate(date)):
+		return False
+	leaves = frappe.get_all(
+		"Leave Application",
+		filters={
+			"employee": doc.employee,
+			"docstatus": 1,
+			"status": "Approved",
+			"from_date": ("<=", date),
+			"to_date": (">=", date),
+		},
+		fields=["half_day", "half_day_date", "custom_half_day_period"],
+	)
+	session = doc.get("custom_half_day_session") or MORNING
+	return bool(leaves) and all(
+		cint(la.half_day)
+		and getdate(la.half_day_date) == getdate(date)
+		and la.custom_half_day_period
+		and la.custom_half_day_period != session
+		for la in leaves
+	)
+
+
+def release_leave_day(att) -> None:
+	"""Huỷ Yêu cầu chấm công trên ngày ĐÃ có đơn nghỉ: ngày công là của đơn nghỉ, không huỷ theo —
+	chỉ gỡ liên kết và trả "Giờ làm" về giờ có mặt thật (phần làm theo đơn không còn)."""
+	from hrms.hr.working_hours import get_lunch_window_map, presence_hours
+
+	lunch_start, lunch_end = get_lunch_window_map().get(att.shift or "", (None, None))
+	frappe.db.set_value(
+		"Attendance",
+		att.name,
+		{
+			"attendance_request": None,
+			"working_hours": presence_hours(
+				att.in_time, att.out_time, att.attendance_date, lunch_start, lunch_end
+			),
+		},
+	)
+
+
 def other_half_status(att) -> str:
 	"""`half_day_status` của nửa KHÔNG thuộc đơn nửa ngày, suy từ ngày công đang có.
 
@@ -156,9 +201,22 @@ def set_attendance_request_code(doc, method=None):
 	for att in frappe.get_all(
 		"Attendance",
 		filters={"attendance_request": doc.name, "docstatus": ["<", 2]},
-		fields=["name", "employee", "attendance_date", "half_day_status", "shift", "in_time", "out_time"],
+		fields=[
+			"name",
+			"employee",
+			"attendance_date",
+			"half_day_status",
+			"shift",
+			"in_time",
+			"out_time",
+			"leave_type",
+		],
 	):
-		if is_half and getdate(att.attendance_date) == half_date:
+		if att.leave_type:
+			# Nửa kia là ĐƠN NGHỈ: mã / số công thuộc đơn nghỉ (token 1/2K, 1/2P — quy ước 2026-07-28),
+			# đơn này chỉ thêm giờ làm của buổi làm theo đơn.
+			vals = {}
+		elif is_half and getdate(att.attendance_date) == half_date:
 			# buổi còn lại: hiện diện đủ → X (đủ công); không → K không lương (chỉ làm nửa ngày). Khớp
 			# đúng cách payroll xử lý half_day_status (chỉ Absent mới trừ 0.5) nên bảng công ↔ lương nhất quán.
 			other = WORK_CODE if att.half_day_status == "Present" else UNPAID_CODE
