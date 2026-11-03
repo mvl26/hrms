@@ -22,7 +22,7 @@ class TestLeaveAttendanceCode(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.year = 2099
+		cls.year = 2099  # mọi ngày xin nghỉ dưới đây là thứ Hai-Sáu: ngày T7/CN bị chặn "là ngày nghỉ"
 		# Tự tạo nhân viên: tra "Active" bất kỳ chỉ chạy được trên site có sẵn dữ liệu; trên
 		# test_site của CI, class trước rollback xong là không còn ai và get_value trả None.
 		cls.emp = test_employee()
@@ -127,7 +127,7 @@ class TestLeaveAttendanceCode(PerTestRollback, FrappeTestCase):
 		self._alloc("Nghỉ phép năm", 12)
 		p = self._att(
 			self._leave_app(
-				"Nghỉ phép năm", f"{self.year}-04-05", f"{self.year}-04-05", reason="Nghỉ phép năm"
+				"Nghỉ phép năm", f"{self.year}-04-06", f"{self.year}-04-06", reason="Nghỉ phép năm"
 			)
 		)
 		self.assertEqual((p.status, p.leave_type), ("On Leave", "Nghỉ phép năm"))
@@ -139,9 +139,9 @@ class TestLeaveAttendanceCode(PerTestRollback, FrappeTestCase):
 
 		self._alloc("Nghỉ phép năm", 12)
 		self._alloc("Nghỉ thai sản", 180)
-		before = get_leave_balance_on(self.emp, "Nghỉ phép năm", f"{self.year}-05-02")
-		la = self._leave_app("Nghỉ thai sản", f"{self.year}-05-02", f"{self.year}-05-02")
-		after = get_leave_balance_on(self.emp, "Nghỉ phép năm", f"{self.year}-05-02")
+		before = get_leave_balance_on(self.emp, "Nghỉ phép năm", f"{self.year}-05-04")
+		la = self._leave_app("Nghỉ thai sản", f"{self.year}-05-04", f"{self.year}-05-04")
+		after = get_leave_balance_on(self.emp, "Nghỉ phép năm", f"{self.year}-05-04")
 		self.assertEqual(before, after)  # quỹ phép năm không đổi
 		self.assertEqual(self._att(la).custom_attendance_code, "TS")  # hiện mã thai sản
 
@@ -183,8 +183,8 @@ class TestLeaveAttendanceCode(PerTestRollback, FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			self._leave_app(
 				"Nghỉ phép năm",
-				f"{self.year}-07-05",
-				f"{self.year}-07-05",
+				f"{self.year}-07-06",
+				f"{self.year}-07-06",
 				half_day=1,
 			)
 

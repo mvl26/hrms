@@ -4,6 +4,7 @@ Runs via the rollback harness — writes are rolled back, never committed."""
 
 import json
 import os
+import unittest
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -475,6 +476,11 @@ class TestUnlockedLeaveFlows(PerTestRollback, FrappeTestCase):
 		self.assertEqual(att.leave_type, ANNUAL_LEAVE)
 		self.assertEqual(att.custom_attendance_code, "P")
 
+	@unittest.skip(
+		"Nghỉ bù HOÃN (quyết định 2026-08-30): Compensatory Leave Request bất khả dụng từ khi lịch tuần "
+		"tách khỏi Holiday List — xem docstring controller + docs/spec/work-schedule-integration-hardening.md §1. "
+		"Mở lại theo spec OT thì viết lại test này theo lịch tuần."
+	)
 	def test_compensatory_leave_request_submits_and_credits_nghi_bu(self):
 		from hrms.setup_vn_holiday import create_vn_holiday_list
 		from hrms.setup_vn_leave import create_leave_period

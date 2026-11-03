@@ -206,7 +206,7 @@ class TestSyncRespectsAttendanceRequestSource(PerTestRollback, FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.year = 2095
+		cls.year = 2095  # ngày dùng dưới đây là thứ Hai-Sáu: T7/CN phiếu On Duty không sinh ngày công
 		cls.emp = test_employee()
 		cls.company = frappe.db.get_value("Employee", cls.emp, "company")
 
@@ -244,7 +244,7 @@ class TestSyncRespectsAttendanceRequestSource(PerTestRollback, FrappeTestCase):
 		self.assertEqual(expected_code(row), "CT", "phiếu On Duty quy định CT — không được hoá X")
 
 	def test_preview_does_not_list_the_on_duty_day(self):
-		date = f"{self.year}-04-16"
+		date = f"{self.year}-04-18"
 		self.on_duty_day(date)
 
 		result = preview_sync({"month": 4, "year": self.year, "company": self.company})
@@ -259,7 +259,7 @@ class TestSyncRespectsAttendanceRequestSource(PerTestRollback, FrappeTestCase):
 		"""Mã bị xoá trên ngày có phiếu → điền lại theo PHIẾU (CT), không suy từ status (X)."""
 		from hrms.hr.attendance_code_sync import expected_code
 
-		row = self.on_duty_day(f"{self.year}-04-17")
+		row = self.on_duty_day(f"{self.year}-04-19")
 		frappe.db.set_value("Attendance", row.name, "custom_attendance_code", None, update_modified=False)
 		row.custom_attendance_code = None
 
