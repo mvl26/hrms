@@ -322,6 +322,12 @@ def mark_attendance_and_link_log(
 		try:
 			frappe.db.savepoint("attendance_creation")
 			if attendance := get_existing_half_day_attendance(employee, attendance_date):
+				if attendance.leave_type and attendance_status == "Absent":
+					# Nửa còn lại của ngày nghỉ theo đơn: ngưỡng VẮNG của ca đặt cho CẢ ngày (nửa buổi
+					# tối đa ~4h), nên chấm muộn / về sớm ở nửa này không được lật thành Absent — phiếu
+					# lương sẽ trừ 0,5 trong khi mã 1/2P vẫn ghi đủ công (HR chốt 2026-11-03: mã công là
+					# chuẩn). Thiếu giờ để bước soát công bắt.
+					attendance_status = "Present"
 				frappe.db.set_value(
 					"Attendance",
 					attendance.name,

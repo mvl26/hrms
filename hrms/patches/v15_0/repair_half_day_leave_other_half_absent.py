@@ -7,10 +7,14 @@ nửa còn lại của ngày nghỉ nửa buổi thành `half_day_status = Absen
 có, bị bật `skip_auto_attendance`, và ngày đó kẹt ở `working_hours = 0`. Kết quả: bảng công ghi
 1/2P đủ công, nhưng payroll (`get_half_absent_days`) trừ thêm 0,5 ngày.
 
+Lỗi gốc thứ hai (sửa 2026-11-03 ở `mark_attendance_and_link_log`): lượt chấm của nửa kia CÓ gộp vào,
+nhưng giờ làm dưới ngưỡng vắng của ca (ngưỡng cho cả ngày) nên nửa kia bị ghi Absent — vd 09:10 →
+13:23 = 2,8h. Cùng hệ quả: Công 1, phiếu lương 0,5.
+
 Quy ước HR 2026-07-28: nửa nghỉ theo đơn + nửa kia (dù có hay không có lượt chấm) = nửa kia đi làm.
 Vì vậy patch:
 
-1. đặt lại `half_day_status = Present` và `modify_half_day_status = 1` cho mọi ngày như vậy, để
+1. với ngày mang mã nửa-ngày-nghỉ (1/2P, 1/2K…), đặt lại `half_day_status = Present` và `modify_half_day_status = 1` cho mọi ngày như vậy, để
    lượt chấm về sau còn gộp được vào ngày nghỉ;
 2. gỡ `skip_auto_attendance` khỏi những lượt chấm chưa gắn Attendance của đúng ngày đó, để job hằng
    giờ kế tiếp gộp chúng vào (giờ vào/ra, giờ làm).
@@ -25,7 +29,19 @@ import frappe
 from frappe.query_builder.functions import Date
 
 
+def half_leave_codes() -> list[str]:
+	"""Mã MỘT nửa ngày nghỉ (1/2P, 1/2K…): theo định nghĩa nửa kia đi làm."""
+	return frappe.get_all(
+		"Attendance Code", {"maps_to_status": "Half Day", "leave_type": ("is", "set")}, pluck="name"
+	)
+
+
 def damaged_days() -> list:
+	"""Chỉ ngày MANG mã nửa-ngày-nghỉ (Công tính đủ nửa kia) mà payroll vẫn trừ nửa kia. Ngày ghi tách
+	nửa nghỉ / V là nửa vắng THẬT — đúng là Absent, không đụng."""
+	codes = half_leave_codes()
+	if not codes:
+		return []
 	return frappe.get_all(
 		"Attendance",
 		filters={
@@ -33,6 +49,7 @@ def damaged_days() -> list:
 			"status": "Half Day",
 			"half_day_status": "Absent",
 			"leave_type": ("is", "set"),
+			"custom_attendance_code": ("in", codes),
 		},
 		fields=["name", "employee", "attendance_date"],
 		order_by="attendance_date, employee",

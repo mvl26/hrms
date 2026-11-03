@@ -351,10 +351,14 @@ class Attendance(Document):
 			if m.maps_to_status == "Half Day":
 				# a single Half-Day code (1/2X/1/2P/1/2K): worked half is present, the other half is
 				# leave (if leave_type set) or unpaid absence (1/2X). Mirrors native Half-Day entry.
-				# CHỈ điền khi còn trống: bản ghi lưu lần đầu đã được suy ngược ra mã, nên lần lưu
-				# sau (submit) sẽ đi nhánh xuôi này lần nữa — đè lên đây sẽ xoá mất half_day_status
-				# mà người gọi cố ý đặt là "Absent", cộng oan 0,5 ngày vào payment_days.
-				self.half_day_status = self.half_day_status or "Present"
+				if self.leave_type:
+					# MÃ CÔNG LÀ CHUẨN (HR chốt 2026-11-03): 1/2P / 1/2K nghĩa là nửa nghỉ + nửa ĐI LÀM.
+					# Một "Absent" còn sót (từ 1/2X cũ, hoặc ô để nguyên khi nhập) làm ô Công ghi 1
+					# nhưng phiếu lương trừ 0,5. Nửa nghỉ + nửa vắng thật thì ghi tách (vd P/V).
+					self.half_day_status = "Present"
+				else:
+					# 1/2X: CHỈ điền khi còn trống — check_leave_record sẽ ép Absent (trừ 0,5) như native.
+					self.half_day_status = self.half_day_status or "Present"
 			else:
 				# non-Half-Day status: half_day_status is meaningless -> clear any stale value the
 				# threshold path (auto-attendance) may have pre-set before the code reclassified it.
@@ -362,13 +366,29 @@ class Attendance(Document):
 		else:
 			# one working half + one non-working half -> Half Day; the non-working half sets leave_type
 			self.status = "Half Day"
-			leave_half = m if m.maps_to_status not in ("Present", "Work From Home") else a
+			worked = ("Present", "Work From Home")
+			leave_half = next(
+				(h for h in (m, a) if h.maps_to_status == "On Leave"),
+				m if m.maps_to_status not in worked else a,
+			)
+			other_half = a if leave_half is m else m
 			self.leave_type = leave_half.leave_type
-			self.half_day_status = "Present" if leave_half.maps_to_status == "On Leave" else "Absent"
+			# Nửa kia đi làm thì Present; nửa kia vắng (P/V, K/V) thì Absent — payroll trừ đúng nửa đó.
+			# Trước đây mọi nửa nghỉ đều ra Present nên P/V được trả 1 ngày trong khi Công ghi 0,5.
+			self.half_day_status = (
+				"Present"
+				if leave_half.maps_to_status == "On Leave" and other_half.maps_to_status in worked
+				else "Absent"
+			)
 
 	def _derive_attendance_code_reverse(self):
 		if self.get("custom_attendance_code") or not self.status:
 			return
+		if self.status == "Half Day" and self.leave_type and self.half_day_status == "Absent":
+			# Nửa nghỉ + nửa kia VẮNG: mã 1/2P/1/2K nói nửa kia đi làm (Công 1 / 0,5) trong khi payroll
+			# trừ thêm 0,5 → hiện tách nửa nghỉ / V để Công khớp đúng số ngày payroll trả.
+			if self.set_leave_plus_absent_codes():
+				return
 		# ["is","not set"] reliably matches NULL/'' Link values (unlike ["in", ["", None]])
 		filters = {"maps_to_status": self.status, "leave_type": self.leave_type or ["is", "not set"]}
 		matches = frappe.get_all("Attendance Code", filters=filters, pluck="name")
@@ -381,6 +401,49 @@ class Attendance(Document):
 		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import paid_credit
 
 		self.custom_work_credit = paid_credit(c) if c else 0
+
+	def set_leave_plus_absent_codes(self) -> bool:
+		"""Đặt mã tách <mã nghỉ cả ngày> / V cho ngày Half Day + loại nghỉ + nửa kia Absent. Thuần
+		hiển thị: không đụng status / leave_type / half_day_status. Nửa nghỉ theo buổi của đơn nghỉ
+		(nếu biết), mặc định buổi sáng."""
+		from hrms.hr.report.monthly_attendance_report.monthly_attendance_report import paid_credit
+
+		leave = _pick_reverse_code(
+			"On Leave",
+			frappe.get_all(
+				"Attendance Code", {"maps_to_status": "On Leave", "leave_type": self.leave_type}, pluck="name"
+			),
+		)
+		absent = _pick_reverse_code(
+			"Absent",
+			frappe.get_all(
+				"Attendance Code", {"maps_to_status": "Absent", "leave_type": ["is", "not set"]}, pluck="name"
+			),
+		)
+		if not (leave and absent):
+			return False
+
+		period = (
+			frappe.db.get_value("Leave Application", self.leave_application, "custom_half_day_period")
+			if self.get("leave_application")
+			and frappe.get_meta("Leave Application").has_field("custom_half_day_period")
+			else None
+		)
+		self.custom_morning_code, self.custom_afternoon_code = (
+			(absent, leave) if period == "Chiều" else (leave, absent)
+		)
+		self.custom_work_credit = sum(
+			paid_credit(self._get_attendance_code(c)) * 0.5 for c in (leave, absent)
+		)
+		return True
+
+	def keep_half_leave_code_present(self):
+		"""Chốt chặn cuối của `validate`: ngày mang MỘT mã nửa-ngày-nghỉ (1/2P, 1/2K…) thì nửa kia đi
+		làm → Present. Bắt cả những đường đặt mã SAU cầu nối (`resync_code_after_leave_record` khi
+		check_leave_record vừa gắn đơn nghỉ vào một ngày chấm công nửa buổi đang Absent)."""
+		code = self._get_attendance_code(self.get("custom_attendance_code"))
+		if self.status == "Half Day" and code and code.maps_to_status == "Half Day" and code.leave_type:
+			self.half_day_status = "Present"
 
 	def validate(self):
 		from erpnext.controllers.status_updater import validate_status
@@ -397,6 +460,7 @@ class Attendance(Document):
 		self.restore_code_driven_half_day_status()
 		# ... và nếu chính check_leave_record vừa đổi status theo đơn nghỉ, suy lại mã công cho khớp.
 		self.resync_code_after_leave_record()
+		self.keep_half_leave_code_present()
 
 	def on_cancel(self):
 		self.unlink_attendance_from_checkins()
