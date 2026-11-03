@@ -169,6 +169,34 @@ class TestHalfDayLeaveOtherHalf(PerTestRollback, FrappeTestCase):
 		self.assertEqual(self.day().half_day_status, "Present")
 		self.assertEqual(self.payable_days(), 0.5, "chỉ trừ nửa không lương, không trừ thêm nửa kia")
 
+	def test_punches_synced_after_the_hourly_job_still_merge_into_the_leave_day(self):
+		"""Job hằng giờ chạy TRƯỚC khi lượt chấm buổi chiều về (máy chấm công đồng bộ trễ). Bản cũ ép
+		nửa kia Absent + tắt `modify_half_day_status` → lượt chấm về sau đâm vào bản ghi đã có, bị
+		`skip_auto_attendance`; ngày vẫn ghi 1/2P đủ công nhưng phiếu lương trừ 0,5 (2026-11-03)."""
+		from datetime import datetime, time
+
+		from hrms.hr.doctype.employee_checkin.test_employee_checkin import make_checkin
+
+		self.leave(ANNUAL, "Sáng")
+		self.hourly_job()
+		logs = [
+			make_checkin(self.emp, datetime.combine(self.date, time(13, 30))).name,
+			make_checkin(self.emp, datetime.combine(self.date, time(17, 35))).name,
+		]
+		self.hourly_job()
+
+		day = self.day()
+		for log in logs:
+			skip, attendance = frappe.db.get_value(
+				"Employee Checkin", log, ["skip_auto_attendance", "attendance"]
+			)
+			self.assertEqual(skip, 0, "lượt chấm nửa kia không được bị bỏ qua")
+			self.assertEqual(attendance, day.name)
+		self.assertEqual(day.half_day_status, "Present")
+		self.assertEqual(day.custom_attendance_code, "1/2P")
+		self.assertEqual(day.custom_work_credit, 1.0)
+		self.assertEqual(self.payable_days(), 1.0, "phiếu lương phải khớp số công của bảng công")
+
 	# --- 2. đơn nghỉ trước, Yêu cầu chấm công cho buổi còn lại sau ------------------------------
 	def test_remote_afternoon_after_unpaid_morning_is_accepted(self):
 		self.leave(UNPAID, "Sáng")
@@ -237,3 +265,52 @@ class TestHalfDayLeaveOtherHalf(PerTestRollback, FrappeTestCase):
 		self.assertIsNotNone(day)
 		self.assertEqual(day.leave_type, UNPAID)
 		self.assertEqual(self.payable_days(), 0.5)
+
+	# --- 4. patch sửa dữ liệu đã hỏng bởi bản job cũ -------------------------------------------
+	def damage_like_the_old_hourly_job(self):
+		"""Trạng thái bản job cũ để lại: nửa kia Absent, cờ gộp tắt, lượt chấm về sau bị skip."""
+		from datetime import datetime, time
+
+		from hrms.hr.doctype.employee_checkin.test_employee_checkin import make_checkin
+
+		self.leave(ANNUAL, "Chiều")
+		frappe.db.set_value(
+			"Attendance", self.day().name, {"half_day_status": "Absent", "modify_half_day_status": 0}
+		)
+		logs = [
+			make_checkin(self.emp, datetime.combine(self.date, time(9, 10))).name,
+			make_checkin(self.emp, datetime.combine(self.date, time(13, 24))).name,
+		]
+		self.hourly_job()
+		for log in logs:
+			self.assertEqual(frappe.db.get_value("Employee Checkin", log, "skip_auto_attendance"), 1)
+		self.assertEqual(self.payable_days(), 0.5, "tiền đề: bản ghi hỏng làm phiếu lương trừ 0,5")
+		return logs
+
+	def test_patch_repairs_the_other_half_and_lets_the_punches_merge(self):
+		from hrms.patches.v15_0.repair_half_day_leave_other_half_absent import execute
+
+		logs = self.damage_like_the_old_hourly_job()
+		execute()
+		self.assertEqual(self.day().half_day_status, "Present")
+		self.assertEqual(self.payable_days(), 1.0, "nửa phép có lương + nửa kia đi làm = đủ 1 ngày")
+
+		self.hourly_job()
+		day = self.day()
+		for log in logs:
+			self.assertEqual(frappe.db.get_value("Employee Checkin", log, "attendance"), day.name)
+		self.assertGreater(day.working_hours, 0)
+		self.assertEqual(day.half_day_status, "Present")
+		self.assertEqual(day.custom_attendance_code, "1/2P")
+		self.assertEqual(day.custom_work_credit, 1.0)
+		self.assertEqual(self.payable_days(), 1.0)
+
+	def test_patch_leaves_locked_periods_alone(self):
+		from unittest.mock import patch
+
+		from hrms.patches.v15_0.repair_half_day_leave_other_half_absent import execute
+
+		self.damage_like_the_old_hourly_job()
+		with patch("hrms.hr.period_lock.is_period_locked", return_value=True):
+			execute()
+		self.assertEqual(self.day().half_day_status, "Absent", "kỳ đã chốt: không sửa lén số đã ký")
