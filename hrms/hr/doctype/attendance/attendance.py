@@ -384,7 +384,14 @@ class Attendance(Document):
 	def _derive_attendance_code_reverse(self):
 		if self.get("custom_attendance_code") or not self.status:
 			return
-		if self.status == "Half Day" and self.leave_type and self.half_day_status == "Absent":
+		if (
+			self.status == "Half Day"
+			and self.leave_type
+			and self.half_day_status == "Absent"
+			# có đơn nghỉ nửa ngày đã duyệt thì nửa kia là đi làm (keep_half_leave_code_present lật lại
+			# Present) → mã đúng là 1/2P, không phải tách P/V
+			and not self.backed_by_half_day_leave()
+		):
 			# Nửa nghỉ + nửa kia VẮNG: mã 1/2P/1/2K nói nửa kia đi làm (Công 1 / 0,5) trong khi payroll
 			# trừ thêm 0,5 → hiện tách nửa nghỉ / V để Công khớp đúng số ngày payroll trả.
 			if self.set_leave_plus_absent_codes():
@@ -437,12 +444,40 @@ class Attendance(Document):
 		)
 		return True
 
+	def backed_by_half_day_leave(self) -> str | None:
+		"""Đơn nghỉ NỬA NGÀY đã duyệt rơi đúng ngày này (kể cả khi người nhập chưa chọn đơn — chính
+		check_leave_record sẽ gắn nó vào sau cầu nối)."""
+		if self.status != "Half Day" or not (self.employee and self.attendance_date):
+			return None
+		return frappe.db.get_value(
+			"Leave Application",
+			{
+				"employee": self.employee,
+				"half_day": 1,
+				"half_day_date": getdate(self.attendance_date),
+				"status": "Approved",
+				"docstatus": 1,
+			},
+			"name",
+		)
+
 	def keep_half_leave_code_present(self):
-		"""Chốt chặn cuối của `validate`: ngày mang MỘT mã nửa-ngày-nghỉ (1/2P, 1/2K…) thì nửa kia đi
-		làm → Present. Bắt cả những đường đặt mã SAU cầu nối (`resync_code_after_leave_record` khi
-		check_leave_record vừa gắn đơn nghỉ vào một ngày chấm công nửa buổi đang Absent)."""
+		"""Chốt chặn cuối của `validate` — nửa kia của ngày nghỉ nửa buổi là ĐI LÀM (Present) khi:
+
+		- ngày mang MỘT mã nửa-ngày-nghỉ (1/2P, 1/2K…): mã công là chuẩn (HR 2026-11-03). Bắt cả đường
+		  đặt mã SAU cầu nối (`resync_code_after_leave_record`);
+		- hoặc ngày có đơn nghỉ nửa ngày đã duyệt và không ai ghi tách nửa kia (vd P/V): HR 2026-07-28 —
+		  nửa nghỉ theo đơn + nửa kia = đi làm. Bắt bản ghi tạo TAY chọn "Absent" ở ô nửa kia
+		  (HR-ATT-2026-04029: Công 1, phiếu lương trừ 0,5)."""
+		if self.status != "Half Day" or not self.leave_type:
+			return
 		code = self._get_attendance_code(self.get("custom_attendance_code"))
-		if self.status == "Half Day" and code and code.maps_to_status == "Half Day" and code.leave_type:
+		if code and code.maps_to_status == "Half Day" and code.leave_type:
+			self.half_day_status = "Present"
+			return
+		morning, afternoon = self.get("custom_morning_code"), self.get("custom_afternoon_code")
+		split_by_hand = morning and afternoon and morning != afternoon
+		if not split_by_hand and self.backed_by_half_day_leave():
 			self.half_day_status = "Present"
 
 	def validate(self):

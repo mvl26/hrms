@@ -384,3 +384,32 @@ class TestHalfDayLeaveOtherHalf(PerTestRollback, FrappeTestCase):
 		self.assertEqual(day.custom_attendance_code, "1/2P")
 		self.assertEqual(self.payable_days(), day.custom_work_credit)
 		self.assertEqual(self.payable_days(), 1.0)
+
+	def test_hand_made_record_choosing_absent_on_an_approved_half_day_leave_pays_in_full(self):
+		"""HR-ATT-2026-04029 (Chu Văn Hiếu 16/10/2026): HR tạo TAY Attendance, chọn Half Day + Nghỉ phép
+		năm + Status for Other Half = Absent, KHÔNG nhập mã công, trên ngày có đơn nghỉ nửa ngày đã duyệt
+		và có giờ vào/ra. Ngày có đơn nghỉ nửa buổi thì nửa kia đi làm (HR 2026-07-28) — người nhập chọn
+		gì ở ô nửa kia cũng không được trừ 0,5."""
+		self.leave(ANNUAL, "Chiều")
+		frappe.get_doc("Attendance", self.day().name).cancel()
+		hand = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": self.date,
+				"company": self.company,
+				"status": "Half Day",
+				"leave_type": ANNUAL,
+				"half_day_status": "Absent",
+				"in_time": f"{self.date} 09:10:48",
+				"out_time": f"{self.date} 13:23:58",
+				"working_hours": 2.8,
+			}
+		)
+		hand.insert()
+		hand.submit()
+		day = self.day()
+		self.assertEqual(day.half_day_status, "Present")
+		self.assertEqual(day.custom_attendance_code, "1/2P")
+		self.assertEqual(self.payable_days(), day.custom_work_credit)
+		self.assertEqual(self.payable_days(), 1.0)
