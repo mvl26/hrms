@@ -891,20 +891,18 @@ class TestLeaveApplication(FrappeTestCase):
 		create_carry_forwarded_allocation(employee, leave_type)
 
 		leave_application = frappe.get_doc(
-			dict(
-				doctype="Leave Application",
-				employee=employee.name,
-				leave_type=leave_type.name,
-				from_date=add_days(nowdate(), -3),
-				to_date=add_days(nowdate(), 7),
-				half_day=1,
-				half_day_date=add_days(nowdate(), -3),
-				custom_half_day_period="Sáng",  # Miyano bắt chọn buổi
-				description="_Test Reason",
-				company="_Test Company",
-				docstatus=1,
-				status="Approved",
-			)
+			doctype="Leave Application",
+			employee=employee.name,
+			leave_type=leave_type.name,
+			from_date=add_days(nowdate(), -3),
+			to_date=add_days(nowdate(), 7),
+			half_day=1,
+			half_day_date=add_days(nowdate(), -3),
+			custom_half_day_period="Sáng",  # Miyano bắt chọn buổi
+			description="_Test Reason",
+			company="_Test Company",
+			docstatus=1,
+			status="Approved",
 		)
 		leave_application.submit()
 

@@ -2431,20 +2431,18 @@ def make_leave_application(
 	create_user("test@example.com")
 
 	leave_application = frappe.get_doc(
-		dict(
-			doctype="Leave Application",
-			employee=employee,
-			leave_type=leave_type,
-			from_date=from_date,
-			to_date=to_date,
-			half_day=half_day,
-			half_day_date=half_day_date,
-			# Miyano bắt chọn buổi cho đơn nửa ngày (`validate_half_day_period`)
-			custom_half_day_period=half_day_period if half_day else None,
-			company=company or erpnext.get_default_company() or "_Test Company",
-			status="Approved",
-			leave_approver="test@example.com",
-		)
+		doctype="Leave Application",
+		employee=employee,
+		leave_type=leave_type,
+		from_date=from_date,
+		to_date=to_date,
+		half_day=half_day,
+		half_day_date=half_day_date,
+		# Miyano bắt chọn buổi cho đơn nửa ngày (`validate_half_day_period`)
+		custom_half_day_period=half_day_period if half_day else None,
+		company=company or erpnext.get_default_company() or "_Test Company",
+		status="Approved",
+		leave_approver="test@example.com",
 	).insert()
 
 	if submit:
