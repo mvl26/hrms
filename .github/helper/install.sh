@@ -20,6 +20,11 @@ bench init --skip-assets --frappe-path ~/frappe --python "$(which python)" frapp
 mkdir ~/frappe-bench/sites/test_site
 cp -r "${GITHUB_WORKSPACE}/.github/helper/site_config.json" ~/frappe-bench/sites/test_site/
 
+# mariadb-client moi tren runner bat SSL mac dinh, con service mariadb:10.6 cua CI khong co SSL
+# -> "ERROR 2026: SSL is required, but the server does not support it". Tat SSL cho MOI client
+# (ke ca lenh mariadb ma `bench reinstall` goi de nap schema), khong chi cac lenh ben duoi.
+printf '[client]\nskip-ssl\n' >> ~/.my.cnf
+
 mariadb --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL character_set_server = 'utf8mb4'"
 mariadb --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL collation_server = 'utf8mb4_unicode_ci'"
 
