@@ -4,7 +4,11 @@ from frappe.model.document import Document
 from frappe.utils import add_days, date_diff, format_date, get_link_to_form, getdate
 
 import hrms
-from hrms.hr.doctype.attendance_request.attendance_request_miyano import other_half_status
+from hrms.hr.doctype.attendance_request.attendance_request_miyano import (
+	other_half_status,
+	release_leave_day,
+	works_other_half_of_leave,
+)
 from hrms.hr.utils import validate_active_employee, validate_dates
 from hrms.hr.work_schedule import is_working_day
 
@@ -85,12 +89,17 @@ class AttendanceRequest(Document):
 
 	def on_cancel(self):
 		attendance_list = frappe.get_all(
-			"Attendance", {"employee": self.employee, "attendance_request": self.name, "docstatus": 1}
+			"Attendance",
+			{"employee": self.employee, "attendance_request": self.name, "docstatus": 1},
+			["name", "leave_type", "shift", "in_time", "out_time", "attendance_date"],
 		)
-		if attendance_list:
-			for attendance in attendance_list:
-				attendance_obj = frappe.get_doc("Attendance", attendance["name"])
-				attendance_obj.cancel()
+		for attendance in attendance_list:
+			if attendance.leave_type:
+				# ngày của đơn nghỉ nửa ngày — đơn nghỉ vẫn còn hiệu lực
+				release_leave_day(attendance)
+				continue
+			attendance_obj = frappe.get_doc("Attendance", attendance["name"])
+			attendance_obj.cancel()
 
 	def create_attendance_records(self):
 		request_days = date_diff(self.to_date, self.from_date) + 1
@@ -117,7 +126,10 @@ class AttendanceRequest(Document):
 			# Nửa còn lại của ngày nửa buổi: đã có lượt chấm công thì người đó CÓ làm nửa kia (sáng ra
 			# ngoài gặp khách, chiều chấm 13:30-17:30) → Present, payroll không trừ. Upstream luôn ép
 			# Absent, nên buổi chiều ngồi ở công ty bị ghi K và mất nửa ngày lương.
-			other_half = other_half_status(doc) if status == "Half Day" else None
+			# Ngày có đơn nghỉ nửa ngày: đơn nghỉ phủ một nửa, đơn này phủ nửa kia → không nửa nào vắng.
+			other_half = None
+			if status == "Half Day":
+				other_half = "Present" if doc.leave_type else other_half_status(doc)
 
 			if old_status != status:
 				doc.db_set({"status": status, "attendance_request": self.name})
@@ -174,7 +186,7 @@ class AttendanceRequest(Document):
 			return False
 
 		# Check if employee is on leave
-		if self.has_leave_record(attendance_date):
+		if self.has_leave_record(attendance_date) and not works_other_half_of_leave(self, attendance_date):
 			frappe.msgprint(
 				_("Attendance not submitted for {0} as {1} is on leave.").format(
 					frappe.bold(format_date(attendance_date)), frappe.bold(self.employee)
@@ -255,7 +267,9 @@ class AttendanceRequest(Document):
 
 			if not self.include_holidays and not is_working_day(self.employee, attendance_date):
 				attendance_warnings.append({"date": attendance_date, "reason": "Holiday", "action": "Skip"})
-			elif self.has_leave_record(attendance_date):
+			elif self.has_leave_record(attendance_date) and not works_other_half_of_leave(
+				self, attendance_date
+			):
 				attendance_warnings.append({"date": attendance_date, "reason": "On Leave", "action": "Skip"})
 			elif self.status_unchanged(attendance_date):
 				attendance_warnings.append(
