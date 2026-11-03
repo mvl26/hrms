@@ -318,6 +318,7 @@ class TestLeaveApplication(FrappeTestCase):
 		application.from_date = "2023-01-02"
 		application.to_date = "2023-01-02"
 		application.half_day = 1
+		application.custom_half_day_period = "Sáng"  # Miyano bắt chọn buổi
 		application.half_day_date = "2023-01-02"
 		application.submit()
 
@@ -464,6 +465,7 @@ class TestLeaveApplication(FrappeTestCase):
 		# leave from 1-5, half day on 3rd
 		application = self.get_application(_test_records[0])
 		application.half_day = 1
+		application.custom_half_day_period = "Sáng"  # Miyano bắt chọn buổi
 		application.half_day_date = "2013-01-03"
 		application.insert()
 
@@ -472,6 +474,7 @@ class TestLeaveApplication(FrappeTestCase):
 		application.from_date = "2013-01-03"
 		application.to_date = "2013-01-03"
 		application.half_day = 1
+		application.custom_half_day_period = "Chiều"  # nửa còn lại của đơn trên
 		application.half_day_date = "2013-01-03"
 		application.insert()
 
@@ -480,6 +483,7 @@ class TestLeaveApplication(FrappeTestCase):
 		application.from_date = "2013-01-03"
 		application.to_date = "2013-01-03"
 		application.half_day = 1
+		application.custom_half_day_period = "Sáng"  # Miyano bắt chọn buổi
 		application.half_day_date = "2013-01-03"
 
 		self.assertRaises(OverlapError, application.insert)
@@ -503,6 +507,7 @@ class TestLeaveApplication(FrappeTestCase):
 		# Apply again for a half day leave on 1st
 		application = self.get_application(_test_records[0])
 		application.half_day = 1
+		application.custom_half_day_period = "Sáng"  # Miyano bắt chọn buổi
 		application.half_day_date = application.from_date
 
 		self.assertRaises(OverlapError, application.insert)
@@ -522,6 +527,7 @@ class TestLeaveApplication(FrappeTestCase):
 		# leave from 1-5, half day on 5th
 		application = self.get_application(_test_records[0])
 		application.half_day = 1
+		application.custom_half_day_period = "Sáng"  # Miyano bắt chọn buổi
 		application.half_day_date = "2013-01-05"
 		application.insert()
 
@@ -530,6 +536,7 @@ class TestLeaveApplication(FrappeTestCase):
 		application.from_date = "2013-01-04"
 		application.to_date = "2013-01-07"
 		application.half_day = 1
+		application.custom_half_day_period = "Sáng"  # Miyano bắt chọn buổi
 		application.half_day_date = "2013-01-05"
 
 		self.assertRaises(OverlapError, application.insert)
@@ -539,6 +546,7 @@ class TestLeaveApplication(FrappeTestCase):
 		application.from_date = "2013-01-05"
 		application.to_date = "2013-01-07"
 		application.half_day = 1
+		application.custom_half_day_period = "Sáng"  # Miyano bắt chọn buổi
 		application.half_day_date = "2013-01-05"
 		application.insert()
 
@@ -891,6 +899,7 @@ class TestLeaveApplication(FrappeTestCase):
 				to_date=add_days(nowdate(), 7),
 				half_day=1,
 				half_day_date=add_days(nowdate(), -3),
+				custom_half_day_period="Sáng",  # Miyano bắt chọn buổi
 				description="_Test Reason",
 				company="_Test Company",
 				docstatus=1,
@@ -1383,6 +1392,7 @@ class TestLeaveApplication(FrappeTestCase):
 			submit=True,
 			half_day=1,
 			half_day_date=nowdate(),
+			half_day_period="Chiều",  # nửa còn lại của đơn thứ nhất (buổi Sáng)
 		)
 		half_day_status_after_second_application = frappe.get_value(
 			"Attendance",
