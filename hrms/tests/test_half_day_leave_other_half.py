@@ -45,7 +45,11 @@ class TestHalfDayLeaveOtherHalf(PerTestRollback, FrappeTestCase):
 		self.shift.save()
 
 		self.company = default_company()
-		self.emp = make_employee("vn_half_leave_other@codes.com", company=self.company)
+		# Mỗi test một nhân viên: job chấm công tự `commit`, nên trên site CI (không harness) phân ca
+		# và ngày công của test trước còn lại → test sau vướng MultipleShiftError / đọc nhầm ngày.
+		self.emp = make_employee(
+			f"vn_half_leave_other_{frappe.generate_hash(length=8)}@codes.com", company=self.company
+		)
 		if locking_sheet(self.emp, self.date):
 			self.skipTest(f"kỳ chứa {self.date} đã chốt — auto-attendance không chấm nữa")
 		work_every_day(self.emp, shift=self.shift.name)
@@ -314,3 +318,69 @@ class TestHalfDayLeaveOtherHalf(PerTestRollback, FrappeTestCase):
 		with patch("hrms.hr.period_lock.is_period_locked", return_value=True):
 			execute()
 		self.assertEqual(self.day().half_day_status, "Absent", "kỳ đã chốt: không sửa lén số đã ký")
+
+	# --- 5. mã công là chuẩn: Công trên bản ghi = số ngày phiếu lương trả (HR chốt 2026-11-03) ------
+	def test_review_correction_to_a_half_leave_code_pays_what_the_code_says(self):
+		from hrms.hr.attendance_review import apply_correction
+
+		short = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": self.date,
+				"company": self.company,
+				"custom_attendance_code": "1/2X",
+			}
+		)
+		short.insert()
+		short.submit()
+		self.assertEqual(self.day().half_day_status, "Absent", "tiền đề: 1/2X trừ nửa kia")
+
+		apply_correction(short.name, "1/2P", "nửa ngày nghỉ phép, quên làm đơn")
+		day = self.day()
+		self.assertEqual(day.half_day_status, "Present")
+		self.assertEqual(self.payable_days(), day.custom_work_credit)
+		self.assertEqual(self.payable_days(), 1.0)
+
+	def test_half_leave_code_entered_by_hand_over_an_absent_half_pays_in_full(self):
+		self.leave(ANNUAL, "Sáng")
+		frappe.get_doc("Attendance", self.day().name).cancel()
+		hand = frappe.get_doc(
+			{
+				"doctype": "Attendance",
+				"employee": self.emp,
+				"attendance_date": self.date,
+				"company": self.company,
+				"custom_attendance_code": "1/2P",
+				"half_day_status": "Absent",
+			}
+		)
+		hand.insert()
+		hand.submit()
+		day = self.day()
+		self.assertEqual(day.half_day_status, "Present")
+		self.assertEqual(self.payable_days(), day.custom_work_credit)
+		self.assertEqual(self.payable_days(), 1.0)
+
+	def test_short_hours_on_the_worked_half_do_not_dock_a_half_leave_day(self):
+		"""Chu Văn Hiếu 16/10/2026: chiều nghỉ phép, sáng chấm 09:10:48 → 13:23:58 (2,8h sau khi trừ
+		nghỉ trưa). Giờ làm dưới ngưỡng VẮNG của ca (ngưỡng cho CẢ ngày) → lượt gộp ghi nửa kia
+		Absent → phiếu lương 0,5 trong khi Công 1. Đi muộn / thiếu giờ để bước soát công bắt, không
+		được lặng lẽ trừ nửa ngày lương."""
+		from datetime import datetime, time
+
+		from hrms.hr.doctype.employee_checkin.test_employee_checkin import make_checkin
+
+		self.shift.working_hours_threshold_for_absent = 4
+		self.shift.save()
+		self.leave(ANNUAL, "Chiều")
+		make_checkin(self.emp, datetime.combine(self.date, time(9, 10, 48)))
+		make_checkin(self.emp, datetime.combine(self.date, time(12, 0)))
+		self.hourly_job()
+
+		day = self.day()
+		self.assertGreater(day.working_hours, 0, "lượt chấm đã gộp vào ngày nghỉ")
+		self.assertEqual(day.half_day_status, "Present")
+		self.assertEqual(day.custom_attendance_code, "1/2P")
+		self.assertEqual(self.payable_days(), day.custom_work_credit)
+		self.assertEqual(self.payable_days(), 1.0)

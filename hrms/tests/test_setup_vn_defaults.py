@@ -58,7 +58,8 @@ class TestSetupVnDefaults(PerTestRollback, FrappeTestCase):
 		"""Loại nghỉ chưa gắn mã phải lộ ra lúc migrate, không đợi tới lúc in bảng công."""
 		from hrms.setup_vn_defaults import leave_types_without_code
 
-		self.assertEqual(leave_types_without_code(), [], "tiền đề: site đang sạch")
+		# Không đòi cả site sạch: site CI có sẵn loại nghỉ upstream (Casual Leave…) chưa gắn mã.
+		self.assertNotIn("Nghỉ thử chưa gắn mã", leave_types_without_code())
 
 		frappe.get_doc(
 			{"doctype": "Leave Type", "leave_type_name": "Nghỉ thử chưa gắn mã", "is_lwp": 0}

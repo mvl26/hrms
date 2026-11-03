@@ -11,7 +11,7 @@ việc trả sai lương cho cả công ty.
 """
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests.utils import FrappeTestCase, change_settings
 from frappe.utils import flt, getdate
 
 from hrms.tests.isolation import PerTestRollback
@@ -28,6 +28,9 @@ JULY_SCHEDULED_DAYS = 23
 
 class TestWorkingDaysInvariance(PerTestRollback, FrappeTestCase):
 	def setUp(self):
+		# Site thật tính lương theo CHẤM CÔNG; site CI để mặc định "Leave" → ngày Absent / Half Day
+		# không bị trừ và các ca biên đọc nhầm thành "không lệch".
+		self.enterContext(change_settings("Payroll Settings", {"payroll_based_on": "Attendance"}))
 		self.company = default_company()
 		self.employee = test_employee("wd_invariance@codes.com")
 		self.shift = "_Test Lich Tuan Invariance"

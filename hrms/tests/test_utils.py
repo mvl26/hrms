@@ -42,6 +42,28 @@ def set_defaults():
 
 	make_holiday_list("Salary Slip Test Holiday List")
 	frappe.db.set_value("Company", "_Test Company", "default_holiday_list", "Salary Slip Test Holiday List")
+	set_work_calendar_defaults()
+
+
+def set_work_calendar_defaults():
+	"""Lịch tuần mặc định T2-T6 cho site test, giống site thật.
+
+	Từ khi lịch tuần tách khỏi Holiday List, mọi phép tính lịch (chấm công, mẫu số lương, đơn nghỉ)
+	hỏi `Work Calendar Settings` khi nhân viên chưa phân ca. Site thật đã khai; site CI dựng từ đầu
+	thì trống, nên hàng trăm test nổ `WorkScheduleNotConfigured` / thiếu `company`. Chỉ điền ô còn
+	trống: đã có thì giữ nguyên."""
+	settings = frappe.get_single("Work Calendar Settings")
+	if not settings.company:
+		settings.company = (
+			"_Test Company"
+			if frappe.db.exists("Company", "_Test Company")
+			else frappe.db.get_value("Company", {}, "name")
+		)
+	if not settings.default_working_days:
+		for day in ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"):
+			settings.append("default_working_days", {"day": day})
+	settings.flags.ignore_permissions = True
+	settings.save()
 
 
 def get_first_sunday(holiday_list="Salary Slip Test Holiday List", for_date=None, find_after_for_date=False):

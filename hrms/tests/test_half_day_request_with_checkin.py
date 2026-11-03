@@ -47,7 +47,11 @@ class TestHalfDayRequestWithCheckin(PerTestRollback, FrappeTestCase):
 		self.shift.save()
 
 		self.company = default_company()
-		self.emp = make_employee("vn_half_outside@codes.com", company=self.company)
+		# Mỗi test một nhân viên: job chấm công tự `commit`, nên trên site CI (không harness) phân ca
+		# và ngày công của test trước còn lại → test sau vướng MultipleShiftError / đọc nhầm ngày.
+		self.emp = make_employee(
+			f"vn_half_outside_{frappe.generate_hash(length=8)}@codes.com", company=self.company
+		)
 		if locking_sheet(self.emp, self.date):
 			self.skipTest(f"kỳ chứa {self.date} đã chốt — auto-attendance không chấm nữa")
 		work_every_day(self.emp, shift=self.shift.name)

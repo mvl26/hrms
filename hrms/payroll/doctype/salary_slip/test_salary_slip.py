@@ -2426,6 +2426,7 @@ def make_leave_application(
 	half_day=False,
 	half_day_date=None,
 	submit=True,
+	half_day_period="Sáng",
 ):
 	create_user("test@example.com")
 
@@ -2438,6 +2439,8 @@ def make_leave_application(
 			to_date=to_date,
 			half_day=half_day,
 			half_day_date=half_day_date,
+			# Miyano bắt chọn buổi cho đơn nửa ngày (`validate_half_day_period`)
+			custom_half_day_period=half_day_period if half_day else None,
 			company=company or erpnext.get_default_company() or "_Test Company",
 			status="Approved",
 			leave_approver="test@example.com",

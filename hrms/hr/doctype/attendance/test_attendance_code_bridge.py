@@ -132,6 +132,35 @@ class TestAttendanceCodeBridge(PerTestRollback, FrappeTestCase):
 		self.assertEqual(d.custom_attendance_code, "1/2P")
 		self.assertEqual(d.custom_work_credit, 1.0)
 
+	# --- mã công là chuẩn: Công trên bản ghi phải bằng đúng số ngày payroll trả (2026-11-03) -------
+	def test_half_leave_code_overrides_a_stale_absent_other_half(self):
+		# 1/2P = nửa phép + nửa đi làm. "Absent" còn sót (từ 1/2X cũ, hoặc người nhập để nguyên ô)
+		# làm phiếu lương trừ 0,5 trong khi ô Công ghi 1.
+		d = self._bridge(custom_attendance_code="1/2P", half_day_status="Absent")
+		self.assertEqual(d.half_day_status, "Present")
+		self.assertEqual(d.custom_work_credit, 1.0)
+
+	def test_unpaid_half_leave_code_overrides_a_stale_absent_other_half(self):
+		d = self._bridge(custom_attendance_code="1/2K", half_day_status="Absent")
+		self.assertEqual(d.half_day_status, "Present", "nửa K đã trừ qua LWP; Absent là trừ hai lần")
+		self.assertEqual(d.custom_work_credit, 0.5)
+
+	def test_leave_half_plus_absent_half_docks_the_absent_half(self):
+		# sáng P + chiều V: nửa phép có lương, nửa kia vắng → trả 0,5. Trước đây ra Present (trả 1).
+		d = self._bridge(custom_morning_code="P", custom_afternoon_code="V")
+		self.assertEqual(d.status, "Half Day")
+		self.assertEqual(d.leave_type, "Nghỉ phép năm")
+		self.assertEqual(d.half_day_status, "Absent")
+		self.assertEqual(d.custom_work_credit, 0.5)
+
+	def test_reverse_half_leave_with_absent_other_half_shows_the_absent_half(self):
+		# Bản ghi native "nửa phép + nửa kia vắng" không được hiện 1/2P (= 1 công) khi payroll trả 0,5.
+		d = self._bridge(status="Half Day", leave_type="Nghỉ phép năm", half_day_status="Absent")
+		self.assertFalse(d.custom_attendance_code)
+		self.assertEqual({d.custom_morning_code, d.custom_afternoon_code}, {"P", "V"})
+		self.assertEqual(d.half_day_status, "Absent", "hiển thị không được đổi lương")
+		self.assertEqual(d.custom_work_credit, 0.5)
+
 	def test_reverse_derives_code_from_native_status(self):
 		# a record with a native status but no code (auto-attendance / leave) -> derive display code
 		d = self._bridge(status="Present")
@@ -253,6 +282,18 @@ class TestHalfDayLeaveCodeFullValidation(PerTestRollback, FrappeTestCase):
 		self.assertEqual(d.status, "Half Day")
 		self.assertEqual(d.leave_type, "Nghỉ phép năm")
 		self.assertEqual(d.half_day_status, "Present")
+
+	def test_native_half_leave_with_absent_other_half_keeps_payroll_and_shows_half(self):
+		# Đường của upstream (mark_attendance Half Day + leave_type + Absent): lương giữ nguyên
+		# (trừ nửa vắng) và Công hiển thị đúng 0,5 thay cho 1/2P = 1.
+		d = self._insert(status="Half Day", leave_type="Nghỉ phép năm", half_day_status="Absent")
+		self.assertEqual(d.half_day_status, "Absent")
+		self.assertEqual(d.custom_work_credit, 0.5)
+
+	def test_half_leave_code_entered_over_absent_stays_present_after_submit(self):
+		d = self._insert(custom_attendance_code="1/2P", half_day_status="Absent")
+		self.assertEqual(d.half_day_status, "Present")
+		self.assertEqual(d.custom_work_credit, 1.0)
 
 	def test_plain_half_day_code_without_leave_still_absent(self):
 		# NN: worked half + unexcused (no leave_type) half -> must stay Absent (docks 0.5, matches native).
