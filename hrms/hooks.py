@@ -317,6 +317,7 @@ fixtures = [
 					"Attendance-custom_work_credit",
 					"Attendance-custom_lunch",
 					"Attendance-custom_lunch_override",
+					"Attendance-custom_lunch_kept",
 					"Leave Type-custom_attendance_code",
 					"Leave Application-custom_attendance_code",
 					"Leave Application-custom_leave_reason",

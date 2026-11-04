@@ -11,26 +11,29 @@ LOẠI lương suy TỪ cấu trúc của slip. Slip khác đi đường Frappe 
 import frappe
 from frappe.utils import add_days, cint, flt, getdate, rounded
 
-from hrms.vn_payroll.lunch import lunch_days_for_period
-from hrms.vn_payroll.mvl import MVLInput, compute_mvl
+from hrms.vn_payroll.lunch import lunch_days_for_period, lunch_kept_days_for_period
+from hrms.vn_payroll.mvl import TAX_WITHHELD_TYPES, MVLInput, compute_mvl
 from hrms.vn_payroll.settings import config_from_settings
 from hrms.vn_payroll.setup_mvl import HR_ENTERED_COMPONENTS, REAL_EARNINGS, salary_type_of
 
 UNION_FEE_COMPONENT = "KPCĐ - Công ty"
 
+TAX_COMPONENT = "Thuế TNCN (nộp thay)"
 # Khoản THẬT cộng vào net (NET). GROSS thêm thuế + BHXH NLĐ vào deduction.
-GROSS_DEDUCTIONS = ("Thuế TNCN (nộp thay)", "BHXH - NLĐ (nộp thay)")
+GROSS_DEDUCTIONS = (TAX_COMPONENT, "BHXH - NLĐ (nộp thay)")
 
 
 def component_values(inp, cfg, r) -> dict:
 	"""Số tiền cho MỖI component MVL (mọi cột tiền của bảng lương)."""
+	# Thử việc tự chịu thuế (TAX_WITHHELD_TYPES) → thuế không phải chi phí công ty, ra khỏi gương
+	tax_on_behalf = 0.0 if inp.salary_type in TAX_WITHHELD_TYPES else r.Q
 	return {
 		"Lương ngày công": inp.base,  # F
 		"Lương đóng BHXH": inp.bhxh_salary,  # G
 		"Lương theo công": r.I,
 		"Phụ cấp ăn trưa": r.J,
 		# gương chi phí (hạch toán): thuế + BHXH (NLĐ+DN) + KPCĐ công ty nộp/chịu → Nợ 6421; KHÔNG cộng net
-		"Chi phí thuế & BHXH DN nộp thay": r.Q + r.S + r.R + r.X,
+		"Chi phí thuế & BHXH DN nộp thay": tax_on_behalf + r.S + r.R + r.X,
 		"Tổng thu nhập": r.K,
 		"Thu nhập quy đổi": r.O,
 		"Thu nhập tính thuế": r.P,
@@ -38,7 +41,7 @@ def component_values(inp, cfg, r) -> dict:
 		# L — theo engine chứ không theo cờ SSA: loại không được giảm trừ (r.N = 0) thì cờ tick cũng vô nghĩa
 		"Giảm trừ bản thân": cfg.personal_deduction if inp.register_personal_deduction and r.N else 0.0,
 		"Tổng giảm trừ gia cảnh": r.N,
-		"Thuế TNCN (nộp thay)": r.Q,
+		TAX_COMPONENT: r.Q,
 		"BHXH - NLĐ (nộp thay)": r.S,
 		"BHXH - Công ty": r.R,
 		UNION_FEE_COMPONENT: r.X,
@@ -248,15 +251,20 @@ def _set_component_amounts(doc, inp, values):
 
 	NET: chỉ Lương theo công + Phụ cấp ăn cộng vào net; mọi component khác do_not_include (hiện trên
 	lưới nhưng không làm sai tổng — thuế/BHXH do công ty nộp thay). GROSS thêm thuế + BHXH NLĐ vào trừ.
+	Thử việc (TAX_WITHHELD_TYPES) tự chịu thuế → thuế là khoản trừ THẬT: net = thu nhập - thuế, và bút
+	toán accrual ra Có 3335 = thuế / Có 334 = net mà không cần gương chi phí.
 	"""
 	is_gross = inp.salary_type == "GROSS"
+	withheld = inp.salary_type in TAX_WITHHELD_TYPES
 	for row in list(doc.earnings) + list(doc.deductions):
 		if row.salary_component not in values:
 			continue
 		row.amount = values[row.salary_component]
 		row.default_amount = values[row.salary_component]
-		real = row.salary_component in REAL_EARNINGS or (
-			is_gross and row.salary_component in GROSS_DEDUCTIONS
+		real = (
+			row.salary_component in REAL_EARNINGS
+			or (is_gross and row.salary_component in GROSS_DEDUCTIONS)
+			or (withheld and row.salary_component == TAX_COMPONENT)
 		)
 		row.do_not_include_in_total = 0 if real else 1
 
@@ -282,6 +290,10 @@ def _set_breakdown_fields(doc, inp, cfg, lunch_days):
 	doc.custom_coefficient = _effective_coefficient(inp, cfg)  # E — hệ số BLEND nếu chuyển giữa kỳ
 	doc.custom_dependents_slip = inp.dependents  # M
 	doc.custom_lunch_days = int(lunch_days)  # số ngày ăn trưa (dữ liệu ăn trưa trên phiếu)
+	if doc.meta.has_field("custom_lunch_kept_days"):
+		# không vượt số buổi ăn của phiếu (SSA có thể ghi đè số buổi ăn thấp hơn số ngày thực ăn)
+		kept = lunch_kept_days_for_period(doc.employee, doc.start_date, doc.end_date)
+		doc.custom_lunch_kept_days = min(kept, int(lunch_days))
 
 
 def _effective_coefficient(inp, cfg) -> float:

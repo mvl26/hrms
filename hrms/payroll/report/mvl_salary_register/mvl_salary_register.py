@@ -103,6 +103,11 @@ def get_data(filters):
 			"custom_coefficient",
 			"custom_dependents_slip",
 			"custom_lunch_days",
+			*(
+				["custom_lunch_kept_days"]
+				if frappe.get_meta("Salary Slip").has_field("custom_lunch_kept_days")
+				else []
+			),
 			"payment_days",
 			"total_working_days",
 			"net_pay",
@@ -128,6 +133,7 @@ def get_data(filters):
 			standard_days=s.total_working_days,
 			# không phải cột: sheet "Ăn trưa" của file Excel in số buổi từ đây
 			lunch_days=s.custom_lunch_days,
+			lunch_kept_days=s.get("custom_lunch_kept_days") or 0,
 			dependents=s.custom_dependents_slip,
 			net_t=flt(s.net_pay),
 		)

@@ -45,6 +45,18 @@ gian. Kế hoạch triển khai: `docs/tasks/plan-miyano-payslip-types.md`. Quy�
   **mọi** row của các component HR nhập (`HR_ENTERED_COMPONENTS`) vào K, chịu thuế như nhau.
 - **Bảo hiểm (R, S) và KPCĐ chỉ tính cho Chính thức**, kể cả khi SSA thử việc có nhập Lương đóng BHXH.
 
+## Thử việc theo bảng lương 10/2026 (`docs/Bang luong 10 - Copy.xlsx` dòng 17–19) — HR chốt 2026-11-04
+
+- **D6 — Thử việc khấu trừ phẳng, NLĐ tự chịu thuế.** Không quy đổi NET→gross: P = O; Q = ROUND(P × 10%)
+  khi P > 5.000.000, ngược lại 0. Thực lĩnh T = K − Q (thuế là khoản trừ thật trên phiếu). Áp cho **mọi**
+  thử việc. Tick "Đăng ký giảm trừ" (NLĐ ký cam kết thu nhập dưới mức chịu thuế) → O vẫn trừ giảm trừ
+  bản thân + người phụ thuộc như thường, nên thường ra Q = 0.
+- Ô T17 của file nhân 10% hai lần (ra 1%) — HR xác nhận nhầm; đúng là S17 = R17, T17 = S17 × 10%.
+- Kê khai U giữ công thức chung K + Q + S − J (HR chốt).
+- Hạch toán: gương chi phí không gồm Q (công ty không chịu) → Nợ 6421 = K, Có 3335 = Q, Có 334 = K − Q.
+- Ngưỡng/tỷ lệ là `MVLConfig.probation_tax_threshold` / `probation_tax_rate` (5tr / 10%), chưa đưa ra
+  Payroll Settings. Phiếu Chính thức có công thử việc giữa kỳ (hệ số blend) KHÔNG đổi — vẫn lũy tiến.
+
 Component mới: `Hỗ trợ điện thoại`, `Hỗ trợ xăng xe`, `Thưởng KPI` (Earning, chịu thuế, cộng net, Nợ
 6421) và `KPCĐ - Công ty` (Deduction, không trừ net, Có 3382). `Tiền thưởng` giữ tên, hiển thị là
 "Thưởng (Lễ/Tết)". Báo cáo `MVL Salary Register` và file Excel theo đúng cột A–Z + tiêu đề "BẢNG LƯƠNG"
@@ -100,17 +112,19 @@ Trả `MVLResult(I, J, K, N, O, P, Q, R, S, T, U)`.
 - N = (register ? 15.500.000 : 0) + 6.200.000 × dependents
 - O = MAX(K − N − J, 0)
 - **P (quy đổi NET→gross)** theo loại:
-  - NET fulltime/thử việc: biểu 5 bậc grossup trên O (Bước 6).
+  - NET fulltime: biểu 5 bậc grossup trên O (Bước 6).
+  - Thử việc: P = O (không quy đổi — D6).
   - Parttime cư trú / Khoán: P = ROUND(O / 0.9, 0).
   - Parttime nước ngoài: P = ROUND(O / 0.8, 0).
   - Parttime cam kết 08: P = 0.
 - **Q (thuế):**
-  - NET fulltime/thử việc: biểu lũy tiến 5 bậc trên P (Bước 7).
+  - NET fulltime: biểu lũy tiến 5 bậc trên P (Bước 7).
+  - Thử việc: Q = ROUND(P × 10%, 0) nếu P > 5.000.000, ngược lại 0 (D6).
   - Parttime cư trú / Khoán: Q = ROUND(P × 10%, 0).
   - Parttime nước ngoài: Q = ROUND(P × 20%, 0).
   - Cam kết 08: Q = 0.
 - R = ROUND(G × 21.5%, 0); S = ROUND(G × 10.5%, 0) (G trống → 0).
-- T (thực lĩnh) = K; U (kê khai) = K + Q + S − J.
+- T (thực lĩnh) = K (thử việc: K − Q); U (kê khai) = K + Q + S − J.
 - **GROSS** (loại `GROSS`): bỏ gross-up, thuế tính thẳng trên (thu nhập − giảm trừ − BH NLĐ);
   T = GROSS − Q − S. (Ưu tiên thấp — Miyano hiện trả toàn NET.)
 

@@ -109,13 +109,14 @@ STRUCTURES = {
 			"Hỗ trợ xăng xe",
 			"Thưởng KPI",
 			"Tiền thưởng",
-			"Chi phí thuế & BHXH DN nộp thay",  # gương chi phí (= Q, thử việc không BHXH)
+			"Chi phí thuế & BHXH DN nộp thay",  # gương chi phí = 0: thử việc tự chịu thuế, không BHXH
 			"Tổng thu nhập",
 			"Thu nhập quy đổi",
 			"Thu nhập tính thuế",
 			"Thu nhập chịu thuế kê khai",
 		],
-		["Giảm trừ bản thân", "Tổng giảm trừ gia cảnh", "Thuế TNCN (nộp thay)"],  # thử việc không đóng BHXH
+		# thử việc không đóng BHXH; Thuế TNCN là khoản trừ THẬT (NLĐ tự chịu — mẫu 10/2026, apply_mvl)
+		["Giảm trừ bản thân", "Tổng giảm trừ gia cảnh", "Thuế TNCN (nộp thay)"],
 	),
 	# Bán thời gian: cư trú + đăng ký giảm trừ → giảm trừ + lũy tiến như chính thức; còn lại khấu trừ 10%
 	# (cư trú) / 20% (không cư trú) — chọn qua cờ trên SSA. Có cột giảm trừ để phiếu hiện được N.
@@ -256,6 +257,8 @@ def _slip_breakdown_fields():
 		f("custom_coefficient", "Hệ số lương (E)", "Float", "custom_salary_type"),
 		f("custom_dependents_slip", "Số người phụ thuộc (M)", "Int", "custom_coefficient"),
 		f("custom_lunch_days", "Số ngày ăn trưa", "Int", "custom_dependents_slip"),
+		# buổi ăn giữ lại (không nộp quỹ canteen) — phụ cấp ăn trưa vẫn trả đủ, chỉ để tab Ăn trưa đọc
+		f("custom_lunch_kept_days", "Số buổi giữ lại tiền ăn", "Int", "custom_lunch_days"),
 	]
 
 
