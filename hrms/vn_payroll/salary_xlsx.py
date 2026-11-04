@@ -410,8 +410,8 @@ def write_lunch_sheet(ws, body: list[dict], filters: dict, config: MVLConfig) ->
 
 	Thành tiền là GIÁ TRỊ trên phiếu (cột J tab Salary) chứ không phải `=C*$D$1`: phiếu đã chốt thì
 	đổi đơn giá trong Settings không được làm tờ này lệch phiếu. Vì cùng lý do, đơn giá D1 là mức
-	phiếu ĐÃ áp (thành tiền / số buổi), không phải mức đang đặt trong Settings. "Giữ lại" để 0 cho
-	kế toán điền."""
+	phiếu ĐÃ áp (thành tiền / số buổi), không phải mức đang đặt trong Settings. "Giữ lại" = số buổi
+	đánh dấu "Giữ lại tiền ăn" trên chấm công x đơn giá đó (kế toán vẫn sửa tay được, F là công thức)."""
 	# Chỉ người thực nhận phụ cấp ăn (J > 0) — như mẫu, tab này nuôi cột J. Bán thời gian/khoán
 	# vẫn có số buổi ăn trên phiếu nhưng không được phụ cấp; liệt kê ra thì dòng "21 buổi = 0đ" vô nghĩa.
 	eaters = [r for r in body if (r.get("lunch_j") or 0) > 0]
@@ -466,6 +466,15 @@ def applied_lunch_rate(eaters: list[dict], config: MVLConfig):
 	return rates.pop() if len(rates) == 1 else _("Nhiều mức - xem từng dòng")
 
 
+def kept_amount(r: dict) -> int:
+	"""Tiền "Giữ lại" = số buổi giữ lại x đơn giá phiếu ĐÃ áp (thành tiền / số buổi) — cùng lý do với
+	`applied_lunch_rate`: đổi mức trong Settings sau khi phiếu đã tính không được làm lệch tờ này."""
+	days, kept = cint(r.get("lunch_days")), cint(r.get("lunch_kept_days"))
+	if not (days and kept):
+		return 0
+	return round((r.get("lunch_j") or 0) / days * min(kept, days))
+
+
 def write_lunch_row(ws, row: int, stt: int, r: dict) -> None:
 	"""STT · họ tên · số buổi (chữ 13 như mẫu) · thành tiền · giữ lại · nộp quỹ (chữ 11, như mẫu)."""
 	small = font(size=LUNCH_FONT_SIZE)
@@ -475,7 +484,7 @@ def write_lunch_row(ws, row: int, stt: int, r: dict) -> None:
 		(r.get("employee_name"), font(), Alignment(vertical="center"), GENERAL),
 		(cint(r.get("lunch_days")), font(), middle, INTEGER_FORMAT),
 		(r.get("lunch_j") or 0, small, None, TAX_FORMAT),
-		(0, small, None, TAX_FORMAT),
+		(kept_amount(r), small, None, TAX_FORMAT),
 		(f"=D{row}-E{row}", font(bold=True, size=LUNCH_FONT_SIZE), None, TAX_FORMAT),
 	)
 	for col, (value, f, align, fmt) in enumerate(cells, start=1):

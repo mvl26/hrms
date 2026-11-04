@@ -11,7 +11,7 @@ LOẠI lương suy TỪ cấu trúc của slip. Slip khác đi đường Frappe 
 import frappe
 from frappe.utils import add_days, cint, flt, getdate, rounded
 
-from hrms.vn_payroll.lunch import lunch_days_for_period
+from hrms.vn_payroll.lunch import lunch_days_for_period, lunch_kept_days_for_period
 from hrms.vn_payroll.mvl import MVLInput, compute_mvl
 from hrms.vn_payroll.settings import config_from_settings
 from hrms.vn_payroll.setup_mvl import HR_ENTERED_COMPONENTS, REAL_EARNINGS, salary_type_of
@@ -282,6 +282,10 @@ def _set_breakdown_fields(doc, inp, cfg, lunch_days):
 	doc.custom_coefficient = _effective_coefficient(inp, cfg)  # E — hệ số BLEND nếu chuyển giữa kỳ
 	doc.custom_dependents_slip = inp.dependents  # M
 	doc.custom_lunch_days = int(lunch_days)  # số ngày ăn trưa (dữ liệu ăn trưa trên phiếu)
+	if doc.meta.has_field("custom_lunch_kept_days"):
+		# không vượt số buổi ăn của phiếu (SSA có thể ghi đè số buổi ăn thấp hơn số ngày thực ăn)
+		kept = lunch_kept_days_for_period(doc.employee, doc.start_date, doc.end_date)
+		doc.custom_lunch_kept_days = min(kept, int(lunch_days))
 
 
 def _effective_coefficient(inp, cfg) -> float:

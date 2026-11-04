@@ -412,6 +412,62 @@ class TestSalarySlipMVL(PerTestRollback, FrappeTestCase):
 		)
 
 
+class TestLunchKeptDays(PerTestRollback, FrappeTestCase):
+	"""Buổi ăn "giữ lại" (công ty không nấu / nhân viên ăn ở ngoài) — theo mẫu Excel 09/2026: phụ cấp
+	ăn trưa VẪN trả đủ số buổi, chỉ phần nộp quỹ canteen giảm (HR chốt 2026-11-04)."""
+
+	def setUp(self):
+		super().setUp()
+		frappe.flags.skip_sheet_gate = True
+		self.addCleanup(lambda: frappe.flags.pop("skip_sheet_gate", None))
+
+	def keep(self, emp, days, reason="Công ty không nấu"):
+		for day in days:
+			name = frappe.db.get_value(
+				"Attendance", {"employee": emp, "attendance_date": day, "docstatus": 1}
+			)
+			att = frappe.get_doc("Attendance", name)
+			att.custom_lunch_kept = reason
+			att.save()  # field sửa được sau submit (allow_on_submit)
+
+	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
+	def test_kept_lunches_are_counted_but_the_allowance_stays_whole(self):
+		ensure_fiscal_year_2099()
+		ensure_mvl_defaults()
+		emp = make_employee("mvl_lunch_kept@codes.com", company=default_company())
+		make_ssa(emp, base=25_000_000, custom_salary_type="Chính thức", custom_bhxh_salary=25_000_000)
+		mark_full_month(emp)
+		before = make_slip(emp)
+		lunch_before, net_before = slip_amounts(before)["Phụ cấp ăn trưa"], before.net_pay
+		before.delete()
+
+		days = working_days_june_2099(emp)
+		self.keep(emp, days[:1], "Công ty không nấu")
+		self.keep(emp, days[1:2], "Ăn ở ngoài")
+		ss = make_slip(emp)
+
+		self.assertEqual(ss.custom_lunch_kept_days, 2)
+		self.assertEqual(ss.custom_lunch_days, len(days), "số buổi ăn vẫn đủ")
+		self.assertEqual(slip_amounts(ss)["Phụ cấp ăn trưa"], lunch_before, "phụ cấp ăn trưa không đổi")
+		self.assertEqual(ss.net_pay, net_before, "thực lĩnh không đổi")
+
+	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
+	def test_keeping_a_day_without_lunch_counts_nothing(self):
+		ensure_fiscal_year_2099()
+		ensure_mvl_defaults()
+		emp = make_employee("mvl_lunch_kept_none@codes.com", company=default_company())
+		make_ssa(emp, base=25_000_000, custom_salary_type="Chính thức", custom_bhxh_salary=25_000_000)
+		mark_full_month(emp)
+		day = working_days_june_2099(emp)[0]
+		name = frappe.db.get_value("Attendance", {"employee": emp, "attendance_date": day, "docstatus": 1})
+		att = frappe.get_doc("Attendance", name)
+		att.custom_lunch_override = "Không"
+		att.custom_lunch_kept = "Ăn ở ngoài"
+		att.save()
+		ss = make_slip(emp)
+		self.assertEqual(ss.custom_lunch_kept_days, 0, "ngày không tính ăn trưa thì không có gì để giữ lại")
+
+
 class TestPaidHolidaysRunBeforeTheGate(PerTestRollback, FrappeTestCase):
 	"""Đặt mẫu số lương (gồm ngày lễ) phải xảy ra TRƯỚC cổng đối soát bảng công.
 

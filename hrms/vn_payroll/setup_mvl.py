@@ -256,6 +256,8 @@ def _slip_breakdown_fields():
 		f("custom_coefficient", "Hệ số lương (E)", "Float", "custom_salary_type"),
 		f("custom_dependents_slip", "Số người phụ thuộc (M)", "Int", "custom_coefficient"),
 		f("custom_lunch_days", "Số ngày ăn trưa", "Int", "custom_dependents_slip"),
+		# buổi ăn giữ lại (không nộp quỹ canteen) — phụ cấp ăn trưa vẫn trả đủ, chỉ để tab Ăn trưa đọc
+		f("custom_lunch_kept_days", "Số buổi giữ lại tiền ăn", "Int", "custom_lunch_days"),
 	]
 
 

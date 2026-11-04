@@ -417,6 +417,24 @@ def lunch_days_for_period(employee: str, start_date, end_date) -> int:
 	return count_lunch_days(employee, start_date, end_date)
 
 
+def lunch_kept_days_for_period(employee: str, start_date, end_date) -> int:
+	"""Số buổi ăn trong kỳ nhân viên được GIỮ LẠI tiền (công ty không nấu / ăn ở ngoài): buổi đó vẫn
+	tính phụ cấp ăn trưa nhưng không nộp quỹ canteen (mẫu bảng lương 09/2026, HR chốt 2026-11-04).
+	Chỉ đếm ngày CÓ tính ăn trưa — ngày không ăn thì không có tiền để giữ lại."""
+	if not frappe.get_meta("Attendance").has_field("custom_lunch_kept"):
+		return 0
+	return frappe.db.count(
+		"Attendance",
+		{
+			"employee": employee,
+			"attendance_date": ["between", [start_date, end_date]],
+			"docstatus": 1,
+			"custom_lunch": 1,
+			"custom_lunch_kept": ["is", "set"],
+		},
+	)
+
+
 def lunch_days_map(employees, start_date, end_date) -> dict:
 	"""{employee: số buổi ăn trưa} cho nhiều NV bằng **một** truy vấn gộp (thay vì gọi
 	``lunch_days_for_period`` từng người trong report). Trước migrate: fallback quét checkin từng NV."""

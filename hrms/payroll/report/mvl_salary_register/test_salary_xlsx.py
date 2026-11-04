@@ -278,6 +278,14 @@ class TestLunchSheet(PerTestRollback, FrappeTestCase):
 		self.assertEqual(ws["D5"].value, "=SUM(D4:D4)")
 		self.assertEqual(ws["F5"].value, "=SUM(F4:F4)")
 
+	def test_kept_lunches_fill_the_kept_column_and_cut_the_canteen_fund(self):
+		rows = sample_rows()
+		rows[0].lunch_kept_days = 2
+		ws = build_workbook(get_columns(), rows, FILTERS).worksheets[1]
+		self.assertEqual(ws["D4"].value, 560_000.0, "thành tiền = phụ cấp trên phiếu, giữ nguyên")
+		self.assertEqual(ws["E4"].value, 70_000, "2 buổi x 35.000 (đơn giá phiếu đã áp)")
+		self.assertEqual(ws["F4"].value, "=D4-E4")
+
 	def test_unit_price_is_the_rate_the_slips_used_not_todays_setting(self):
 		# HR đổi Settings 35.000 → 50.000 SAU khi phiếu đã tính: D1 vẫn phải là 35.000 — đơn giá đã
 		# nhân ra cột Thành tiền. In 50.000 thì tờ giấy ghi "16 buổi x 50.000 = 560.000".
