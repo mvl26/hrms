@@ -323,6 +323,23 @@ class TestSalarySlipMVL(PerTestRollback, FrappeTestCase):
 		self.assertEqual(comp["Thu nhập chịu thuế kê khai"], 5_500_000)
 
 	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
+	def test_khoan_still_declares_taxable_income(self):
+		# Bảng lương 10/2026 dòng 22: khoán 5tr → căn cứ quy đổi 5tr, KHÔNG khấu trừ, nhưng cột Thu nhập
+		# chịu thuế vẫn kê khai 5tr (HR chốt 2026-11-04) — trước đây cấu trúc Khoán thiếu cột này → 0
+		ensure_fiscal_year_2099()
+		ensure_mvl_defaults()
+		emp = make_employee("mvl_khoan_declared@codes.com", company=default_company())
+		make_ssa(emp, base=5_000_000, custom_salary_type="Khoán")
+		mark_full_month(emp)
+		ss = make_slip(emp, salary_type="Khoán")
+		comp = slip_amounts(ss)
+		self.assertEqual(comp["Tổng thu nhập"], 5_000_000)
+		self.assertEqual(comp["Thu nhập quy đổi"], 5_000_000)
+		self.assertEqual(comp["Thuế TNCN (nộp thay)"], 0)
+		self.assertEqual(comp.get("Thu nhập chịu thuế kê khai"), 5_000_000)
+		self.assertEqual(ss.net_pay, 5_000_000)  # cột hiển thị, không cộng vào thực lĩnh
+
+	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
 	def test_khoan_holiday_bonus_untaxed(self):
 		ensure_fiscal_year_2099()
 		ensure_mvl_defaults()

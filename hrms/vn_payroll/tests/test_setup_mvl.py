@@ -62,6 +62,11 @@ class TestSetupMVL(PerTestRollback, FrappeTestCase):
 			self.assertNotIn(c, comps("Khoán"))
 			self.assertNotIn(c, comps("Chuyên gia"))
 
+	def test_every_type_declares_taxable_income(self):
+		# cột Thu nhập chịu thuế có ở MỌI loại, kể cả khoán không khấu trừ (bảng lương 10/2026 dòng 22)
+		for name, (_stype, earnings, _deductions) in STRUCTURES.items():
+			self.assertIn("Thu nhập chịu thuế kê khai", earnings, name)
+
 	def test_every_type_can_receive_holiday_bonus(self):
 		# mẫu 09/2026: cả part time (dòng 6) cũng có Thưởng (Lễ/Tết)
 		for name, (_stype, earnings, _deductions) in STRUCTURES.items():
