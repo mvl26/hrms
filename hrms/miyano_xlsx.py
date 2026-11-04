@@ -81,6 +81,12 @@ def company_lines(company: str | None) -> list[str]:
 	return lines
 
 
+def short_city(address: str) -> str:
+	"""Địa danh dòng ngày ký gọn: "Thành phố Hà Nội" → "Hà Nội" (HR 2026-11-04), kể cả khi `city` của
+	Address ghi đủ. Dòng Địa chỉ công ty ở tiêu đề thư thì GIỮ NGUYÊN đầy đủ."""
+	return address.replace("Thành phố Hà Nội", "Hà Nội")
+
+
 def company_address_row(company: str | None) -> frappe._dict | None:
 	"""Address chính liên kết với Company; None nếu chưa có Address nào."""
 	if not company:
@@ -169,7 +175,7 @@ def signature_date_line(company: str | None) -> str:
 
 	Ngày là ngày xuất file (ngày trình ký), địa danh lấy `city` của Address công ty khi có."""
 	today = getdate(nowdate())
-	city = company_city(company) or MIYANO_LETTERHEAD["city"]
+	city = short_city(company_city(company) or MIYANO_LETTERHEAD["city"])
 	return _("{0}, ngày {1} tháng {2} năm {3}").format(city, f"{today.day:02d}", today.month, today.year)
 
 

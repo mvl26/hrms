@@ -102,10 +102,26 @@ class TestSalaryXlsxLayout(PerTestRollback, FrappeTestCase):
 		self.assertTrue(ws["A1"].font.bold)
 		self.assertIn(MIYANO_LETTERHEAD["tax_id"], ws["A2"].value)
 		self.assertIn("Địa chỉ", ws["A3"].value)
+		self.assertIn("Thành phố Hà Nội", ws["A3"].value)  # địa chỉ công ty giữ ĐẦY ĐỦ (HR 2026-11-04)
 		self.assertEqual(ws["A1"].alignment.horizontal, "left")
 		merged = {str(r) for r in ws.merged_cells.ranges}
 		# mẫu gộp tiêu đề thư tới cột U, tên bảng + kỳ tới cột Z
 		self.assertTrue({"A1:U1", "A2:U2", "A3:U3", "A5:Z5", "A6:Z6"} <= merged, merged)
+
+	def test_signature_line_says_ha_noi_but_letterhead_keeps_full_address(self):
+		# HR 2026-11-04: dòng ngày ký "Hà Nội, ngày …" cho gọn, kể cả khi Address ghi city
+		# "Thành phố Hà Nội"; dòng Địa chỉ của công ty thì giữ nguyên đầy đủ.
+		from unittest.mock import patch
+
+		from hrms.miyano_xlsx import company_lines
+
+		full = "Số 20, Phường Bồ Đề, Thành phố Hà Nội, Việt Nam"
+		with (
+			patch("hrms.miyano_xlsx.company_city", return_value="Thành phố Hà Nội"),
+			patch("hrms.miyano_xlsx.company_address", return_value=full),
+		):
+			self.assertTrue(signature_date_line(None).startswith("Hà Nội, ngày "))
+			self.assertEqual(company_lines(None)[-1], f"Địa chỉ: {full}")
 
 	def test_title_is_bang_luong(self):
 		ws = build()
