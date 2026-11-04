@@ -8,6 +8,37 @@ from hrms.vn_payroll.setup_mvl import ensure_mvl_defaults
 
 
 class TestMVLSettings(PerTestRollback, FrappeTestCase):
+	def setUp(self):
+		super().setUp()
+		# tham số MVL nằm ở tab "Lương Miyano (VN)" của Payroll Settings (gộp 2026-11-04): nạp meta
+		# trong transaction của test (Single không có bảng riêng → chỉ DML)
+		frappe.reload_doc("payroll", "doctype", "payroll_settings")
+
+	def tearDown(self):
+		super().tearDown()
+		frappe.clear_cache(doctype="Payroll Settings")
+
+	def test_mvl_parameters_live_in_payroll_settings(self):
+		# MỘT trang cài đặt lương: không còn doctype riêng cho tham số MVL
+		meta = frappe.get_meta("Payroll Settings")
+		for field in (
+			"personal_deduction",
+			"dependent_deduction",
+			"lunch_rate_per_day",
+			"probation_coefficient",
+			"insurance_company_rate",
+			"insurance_employee_rate",
+			"union_fee_rate",
+			"tax_brackets",
+			"grossup_brackets",
+		):
+			self.assertTrue(meta.has_field(field), field)
+
+	def test_hr_manager_can_edit_payroll_settings(self):
+		# bản MVL cũ cho HR Manager sửa tham số; gộp vào không được tước quyền đó
+		roles = {p.role for p in frappe.get_meta("Payroll Settings").permissions if p.write}
+		self.assertIn("HR Manager", roles)
+
 	def test_config_from_settings_matches_defaults(self):
 		ensure_mvl_defaults()
 		cfg = config_from_settings()
@@ -35,27 +66,30 @@ class TestMVLSettings(PerTestRollback, FrappeTestCase):
 class TestUnionFeeRate(PerTestRollback, FrappeTestCase):
 	def setUp(self):
 		super().setUp()
-		# field mới của Single: nạp meta trong transaction của test (Single không có bảng riêng → DML)
-		frappe.reload_doc("hr", "doctype", "mvl_payroll_settings")
+		frappe.reload_doc("payroll", "doctype", "payroll_settings")
+
+	def tearDown(self):
+		super().tearDown()
+		frappe.clear_cache(doctype="Payroll Settings")
 
 	def test_union_fee_rate_read_from_settings(self):
 		ensure_mvl_defaults()
-		frappe.db.set_single_value("MVL Payroll Settings", "union_fee_rate", 0.02)
+		frappe.db.set_single_value("Payroll Settings", "union_fee_rate", 0.02)
 		self.assertAlmostEqual(config_from_settings().union_fee_rate, 0.02)
 
 	def test_seed_when_missing_keeps_hr_zero(self):
-		frappe.db.delete("Singles", {"doctype": "MVL Payroll Settings", "field": "union_fee_rate"})
+		frappe.db.delete("Singles", {"doctype": "Payroll Settings", "field": "union_fee_rate"})
 		ensure_mvl_defaults()
-		self.assertAlmostEqual(frappe.db.get_single_value("MVL Payroll Settings", "union_fee_rate"), 0.02)
+		self.assertAlmostEqual(frappe.db.get_single_value("Payroll Settings", "union_fee_rate"), 0.02)
 		# HR cố ý đặt 0 (không thu KPCĐ) → migrate sau không được ghi đè
-		frappe.db.set_single_value("MVL Payroll Settings", "union_fee_rate", 0)
+		frappe.db.set_single_value("Payroll Settings", "union_fee_rate", 0)
 		ensure_mvl_defaults()
-		self.assertEqual(frappe.db.get_single_value("MVL Payroll Settings", "union_fee_rate"), 0)
+		self.assertEqual(frappe.db.get_single_value("Payroll Settings", "union_fee_rate"), 0)
 		self.assertEqual(config_from_settings().union_fee_rate, 0)
 
 	def test_rates_must_be_fractions(self):
 		# nhãn ghi "(%)" nhưng giá trị là tỷ lệ (0,02): HR gõ 2 sẽ thành KPCĐ = 200% lương đóng BHXH
-		s = frappe.get_single("MVL Payroll Settings")
+		s = frappe.get_single("Payroll Settings")
 		for field in ("union_fee_rate", "insurance_company_rate", "insurance_employee_rate"):
 			s.reload()
 			s.set(field, 2)

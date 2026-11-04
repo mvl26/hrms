@@ -16,6 +16,15 @@ from hrms.vn_payroll.setup_mvl import (
 
 
 class TestSetupMVL(PerTestRollback, FrappeTestCase):
+	def setUp(self):
+		super().setUp()
+		# tham số MVL ở Payroll Settings (gộp 2026-11-04) — nạp meta trong transaction (Single → DML)
+		frappe.reload_doc("payroll", "doctype", "payroll_settings")
+
+	def tearDown(self):
+		super().tearDown()
+		frappe.clear_cache(doctype="Payroll Settings")
+
 	def test_gross_not_offered_until_implemented(self):
 		# GROSS chưa hiện thực → không được cho HR chọn (tránh ra phiếu sai âm thầm)
 		self.assertNotIn("GROSS", SALARY_TYPES.split("\n"))
@@ -127,11 +136,11 @@ class TestSetupMVL(PerTestRollback, FrappeTestCase):
 
 	def test_idempotent_and_non_destructive(self):
 		ensure_mvl_defaults()
-		frappe.db.set_single_value("MVL Payroll Settings", "lunch_rate_per_day", 40_000)
+		frappe.db.set_single_value("Payroll Settings", "lunch_rate_per_day", 40_000)
 		ensure_mvl_defaults()  # chạy lại không được ghi đè giá trị đã sửa
-		self.assertEqual(frappe.db.get_single_value("MVL Payroll Settings", "lunch_rate_per_day"), 40_000)
+		self.assertEqual(frappe.db.get_single_value("Payroll Settings", "lunch_rate_per_day"), 40_000)
 		# không nhân đôi bậc thuế
-		s = frappe.get_single("MVL Payroll Settings")
+		s = frappe.get_single("Payroll Settings")
 		self.assertEqual(len(s.tax_brackets), 5)
 
 	def test_field_help_follows_current_tax_rules_on_installed_site(self):
