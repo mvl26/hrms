@@ -10,7 +10,7 @@ openpyxl nên kiểm soát được từng ô.
 Bố cục bám mẫu tới từng ô: tab `Salary MM.YYYY`; dòng 1-3 pháp nhân (gộp A:U); dòng 5 tên bảng,
 dòng 6 `Từ ngày … Đến ngày …` (gộp A:Z); dòng 7 công chuẩn (E7:G7 → H7) + hằng số giảm trừ người
 phụ thuộc (Q7) và ba tỷ lệ BH công ty / BH NLĐ / KPCĐ (V7/W7/X7); dòng 8 tiêu đề A-Z; dữ liệu từ
-dòng 9; dòng TỔNG CỘNG cộng bằng `=SUM()`; khối ký người lập ở I:J, người duyệt ở R:T. Times New
+dòng 9; dòng TỔNG CỘNG là SỐ đã cộng (không `=SUM()` — xem `write_total_row`); khối ký người lập ở I:J, người duyệt ở R:T. Times New
 Roman 13, viền mảnh đen, định dạng kế toán. Thêm tab `Ăn trưa MM.YYYY` như mẫu.
 
 Khác mẫu CÓ CHỦ Ý — ô số của từng nhân viên là GIÁ TRỊ lấy từ phiếu lương, không phải công thức.
@@ -304,10 +304,12 @@ def write_row(ws, columns: list[dict], data_row: dict, row: int, stt: int) -> No
 
 
 def write_total_row(ws, columns: list[dict], row: int, first: int, last: int) -> None:
-	"""Mẫu dòng 15: "TỔNG CỘNG" ở cột A, mỗi cột số là `=SUM()` của khối dữ liệu, chữ đậm.
+	"""Mẫu dòng 15: "TỔNG CỘNG" ở cột A, mỗi cột số là TỔNG của khối dữ liệu, chữ đậm.
 
-	Công thức thay vì số đã cộng sẵn: đúng mẫu, và kế toán sửa tay một ô (vd. giữ lại tiền ăn) thì
-	dòng tổng tự theo. Cột chữ và cột hệ số để trống."""
+	Ghi SỐ đã cộng chứ không `=SUM()` như mẫu: openpyxl không lưu giá trị tính sẵn cho công thức, nên
+	Excel ở Protected View (file tải về), bản xem trước, Excel điện thoại… hiện dòng tổng TRỐNG và in
+	ra cũng trống (HR báo 2026-11-04). Đổi lại: sửa tay một ô thì tổng không tự theo. Cột chữ và cột
+	hệ số để trống."""
 	for i, c in enumerate(columns, start=1):
 		fieldname = c.get("fieldname") or ""
 		cell = ws.cell(row, i)
@@ -316,10 +318,14 @@ def write_total_row(ws, columns: list[dict], row: int, first: int, last: int) ->
 		if fieldname == "stt":
 			cell.value = _(TOTAL_LABEL)
 		elif is_numeric(c) and fieldname not in NOT_SUMMED:
-			letter = get_column_letter(i)
-			cell.value = f"=SUM({letter}{first}:{letter}{last})"
+			cell.value = column_sum(ws, i, first, last)
 			cell.number_format = GENERAL if fieldname == "worked_days" else INTEGER_FORMAT
 	ws.row_dimensions[row].height = TOTAL_HEIGHT
+
+
+def column_sum(ws, col: int, first: int, last: int) -> float:
+	"""Tổng các ô số đã ghi ở một cột, từ dòng `first` tới `last` (ô trống bỏ qua)."""
+	return sum(v for r in range(first, last + 1) if isinstance(v := ws.cell(r, col).value, int | float))
 
 
 def is_numeric(c: dict) -> bool:
@@ -411,7 +417,8 @@ def write_lunch_sheet(ws, body: list[dict], filters: dict, config: MVLConfig) ->
 	Thành tiền là GIÁ TRỊ trên phiếu (cột J tab Salary) chứ không phải `=C*$D$1`: phiếu đã chốt thì
 	đổi đơn giá trong Settings không được làm tờ này lệch phiếu. Vì cùng lý do, đơn giá D1 là mức
 	phiếu ĐÃ áp (thành tiền / số buổi), không phải mức đang đặt trong Settings. "Giữ lại" = số buổi
-	đánh dấu "Giữ lại tiền ăn" trên chấm công x đơn giá đó (kế toán vẫn sửa tay được, F là công thức)."""
+	đánh dấu "Giữ lại tiền ăn" trên chấm công x đơn giá đó. Nộp quỹ và dòng Tổng là SỐ, không công
+	thức — cùng lý do với `write_total_row` (công thức không có giá trị tính sẵn → hiện/in trống)."""
 	# Chỉ người thực nhận phụ cấp ăn (J > 0) — như mẫu, tab này nuôi cột J. Bán thời gian/khoán
 	# vẫn có số buổi ăn trên phiếu nhưng không được phụ cấp; liệt kê ra thì dòng "21 buổi = 0đ" vô nghĩa.
 	eaters = [r for r in body if (r.get("lunch_j") or 0) > 0]
@@ -437,9 +444,7 @@ def write_lunch_sheet(ws, body: list[dict], filters: dict, config: MVLConfig) ->
 	ws.cell(total, 2, _("Tổng")).font = font()
 	first = LUNCH_HEADER_ROW + 1
 	for col, bold in ((4, False), (6, True)):
-		letter = get_column_letter(col)
-		value = f"=SUM({letter}{first}:{letter}{row})" if eaters else 0
-		cell = ws.cell(total, col, value)
+		cell = ws.cell(total, col, column_sum(ws, col, first, row) if eaters else 0)
 		cell.font, cell.number_format = font(bold=bold, size=LUNCH_FONT_SIZE), TAX_FORMAT
 
 	for r in range(1, total + 1):
@@ -485,7 +490,7 @@ def write_lunch_row(ws, row: int, stt: int, r: dict) -> None:
 		(cint(r.get("lunch_days")), font(), middle, INTEGER_FORMAT),
 		(r.get("lunch_j") or 0, small, None, TAX_FORMAT),
 		(kept_amount(r), small, None, TAX_FORMAT),
-		(f"=D{row}-E{row}", font(bold=True, size=LUNCH_FONT_SIZE), None, TAX_FORMAT),
+		((r.get("lunch_j") or 0) - kept_amount(r), font(bold=True, size=LUNCH_FONT_SIZE), None, TAX_FORMAT),
 	)
 	for col, (value, f, align, fmt) in enumerate(cells, start=1):
 		cell = ws.cell(row, col, value)

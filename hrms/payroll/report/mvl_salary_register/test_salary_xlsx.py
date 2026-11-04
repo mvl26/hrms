@@ -211,16 +211,19 @@ class TestSalaryXlsxRows(PerTestRollback, FrappeTestCase):
 		self.assertEqual(ws.cell(FIRST_DATA_ROW, col("union_fee")).value, 600_000.0)
 		self.assertEqual(ws.cell(FIRST_DATA_ROW, col("worked_days")).value, 19.5)
 
-	def test_total_row_sums_with_formulas_like_the_template(self):
+	def test_total_row_holds_the_summed_numbers_not_formulas(self):
+		# Công thức `=SUM()` do openpyxl ghi KHÔNG có giá trị tính sẵn → Protected View / xem trước /
+		# Excel điện thoại hiện dòng tổng TRỐNG, in ra cũng trống (HR báo 2026-11-04). Ghi số.
 		ws = build()
 		self.assertEqual(ws.cell(TOTAL_ROW, 1).value, TOTAL_LABEL)  # mẫu: "TỔNG CỘNG" ở cột A
 		self.assertTrue(ws.cell(TOTAL_ROW, 1).font.bold)
-		last = TOTAL_ROW - 1
 		for letter in ("F", "H", "I", "N", "O", "U", "X", "Y", "Z"):
-			self.assertEqual(
-				ws[f"{letter}{TOTAL_ROW}"].value, f"=SUM({letter}{FIRST_DATA_ROW}:{letter}{last})"
-			)
-			self.assertTrue(ws[f"{letter}{TOTAL_ROW}"].font.bold)
+			cell = ws[f"{letter}{TOTAL_ROW}"]
+			expected = sum(ws[f"{letter}{r}"].value or 0 for r in range(FIRST_DATA_ROW, TOTAL_ROW))
+			self.assertNotIsInstance(cell.value, str, letter)
+			self.assertEqual(cell.value, expected, letter)
+			self.assertTrue(cell.font.bold)
+		self.assertEqual(ws[f"F{TOTAL_ROW}"].value, sum(r.base_f for r in sample_rows() if r.get("employee")))
 		self.assertIsNone(ws[f"E{TOTAL_ROW}"].value)  # hệ số không cộng
 		self.assertEqual(ws.row_dimensions[TOTAL_ROW].height, 30)
 
@@ -272,11 +275,11 @@ class TestLunchSheet(PerTestRollback, FrappeTestCase):
 		self.assertEqual([ws["A4"].value, ws["B4"].value, ws["C4"].value], [1, "Trần Thị Bình", 16])
 		self.assertEqual(ws["D4"].value, 560_000.0)  # đúng số trên phiếu lương (cột J)
 		self.assertEqual(ws["E4"].value, 0)
-		self.assertEqual(ws["F4"].value, "=D4-E4")
+		self.assertEqual(ws["F4"].value, 560_000.0)  # nộp quỹ = thành tiền - giữ lại, ghi SỐ
 		# Lê Văn Cường (bán thời gian) có buổi ăn nhưng không được phụ cấp → không có dòng; kế là Tổng
 		self.assertEqual(ws["B5"].value, "Tổng")
-		self.assertEqual(ws["D5"].value, "=SUM(D4:D4)")
-		self.assertEqual(ws["F5"].value, "=SUM(F4:F4)")
+		self.assertEqual(ws["D5"].value, 560_000.0)
+		self.assertEqual(ws["F5"].value, 560_000.0)
 
 	def test_kept_lunches_fill_the_kept_column_and_cut_the_canteen_fund(self):
 		rows = sample_rows()
@@ -284,7 +287,8 @@ class TestLunchSheet(PerTestRollback, FrappeTestCase):
 		ws = build_workbook(get_columns(), rows, FILTERS).worksheets[1]
 		self.assertEqual(ws["D4"].value, 560_000.0, "thành tiền = phụ cấp trên phiếu, giữ nguyên")
 		self.assertEqual(ws["E4"].value, 70_000, "2 buổi x 35.000 (đơn giá phiếu đã áp)")
-		self.assertEqual(ws["F4"].value, "=D4-E4")
+		self.assertEqual(ws["F4"].value, 490_000.0)
+		self.assertEqual(ws["F5"].value, 490_000.0, "dòng Tổng nộp quỹ cũng là số")
 
 	def test_unit_price_is_the_rate_the_slips_used_not_todays_setting(self):
 		# HR đổi Settings 35.000 → 50.000 SAU khi phiếu đã tính: D1 vẫn phải là 35.000 — đơn giá đã
