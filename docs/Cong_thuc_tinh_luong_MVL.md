@@ -267,13 +267,17 @@ Trường hợp **Nguyễn Thị Khương** (dòng 20): nhận mức khoán cố
 
 ```
 Thu nhập khoán (I) = số tiền khoán tháng (F)
+Thu nhập làm căn cứ quy đổi (O) = K   (không giảm trừ, không ăn trưa)
 P = 0 ; Q = 0
 Thực lĩnh (T) = nguyên số tiền khoán
+Thu nhập chịu thuế kê khai (U) = K   (vẫn kê khai dù không khấu trừ)
 Chi phí công ty = số tiền khoán
 ```
-Excel gốc: `P20 = 0` → `Q20 = 0`.
+Excel gốc: `P20 = 0` → `Q20 = 0`; bảng lương 10/2026 dòng 22: `R22 = 5.000.000`, `S22 = 0`,
+`Y22 = M22+N22+T22+V22 = 5.000.000` (HR chốt 2026-11-04: cột Thu nhập chịu thuế của khoán vẫn có số).
 
-**Ví dụ thật:** khoán 5.000.000/tháng → thực lĩnh **5.000.000 đ**, không phát sinh thuế và bảo hiểm.
+**Ví dụ thật:** khoán 5.000.000/tháng → căn cứ quy đổi 5.000.000, thu nhập chịu thuế 5.000.000, thực
+lĩnh **5.000.000 đ**, không phát sinh thuế và bảo hiểm.
 
 ### 4.5. LƯƠNG CHUYÊN GIA
 

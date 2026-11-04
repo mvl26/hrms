@@ -125,8 +125,9 @@ STRUCTURES = {
 		_PARTTIME_LIKE,
 		["Giảm trừ bản thân", "Tổng giảm trừ gia cảnh", "Thuế TNCN (nộp thay)"],
 	),
-	# Khoán: trọn gói, KHÔNG khấu trừ thuế → không cần cột kê khai U. Gương chi phí = 0 (Q=0) nhưng vẫn có
-	# để cấu trúc đồng nhất (bút toán ra Nợ 6421 = I / Có 334 = I).
+	# Khoán: trọn gói, KHÔNG khấu trừ thuế, nhưng VẪN kê khai thu nhập chịu thuế U (= K; bảng lương
+	# 10/2026 dòng 22, HR chốt 2026-11-04). Gương chi phí = 0 (Q=0) nhưng vẫn có để cấu trúc đồng nhất
+	# (bút toán ra Nợ 6421 = I / Có 334 = I).
 	"Khoán": (
 		"Khoán",
 		[
@@ -137,6 +138,7 @@ STRUCTURES = {
 			"Tổng thu nhập",
 			"Thu nhập quy đổi",
 			"Thu nhập tính thuế",
+			"Thu nhập chịu thuế kê khai",
 		],
 		["Thuế TNCN (nộp thay)"],
 	),
