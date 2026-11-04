@@ -109,13 +109,14 @@ STRUCTURES = {
 			"Hỗ trợ xăng xe",
 			"Thưởng KPI",
 			"Tiền thưởng",
-			"Chi phí thuế & BHXH DN nộp thay",  # gương chi phí (= Q, thử việc không BHXH)
+			"Chi phí thuế & BHXH DN nộp thay",  # gương chi phí = 0: thử việc tự chịu thuế, không BHXH
 			"Tổng thu nhập",
 			"Thu nhập quy đổi",
 			"Thu nhập tính thuế",
 			"Thu nhập chịu thuế kê khai",
 		],
-		["Giảm trừ bản thân", "Tổng giảm trừ gia cảnh", "Thuế TNCN (nộp thay)"],  # thử việc không đóng BHXH
+		# thử việc không đóng BHXH; Thuế TNCN là khoản trừ THẬT (NLĐ tự chịu — mẫu 10/2026, apply_mvl)
+		["Giảm trừ bản thân", "Tổng giảm trừ gia cảnh", "Thuế TNCN (nộp thay)"],
 	),
 	# Bán thời gian: cư trú + đăng ký giảm trừ → giảm trừ + lũy tiến như chính thức; còn lại khấu trừ 10%
 	# (cư trú) / 20% (không cư trú) — chọn qua cờ trên SSA. Có cột giảm trừ để phiếu hiện được N.

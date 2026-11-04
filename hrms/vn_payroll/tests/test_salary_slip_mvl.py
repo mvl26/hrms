@@ -252,8 +252,50 @@ class TestSalarySlipMVL(PerTestRollback, FrappeTestCase):
 		ss = make_slip(emp, salary_type="Thử việc")
 		comp = {r.salary_component: r.amount for r in list(ss.earnings) + list(ss.deductions)}
 		tax = comp["Thuế TNCN (nộp thay)"]
-		self.assertEqual(comp["Chi phí thuế & BHXH DN nộp thay"], tax)  # chỉ thuế, không BH
-		self.assertEqual(comp["Thu nhập chịu thuế kê khai"], comp["Tổng thu nhập"] + tax - 700_000)
+		# thử việc tự chịu thuế (mẫu 10/2026) và không BH → công ty không gánh chi phí nào
+		self.assertEqual(comp["Chi phí thuế & BHXH DN nộp thay"], 0)
+		self.assertEqual(
+			comp["Thu nhập chịu thuế kê khai"], comp["Tổng thu nhập"] + tax - comp["Phụ cấp ăn trưa"]
+		)
+
+	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
+	def test_probation_slip_withholds_flat_10pct_from_net_pay(self):
+		# Bảng lương 10/2026 dòng 17: thử việc không đăng ký giảm trừ → thu nhập tính thuế = thu nhập
+		# làm căn cứ (không quy đổi), khấu trừ 10% vì > 5tr, TRỪ vào thực lĩnh (NLĐ tự chịu thuế).
+		ensure_fiscal_year_2099()
+		ensure_mvl_defaults()
+		emp = make_employee("mvl_prob_flat10@codes.com", company=default_company())
+		make_ssa(emp, base=25_000_000, custom_salary_type="Thử việc", custom_lunch_days_override=20)
+		mark_full_month(emp)
+		ss = make_slip(emp, salary_type="Thử việc")
+		comp = slip_amounts(ss)
+		lunch = comp["Phụ cấp ăn trưa"]
+		income = comp["Lương theo công"] + lunch
+		self.assertEqual(comp["Lương theo công"], 21_250_000)  # 25tr x 0,85, trọn tháng
+		self.assertEqual(comp["Thu nhập tính thuế"], comp["Thu nhập quy đổi"])
+		self.assertEqual(comp["Thu nhập quy đổi"], 21_250_000)
+		self.assertEqual(comp["Thuế TNCN (nộp thay)"], 2_125_000)
+		self.assertEqual(ss.net_pay, income - 2_125_000)
+		self.assertEqual(ss.gross_pay - ss.total_deduction, ss.net_pay)
+		tax_row = next(r for r in ss.deductions if r.salary_component == "Thuế TNCN (nộp thay)")
+		self.assertEqual(tax_row.do_not_include_in_total, 0, "thuế là khoản trừ thật của thử việc")
+		# công ty không nộp thay → gương chi phí 0; bút toán: Nợ 6421 = thu nhập, Có 3335 = thuế, Có 334 = net
+		self.assertEqual(comp["Chi phí thuế & BHXH DN nộp thay"], 0)
+		self.assertEqual(comp["Thu nhập chịu thuế kê khai"], income - lunch + 2_125_000)
+
+	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
+	def test_official_slip_still_pays_tax_on_behalf(self):
+		# hồi quy: chính thức vẫn NET gross-up, thuế do công ty nộp thay, không trừ thực lĩnh
+		ensure_fiscal_year_2099()
+		ensure_mvl_defaults()
+		emp = make_employee("mvl_official_onbehalf@codes.com", company=default_company())
+		make_ssa(emp, base=40_000_000, custom_salary_type="Chính thức", custom_lunch_days_override=20)
+		mark_full_month(emp)
+		ss = make_slip(emp)
+		comp = slip_amounts(ss)
+		self.assertGreater(comp["Thuế TNCN (nộp thay)"], 0)
+		self.assertEqual(ss.net_pay, comp["Tổng thu nhập"])
+		self.assertEqual(comp["Chi phí thuế & BHXH DN nộp thay"], comp["Thuế TNCN (nộp thay)"])
 
 	@change_settings("Payroll Settings", {"payroll_based_on": "Attendance"})
 	def test_template_row6_parttime_holiday_bonus(self):

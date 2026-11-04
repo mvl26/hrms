@@ -133,7 +133,7 @@ Excel gốc: `O9 = IF(K9-N9-J9>0, K9-N9-J9, 0)`
 
 ### Bước 6 — Quy đổi lương NET → Thu nhập tính thuế (GROSS-UP)
 
-*Chỉ áp dụng cho Chính thức toàn thời gian và Thử việc; các loại còn lại quy đổi theo mức riêng ở Mục 4.*
+*Chỉ áp dụng cho Chính thức toàn thời gian (từ 10/2026 Thử việc KHÔNG quy đổi — xem 4.2); các loại còn lại quy đổi theo mức riêng ở Mục 4.*
 
 ```
 Thu nhập tính thuế (P):
@@ -216,20 +216,35 @@ Excel gốc: `T9 = K9` ; `U9 = K9 + Q9 + S9 - J9`
 
 ### 4.2. THỬ VIỆC
 
-Giống 4.1 nhưng:
+Áp dụng từ bảng lương 10/2026 (`docs/Bang luong 10 - Copy.xlsx` dòng 17–19, HR chốt 2026-11-04):
 
 ```
 Hệ số lương (E) = 0,85   →   Lương thử việc = 85% lương chính thức
 Lương đóng BHXH (G) = trống  →  không đóng BHXH trong thời gian thử việc (R = S = 0)
+Phụ cấp ăn trưa (J) = như chính thức
+Giảm trừ (N) = chỉ khi tick "Đăng ký giảm trừ" (NLĐ ký cam kết thu nhập dưới mức chịu thuế) + người phụ thuộc
+Thu nhập làm căn cứ (O)  = MAX(K − N − J, 0)
+Thu nhập tính thuế (P)   = O            (KHÔNG quy đổi NET → gross)
+Thuế TNCN (Q)            = ROUND(P × 10%, 0) nếu P > 5.000.000 ; ngược lại 0
+Thực lĩnh (T)            = K − Q        (người lao động TỰ chịu thuế)
+Thu nhập chịu thuế (U)   = K − J + S + Q
 ```
 
-Excel gốc: dòng 16–17 (`E16 = 0.85`, G trống); sheet cũ 07 2024 ghi thẳng `E8 = 12987000*85%`.
+Excel gốc: `R17 = IF(N17-Q17-J17>0, N17-Q17-J17, 0)`, `X17 = N17 - T17`. File gốc ghi
+`S17 = IF(R17>5000000, R17*10%, 0)` rồi `T17 = S17*0,1` — nhân 10% hai lần, HR xác nhận nhầm: đúng là
+S17 = R17 và T17 = S17 × 10%.
 
-**Ví dụ thật (Nguyễn Yến Chi):** F = 13.500.000; E = 0,85; H = 11,5/22 công.
+**Ví dụ (Nguyễn Thị Thư, dòng 17):** F = 25.000.000; E = 0,85; H = 21/22; ăn trưa 50.000; không giảm trừ.
 
-- I = 13.500.000 × 0,85 × 11,5/22 = **5.998.295 đ**
-- K = 5.998.295 + 9 × 35.000 = 6.313.295 → sau giảm trừ 15.500.000 → O = 0 → **thuế = 0**
-- Thực lĩnh T = **6.313.295 đ**
+- I = 25.000.000 × 0,85 / 22 × 21 = **20.284.091 đ**; K = 20.334.091
+- O = P = 20.334.091 − 50.000 = 20.284.091 > 5tr → **Q = 2.028.409 đ**
+- Thực lĩnh T = 20.334.091 − 2.028.409 = **18.305.682 đ**; U = 22.312.500
+
+**Dưới ngưỡng (Nguyễn Bình Minh, dòng 18):** F = 7tr, 10/22 công → I = 2.704.545; O = 2.704.545 ≤ 5tr
+→ Q = 0, T = K = 3.204.545.
+
+*Trước 10/2026* thử việc tính như chính thức (giảm trừ + quy đổi bậc + lũy tiến, công ty nộp thay), ví dụ
+Nguyễn Yến Chi: I = 5.998.295, K = 6.313.295, O = 0 → thuế 0 (cùng kết quả theo quy tắc mới vì có giảm trừ).
 
 ### 4.3. BÁN THỜI GIAN (parttime), lương NET
 
@@ -281,7 +296,7 @@ Toàn bộ bảng lương hiện tại trả theo NET (cột Status = "NET"): s�
 
 ```
 Thực lĩnh  = Lương thỏa thuận theo công + phụ cấp
-Thuế TNCN  = tính trên thu nhập ĐÃ QUY ĐỔI (Bước 6–7 với chính thức/thử việc; /0,9 hoặc /0,8 với bán thời gian/chuyên gia; = 0 với khoán)
+Thuế TNCN  = tính trên thu nhập ĐÃ QUY ĐỔI (Bước 6–7 với chính thức; thử việc khấu trừ 10% trên O khi > 5tr, NLĐ tự chịu (4.2); /0,9 hoặc /0,8 với bán thời gian/chuyên gia; = 0 với khoán)
 Chi phí công ty = Thực lĩnh + Thuế nộp thay + BH NLĐ nộp thay + BH phần công ty
 Thu nhập chịu thuế kê khai (U) = Thực lĩnh + Thuế + BH NLĐ − Phụ cấp ăn miễn thuế
 ```
@@ -326,7 +341,7 @@ Phân bổ hạch toán:   SUMIF theo TK (6421 - QLDN / 6411 - bán hàng), đ�
 | Loại lao động | Hệ số E | BHXH (G) | Giảm trừ (L,M) | Phụ cấp ăn (J) | Cách tính thuế | Ví dụ trong file |
 |---|---|---|---|---|---|---|
 | Chính thức toàn thời gian, NET | 1 | Có (21,5% + 10,5%) | Có | Có (35k/ngày) | Quy đổi bậc (B6) → lũy tiến 5 bậc (B7) | Tạ Trường Xuân |
-| Thử việc | **0,85** | Không | Có (nếu đăng ký) | Có | Như chính thức | Phan Thị Thu Lan, Nguyễn Yến Chi |
+| Thử việc (từ 10/2026) | **0,85** | Không | Có (nếu đăng ký) | Có | Không quy đổi; 10% × O khi O > 5tr; **trừ vào thực lĩnh** | Nguyễn Thị Thư, Nguyễn Bình Minh |
 | Bán thời gian, cư trú, **có đăng ký giảm trừ** (HĐLĐ từ 3 tháng) — từ 09/2026 | 1 | Không | Có | Không | Như chính thức (B6 → B7) | Mẫu 09/2026 dòng 6 |
 | Bán thời gian, cư trú, không đăng ký giảm trừ | 1 | Không | Không | Không | O/0,9 × 10% | Vũ Văn Tiến Tuyền |
 | Bán thời gian, không cư trú (nước ngoài) | 1 | Không | Không | Không | O/0,8 × 20% | Koshioka Hiroshi |

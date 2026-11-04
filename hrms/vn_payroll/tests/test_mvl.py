@@ -203,3 +203,55 @@ class TestTemplate092026(unittest.TestCase):
 		self.assertEqual(
 			compute_mvl(MVLInput("Chính thức", 1, 30_000_000, 0, True, 0, 22, 22), self.cfg).X, 0
 		)
+
+
+class TestProbationFlatWithholding(unittest.TestCase):
+	"""Thử việc theo bảng lương 10/2026 dòng 17-19 (`docs/Bang luong 10 - Copy.xlsx`, HR chốt 2026-11-04).
+
+	KHÔNG quy đổi NET→gross: thu nhập tính thuế = thu nhập làm căn cứ quy đổi; khấu trừ 10% khi > 5tr;
+	người lao động TỰ chịu thuế (thực lĩnh = tổng thu nhập - thuế). Ô T17 của file nhân 10% hai lần
+	(ra 202.841) — HR xác nhận là nhầm, đúng là 10% của thu nhập tính thuế. Tick giảm trừ thì vẫn giảm
+	trừ bình thường (NLĐ ký cam kết thu nhập dưới mức chịu thuế)."""
+
+	def setUp(self):
+		self.cfg = default_config()
+		self.cfg.lunch_rate = 50_000  # mẫu 10/2026: ăn trưa 50k/buổi
+
+	def probation(self, base, worked, lunch_days, bonus=0.0, register=False, dependents=0):
+		inp = MVLInput("Thử việc", base, 0, dependents, register, lunch_days, 22, worked, bonus=bonus)
+		return compute_mvl(inp, self.cfg)
+
+	def test_row17_nguyen_thi_thu_withholds_10pct_from_net(self):
+		r = self.probation(25_000_000, 21, 1)
+		self.assertEqual((r.I, r.J, r.K), (20_284_091, 50_000, 20_334_091))
+		self.assertEqual((r.N, r.O, r.P), (0, 20_284_091, 20_284_091))  # không quy đổi: P = O
+		self.assertEqual(r.Q, 2_028_409)
+		self.assertEqual(r.T, 20_334_091 - 2_028_409)  # NLĐ tự chịu thuế
+		self.assertEqual((r.R, r.S, r.X), (0, 0, 0))
+		# kê khai vẫn = tổng thu nhập - ăn trưa + BH + thuế (HR chốt)
+		self.assertEqual(r.U, 20_334_091 - 50_000 + 2_028_409)
+
+	def test_row18_nguyen_binh_minh_below_threshold(self):
+		r = self.probation(7_000_000, 10, 10)
+		self.assertEqual((r.I, r.J, r.K, r.O), (2_704_545, 500_000, 3_204_545, 2_704_545))
+		self.assertEqual((r.Q, r.T, r.U), (0, 3_204_545, 2_704_545))
+
+	def test_row19_nguyen_tan_tien_kpi_counts_as_income(self):
+		r = self.probation(8_000_000, 10, 10, bonus=750_000)
+		self.assertEqual((r.I, r.K, r.O), (3_090_909, 4_340_909, 3_840_909))
+		self.assertEqual((r.Q, r.T), (0, 4_340_909))
+
+	def test_threshold_is_strictly_above_5m(self):
+		just_above = self.probation(5_000_000, 22, 0, bonus=750_001)  # O = 4.250.000 + 750.001
+		exactly = self.probation(5_000_000, 22, 0, bonus=750_000)  # O = 5.000.000
+		self.assertEqual(exactly.Q, 0)
+		self.assertEqual(just_above.Q, 500_000)
+		self.assertEqual(just_above.T, just_above.K - 500_000)
+
+	def test_registered_deduction_reduces_the_withholding_base(self):
+		# lương 25tr trọn tháng → I = 21.250.000; giảm trừ 15,5tr + 1 NPT 6,2tr → O = 0 → không thuế
+		self.assertEqual(self.probation(25_000_000, 22, 0, register=True, dependents=1).Q, 0)
+		r = self.probation(25_000_000, 22, 0, register=True)
+		self.assertEqual((r.N, r.O, r.P), (15_500_000, 5_750_000, 5_750_000))
+		self.assertEqual((r.Q, r.T), (575_000, 21_250_000 - 575_000))
+		self.assertEqual(r.U, 21_250_000 + 575_000)
