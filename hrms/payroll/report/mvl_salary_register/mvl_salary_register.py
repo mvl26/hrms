@@ -81,7 +81,7 @@ def get_data(filters):
 	slip_filters = {
 		# Mặc định CHỈ phiếu đã duyệt: bảng lương là chứng từ đem trình ký, lẫn phiếu chưa chốt vào
 		# là ký lên số có thể còn đổi. Bật `include_drafts` để soát trước khi duyệt — khi đó bản
-		# xuất Excel tự đóng dấu cảnh báo lên tiêu đề (xem `salary_xlsx.subtitle_line`).
+		# xuất Excel tự đóng dấu cảnh báo lên dòng kỳ (xem `salary_xlsx.period_line`).
 		"docstatus": ["in", [0, 1]] if cint(filters.include_drafts) else 1,
 		"salary_structure": ["in", list(STRUCTURE_NAMES)],
 		"start_date": [">=", start],
@@ -102,6 +102,7 @@ def get_data(filters):
 			"custom_salary_type",
 			"custom_coefficient",
 			"custom_dependents_slip",
+			"custom_lunch_days",
 			"payment_days",
 			"total_working_days",
 			"net_pay",
@@ -125,6 +126,8 @@ def get_data(filters):
 			worked_days=s.payment_days,
 			# không phải cột: bộ xuất Excel in dòng "Số công làm việc chuẩn" từ đây
 			standard_days=s.total_working_days,
+			# không phải cột: sheet "Ăn trưa" của file Excel in số buổi từ đây
+			lunch_days=s.custom_lunch_days,
 			dependents=s.custom_dependents_slip,
 			net_t=flt(s.net_pay),
 		)

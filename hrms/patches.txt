@@ -44,3 +44,4 @@ hrms.patches.v15_0.recompute_work_credit_as_paid_cong #2026-08-03
 hrms.patches.v15_0.backfill_sheet_total_paid_days #2026-08-03
 hrms.patches.v15_0.remove_weekly_off_from_holiday_list #2026-09-14
 hrms.patches.v15_0.repair_half_day_leave_other_half_absent #2026-11-03-2 chay lai: ban ghi tao tay sau lan migrate dau
+hrms.patches.v15_0.merge_mvl_payroll_settings #2026-11-04

@@ -4,13 +4,28 @@ from frappe.custom.doctype.property_setter.property_setter import make_property_
 from frappe.model.document import Document
 from frappe.utils import cint
 
+# Tab "Lương Miyano (VN)" (gộp từ MVL Payroll Settings 2026-11-04): lưu dạng TỶ LỆ (0,215 = 21,5%)
+# dù nhãn ghi "(%)" — gõ nhầm 2 thay vì 0,02 là KPCĐ = 200% lương đóng BHXH.
+MVL_RATE_FIELDS = ("insurance_company_rate", "insurance_employee_rate", "union_fee_rate")
+
 
 class PayrollSettings(Document):
 	def validate(self):
 		self.validate_password_policy()
+		self.validate_mvl_rates()
 
 		if not self.daily_wages_fraction_for_half_day:
 			self.daily_wages_fraction_for_half_day = 0.5
+
+	def validate_mvl_rates(self):
+		for field in MVL_RATE_FIELDS:
+			value = self.get(field)
+			if value is not None and not 0 <= value < 1:
+				frappe.throw(
+					_("{0} phải là tỷ lệ từ 0 đến dưới 1 (ví dụ 0,02 cho 2%), không phải {1}.").format(
+						_(self.meta.get_label(field)), value
+					)
+				)
 
 	def validate_password_policy(self):
 		if self.email_salary_slip_to_employee and self.encrypt_salary_slips_in_emails:

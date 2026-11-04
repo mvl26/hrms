@@ -19,8 +19,10 @@ khi cài), **sửa được trên giao diện**. Số liệu riêng từng nhân
    phân nhánh loại nhân sự. KHÔNG dùng formula component (native chỉ cho int/float/round/ceil/floor).
 2. **Cấu hình mỗi NV = custom fields trên Salary Structure Assignment** (native, versioned theo
    `from_date`, Payroll Entry chạy được). Không tạo doctype hồ sơ lương riêng.
-3. **Tham số chuẩn = Single DocType `MVL Payroll Settings`** (sửa trên UI): giảm trừ, ăn trưa, tỷ lệ
-   BH, biểu thuế, biểu gross-up. Đóng gói bằng `ensure_defaults` (self-heal mỗi migrate).
+3. **Tham số chuẩn = tab "Lương Miyano (VN)" của `Payroll Settings`** (sửa trên UI): giảm trừ, ăn
+   trưa, tỷ lệ BH/KPCĐ, biểu thuế, biểu gross-up. Đóng gói bằng `ensure_defaults` (self-heal mỗi
+   migrate). Trước 2026-11-04 là Single riêng `MVL Payroll Settings`; patch
+   `merge_mvl_payroll_settings` đã gộp vào để payroll chỉ còn MỘT trang cài đặt (HR Manager sửa được).
 4. **Payslip NET:** `net_pay = thực lĩnh T = K = I + J`. Q/S/R là **statistical component** (chi phí
    công ty nộp thay, hiện trên slip để kê khai, KHÔNG trừ vào tiền NV nhận). Loại GROSS thì Q+S trừ thật.
 5. **Đóng gói:** Salary Components + Salary Structure "MVL Việt Nam" + custom fields + settings mặc
@@ -52,7 +54,8 @@ Khác mẫu có chủ ý: mẫu ghi ăn trưa dòng 1 là 1.000.000 cố định
 
 ## Data model
 
-### `MVL Payroll Settings` (Single) — tham số chuẩn, sửa trên UI
+### `Payroll Settings` → tab "Lương Miyano (VN)" — tham số chuẩn, sửa trên UI
+(gộp từ `MVL Payroll Settings` 2026-11-04, cùng fieldname; KPCĐ `union_fee_rate` = 0.02)
 - `personal_deduction` = 15.500.000 (giảm trừ bản thân/tháng)
 - `dependent_deduction` = 6.200.000 (mỗi người phụ thuộc/tháng)
 - `lunch_rate_per_day` = 35.000
@@ -143,7 +146,7 @@ Không đụng logic `get_working_days_details` (payment_days) đã có — ch�
 
 ## Packaging & deploy
 
-- Custom fields + Salary Components + Salary Structure + `MVL Payroll Settings` mặc định: export qua
+- Custom fields + Salary Components + Salary Structure + tham số MVL mặc định (tab của Payroll Settings): export qua
   `fixtures` (đồng bộ filter trong `hooks.py`) + `ensure_defaults` self-heal (không ghi đè giá trị đã sửa).
 - Deploy chuẩn = `bench migrate` (re-sync fixtures = cổng ask-first). Dev cài bằng `reload_doc` + seed.
 

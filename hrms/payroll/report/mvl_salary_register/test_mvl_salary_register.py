@@ -63,6 +63,8 @@ class TestBangLuongMVL(PerTestRollback, FrappeTestCase):
 		self.assertEqual(row["net_t"], ss.net_pay)  # T
 		# không phải cột: dòng "Số công làm việc chuẩn" của file Excel đọc từ đây
 		self.assertEqual(row["standard_days"], ss.total_working_days)
+		# không phải cột: sheet "Ăn trưa" của file Excel đọc số buổi từ đây
+		self.assertEqual(row["lunch_days"], ss.custom_lunch_days)
 
 		total = data[-1]
 		self.assertEqual(total["employee_name"], "TỔNG CỘNG")

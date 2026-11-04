@@ -413,3 +413,35 @@ class TestHalfDayLeaveOtherHalf(PerTestRollback, FrappeTestCase):
 		self.assertEqual(day.custom_attendance_code, "1/2P")
 		self.assertEqual(self.payable_days(), day.custom_work_credit)
 		self.assertEqual(self.payable_days(), 1.0)
+
+	def test_patch_does_not_reopen_a_day_whose_punches_are_already_merged(self):
+		"""`modify_half_day_status = 1` là đúng cái cờ job đánh vắng bản cũ nhắm vào: bật lại nó cho một
+		ngày đã gộp xong lượt chấm thì server còn chạy code cũ (hoặc chưa restart) sẽ ép Absent lại ở
+		lần auto-attendance kế tiếp — "soát công xong hết lỗi, chạy auto attendance lại lỗi"."""
+		from datetime import datetime, time
+
+		from hrms.hr.doctype.employee_checkin.test_employee_checkin import make_checkin
+		from hrms.patches.v15_0.repair_half_day_leave_other_half_absent import execute
+
+		self.leave(ANNUAL, "Chiều")
+		make_checkin(self.emp, datetime.combine(self.date, time(9, 10, 48)))
+		make_checkin(self.emp, datetime.combine(self.date, time(13, 23, 58)))
+		self.hourly_job()
+		name = self.day().name
+		frappe.db.set_value("Attendance", name, {"half_day_status": "Absent", "modify_half_day_status": 0})
+
+		execute()
+		self.assertEqual(self.day().half_day_status, "Present")
+		self.assertEqual(frappe.db.get_value("Attendance", name, "modify_half_day_status"), 0)
+
+	def test_consistency_scan_flags_the_broken_day_and_clears_after_the_patch(self):
+		from hrms.attendance_payroll_consistency import mismatches
+		from hrms.patches.v15_0.repair_half_day_leave_other_half_absent import execute
+
+		self.damage_like_the_old_hourly_job()
+		rows = mismatches(self.date, self.date, self.emp)
+		self.assertEqual([r.name for r in rows], [self.day().name])
+		self.assertEqual((rows[0].cong, rows[0].payroll_days), (1.0, 0.5))
+
+		execute()
+		self.assertEqual(mismatches(self.date, self.date, self.emp), [])

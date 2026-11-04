@@ -389,10 +389,18 @@ def ensure_custom_fields():
 
 
 def ensure_settings():
-	"""Seed tham số + biểu thuế/gross-up CHỈ khi chưa có (không ghi đè giá trị HR đã sửa)."""
-	s = frappe.get_single("MVL Payroll Settings")
+	"""Seed tham số + biểu thuế/gross-up vào tab "Lương Miyano (VN)" của Payroll Settings CHỈ khi chưa
+	có (không ghi đè giá trị HR đã sửa).
+
+	Chỉ lưu khi thật sự seed: chạy mỗi migrate, mà lưu Payroll Settings là chạy cả `on_update` của
+	upstream (property setter làm tròn + xoá cache toàn site) — không có lý do làm vậy khi chẳng đổi gì."""
+	s = frappe.get_single("Payroll Settings")
+	if not s.meta.has_field("personal_deduction"):
+		return  # meta chưa đồng bộ (chưa migrate doctype) — lần migrate sau sẽ seed
 	cfg = default_config()
+	changed = False
 	if not s.personal_deduction:
+		changed = True
 		s.personal_deduction = cfg.personal_deduction
 		s.dependent_deduction = cfg.dependent_deduction
 		s.lunch_rate_per_day = cfg.lunch_rate
@@ -400,6 +408,7 @@ def ensure_settings():
 		s.insurance_employee_rate = cfg.ins_employee
 		s.probation_coefficient = cfg.probation_coef
 	if not s.tax_brackets:
+		changed = True
 		for threshold, rate, subtract in cfg.tax_brackets:
 			s.append(
 				"tax_brackets",
@@ -410,6 +419,7 @@ def ensure_settings():
 				},
 			)
 	if not s.grossup_brackets:
+		changed = True
 		for threshold, subtract, divisor in cfg.grossup_brackets:
 			s.append(
 				"grossup_brackets",
@@ -424,7 +434,9 @@ def ensure_settings():
 		"select 1 from `tabSingles` where doctype = %s and field = 'union_fee_rate'", s.doctype
 	):
 		s.union_fee_rate = cfg.union_fee_rate
-	s.save(ignore_permissions=True)
+		changed = True
+	if changed:
+		s.save(ignore_permissions=True)
 
 
 PRINT_FORMAT = "Phiếu lương MVL"

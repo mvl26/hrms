@@ -14,8 +14,8 @@ nhưng giờ làm dưới ngưỡng vắng của ca (ngưỡng cho cả ngày) n
 Quy ước HR 2026-07-28: nửa nghỉ theo đơn + nửa kia (dù có hay không có lượt chấm) = nửa kia đi làm.
 Vì vậy patch:
 
-1. với ngày mang mã nửa-ngày-nghỉ (1/2P, 1/2K…), đặt lại `half_day_status = Present` và `modify_half_day_status = 1` cho mọi ngày như vậy, để
-   lượt chấm về sau còn gộp được vào ngày nghỉ;
+1. với ngày mang mã nửa-ngày-nghỉ (1/2P, 1/2K…), đặt lại `half_day_status = Present`; chỉ khi ngày đó
+   còn lượt chấm bị skip mới mở `modify_half_day_status = 1` để lượt chấm gộp được vào ngày nghỉ;
 2. gỡ `skip_auto_attendance` khỏi những lượt chấm chưa gắn Attendance của đúng ngày đó, để job hằng
    giờ kế tiếp gộp chúng vào (giờ vào/ra, giờ làm).
 
@@ -90,13 +90,15 @@ def execute():
 		if is_period_locked(day.employee, day.attendance_date):
 			locked.append(day.name)
 			continue
-		frappe.db.set_value(
-			"Attendance",
-			day.name,
-			{"half_day_status": "Present", "modify_half_day_status": 1},
-			update_modified=False,
-		)
-		released += release_skipped_checkins(day.employee, day.attendance_date)
+		freed = release_skipped_checkins(day.employee, day.attendance_date)
+		updates = {"half_day_status": "Present"}
+		if freed:
+			# còn lượt chấm bị skip chưa gộp → mở cờ để job gộp vào. Ngày đã gộp xong thì KHÔNG mở:
+			# cờ này là đúng thứ job đánh vắng bản cũ (trước 30085e4) nhắm vào — server còn chạy code cũ
+			# hoặc chưa restart sẽ ép Absent lại ở lần auto-attendance kế tiếp.
+			updates["modify_half_day_status"] = 1
+		frappe.db.set_value("Attendance", day.name, updates, update_modified=False)
+		released += freed
 		submitted.update(submitted_slips_covering(day.employee, day.attendance_date))
 		fixed.append(day.name)
 

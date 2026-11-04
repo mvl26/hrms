@@ -1,5 +1,8 @@
 # Copyright (c) 2026, Miyano Việt Nam.
-"""Đọc `MVL Payroll Settings` (Single) thành MVLConfig cho engine."""
+"""Đọc tab "Lương Miyano (VN)" của `Payroll Settings` (Single) thành MVLConfig cho engine.
+
+Trước 2026-11-04 tham số nằm ở doctype riêng `MVL Payroll Settings`; patch
+`merge_mvl_payroll_settings` đã chuyển sang đây để payroll chỉ còn MỘT trang cài đặt."""
 
 import frappe
 
@@ -7,7 +10,7 @@ from hrms.vn_payroll.mvl import MVLConfig, default_config
 
 
 def config_from_settings() -> MVLConfig:
-	s = frappe.get_single("MVL Payroll Settings")
+	s = frappe.get_single("Payroll Settings")
 	tax = [
 		(b.threshold_upto or float("inf"), (b.rate or 0) / 100.0, b.subtract or 0)
 		for b in sorted(s.tax_brackets, key=lambda b: b.threshold_upto or float("inf"))
@@ -25,8 +28,16 @@ def config_from_settings() -> MVLConfig:
 		probation_coef=s.probation_coefficient,
 		tax_brackets=tax,
 		grossup_brackets=grossup,
-		# chưa migrate field → dùng mặc định thay vì 0 (deploy lệch không được im lặng bỏ KPCĐ)
-		union_fee_rate=default_config().union_fee_rate
-		if s.get("union_fee_rate") is None
-		else s.union_fee_rate,
+		# Chưa từng lưu KPCĐ → mặc định, KHÔNG phải 0. Soi `tabSingles` chứ không `s.get(...) is None`:
+		# trường Float có trong meta thì ô trống vẫn đọc ra 0.0 (= im lặng bỏ KPCĐ). Số 0 HR cố ý
+		# lưu thì vẫn là 0.
+		union_fee_rate=s.union_fee_rate if union_fee_saved() else default_config().union_fee_rate,
+	)
+
+
+def union_fee_saved() -> bool:
+	return bool(
+		frappe.db.sql(
+			"select 1 from `tabSingles` where doctype = 'Payroll Settings' and field = 'union_fee_rate'"
+		)
 	)
