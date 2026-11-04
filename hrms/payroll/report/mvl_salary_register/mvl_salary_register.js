@@ -92,6 +92,12 @@ function mvl_salary_export_dialog(report) {
 				fieldtype: "Data",
 				description: __("Để trống = tên người đang đăng nhập"),
 			},
+			{
+				fieldname: "prepared_title",
+				label: __("Chức vụ người lập"),
+				fieldtype: "Data",
+				description: __("Để trống = chức vụ trên hồ sơ nhân viên của người đăng nhập"),
+			},
 			{ fieldtype: "Column Break" },
 			{
 				fieldname: "approved_by",
@@ -99,9 +105,15 @@ function mvl_salary_export_dialog(report) {
 				fieldtype: "Data",
 				description: __("Để trống = chỉ in chức danh, ký tên tay"),
 			},
+			{
+				fieldname: "approved_title",
+				label: __("Chức vụ người duyệt"),
+				fieldtype: "Data",
+				default: __("Giám đốc vận hành"),
+			},
 		],
 		primary_action_label: __("Tải về"),
-		primary_action: ({ file_format, prepared_by, approved_by }) => {
+		primary_action: ({ file_format, prepared_by, approved_by, prepared_title, approved_title }) => {
 			d.hide();
 			report.make_access_log("Export", file_format);
 
@@ -115,6 +127,8 @@ function mvl_salary_export_dialog(report) {
 					visible_idx,
 					prepared_by: prepared_by || "",
 					approved_by: approved_by || "",
+					prepared_title: prepared_title || "",
+					approved_title: approved_title || "",
 				});
 			} else {
 				open_url_post(frappe.request.url, {
