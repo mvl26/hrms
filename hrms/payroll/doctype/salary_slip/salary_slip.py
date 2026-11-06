@@ -2425,15 +2425,77 @@ def enqueue_email_salary_slips(names) -> None:
 	if isinstance(names, str):
 		names = json.loads(names)
 
-	frappe.enqueue("hrms.payroll.doctype.salary_slip.salary_slip.email_salary_slips", names=names)
-	frappe.msgprint(
-		_("Salary slip emails have been enqueued for sending. Check {0} for status.").format(
-			f"""<a href='{frappe.utils.get_url_to_list("Email Queue")}' target='blank'>Email Queue</a>"""
+	# Miyano: kiểm người nhận NGAY lúc bấm. Thiếu Email ưu tiên thì `email_salary_slip` chỉ msgprint
+	# bên trong job nền — không ai thấy, phiếu rơi im lặng (HR báo 2026-11-04: tích 10, tạo 6).
+	sendable, missing = split_slips_by_receiver(names)
+	if sendable:
+		frappe.enqueue("hrms.payroll.doctype.salary_slip.salary_slip.email_salary_slips", names=sendable)
+		frappe.msgprint(
+			_("Đã xếp hàng gửi {0} email phiếu lương. Xem trạng thái ở {1}.").format(
+				len(sendable),
+				f"""<a href='{frappe.utils.get_url_to_list("Email Queue")}' target='blank'>Email Queue</a>""",
+			)
+		)
+	if missing:
+		frappe.msgprint(
+			_("KHÔNG gửi {0} phiếu vì nhân viên chưa có Email ưu tiên (Preferred Contact Email): {1}").format(
+				len(missing), ", ".join(missing)
+			),
+			indicator="orange",
+		)
+
+
+def split_slips_by_receiver(names) -> tuple[list[str], list[str]]:
+	"""(phiếu gửi được, tên nhân viên thiếu Email ưu tiên) — giữ thứ tự phiếu đã chọn."""
+	slips = {
+		r.name: r
+		for r in frappe.get_all(
+			"Salary Slip", filters={"name": ["in", names]}, fields=["name", "employee", "employee_name"]
+		)
+	}
+	emails = dict(
+		frappe.get_all(
+			"Employee",
+			filters={"name": ["in", list({s.employee for s in slips.values()})]},
+			fields=["name", "prefered_email"],
+			as_list=True,
 		)
 	)
+	sendable, missing = [], []
+	for name in names:
+		slip = slips.get(name)
+		if not slip:
+			continue
+		if emails.get(slip.employee):
+			sendable.append(name)
+		else:
+			missing.append(slip.employee_name or slip.employee)
+	return sendable, missing
 
 
 def email_salary_slips(names) -> None:
+	# Miyano: mỗi phiếu độc lập — trước đây một phiếu lỗi (PDF / email template) làm dừng cả job và
+	# mọi phiếu sau nó không bao giờ được gửi. Phiếu lỗi ghi Error Log + báo người bấm gửi.
+	failed = []
 	for name in names:
-		salary_slip = frappe.get_doc("Salary Slip", name)
-		salary_slip.email_salary_slip()
+		try:
+			salary_slip = frappe.get_doc("Salary Slip", name)
+			salary_slip.email_salary_slip()
+		except Exception:
+			frappe.log_error(
+				title=_("Gửi email phiếu lương {0} lỗi").format(name),
+				reference_doctype="Salary Slip",
+				reference_name=name,
+			)
+			failed.append(name)
+	if failed:
+		frappe.publish_realtime(
+			"msgprint",
+			{
+				"message": _("Không gửi được {0} phiếu lương (xem Error Log): {1}").format(
+					len(failed), ", ".join(failed)
+				),
+				"indicator": "red",
+			},
+			user=frappe.session.user,
+		)
